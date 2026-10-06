@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Res-Q | AI-Powered Provision Pipeline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0c0c0c',
+                        cardbg: '#141414',
+                        cardhover: '#1c1c1c',
+                        accent: '#ff4500',
+                        cream: '#f4f4f0',
+                        muted: '#888888'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom notched corners to mimic the Apptronik reference style */
+        .notched-card {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                0 0, 
+                calc(100% - 35px) 0, 
+                100% 35px, 
+                100% 100%, 
+                0 100%
+            );
+        }
+        .notched-card:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Inverse notch variant */
+        .notched-card-alt {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                35px 0, 
+                100% 0, 
+                100% 100%, 
+                0 100%, 
+                0 35px
+            );
+        }
+        .notched-card-alt:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Orange accent CTA card with notch */
+        .notched-orange {
+            background-color: #ff4500;
+            border-radius: 1.5rem;
+            clip-path: polygon(
+                0 0, 
+                100% 0, 
+                100% calc(100% - 35px), 
+                calc(100% - 35px) 100%, 
+                0 100%
+            );
+        }
+    </style>
+</head>
+<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
+
+    <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </div>
+            <nav class="hidden md:flex items-center space-x-8 text-sm font-mono text-neutral-400">
+                <a href="#pipeline" class="hover:text-[#f4f4f0] transition-colors">01 / PIPELINE</a>
+                <a href="#features" class="hover:text-[#f4f4f0] transition-colors">02 / CAPABILITIES</a>
+                <a href="#metrics" class="hover:text-[#f4f4f0] transition-colors">03 / IMPACT</a>
+            </nav>
+            <div>
+                <a href="#get-started" class="inline-flex items-center px-5 py-2.5 rounded-full bg-[#ff4500] text-white text-sm font-bold tracking-wide hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20">
+                    Access Portal →
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-12">
+
+        <section class="mb-24 pt-8">
+            <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+                <div>
+                    <span class="text-xs font-mono text-[#ff4500] tracking-widest uppercase block mb-3">// AI-POWERED PROVISION PIPELINE</span>
+                    <h1 class="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-none">
+                        Surplus <br>Matched. <br><span class="text-neutral-500">Delivered.</span>
+                    </h1>
+                </div>
+                <div class="mt-6 md:mt-0 max-w-md">
+                    <p class="text-neutral-400 text-sm md:text-base leading-relaxed">
+                        End-to-end Python machine learning pipelines transforming daily corporate food and life-essential surplus into automated relief networks for shelters and vulnerable communities.
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Card A -->
+                <div class="notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(a)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">INITIALIZE →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Predictive Surplus</h3>
+                        <p class="text-sm text-neutral-400">Regression pipelines forecasting daily inventory yields based on time, weather, and historical metrics.</p>
+                    </div>
+                </div>
+
+                <!-- Card B -->
+                <div class="notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(b)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">OPTIMIZE →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Smart Matching</h3>
+                        <p class="text-sm text-neutral-400">Algorithms pairing surplus stocks with nearest shelter capacity using distance and urgency scores.</p>
+                    </div>
+                </div>
+
+                <!-- Card C (Accent Orange Block) -->
+                <div class="notched-orange p-8 flex flex-col justify-between h-72 cursor-pointer group text-black">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono opacity-70">(c)</span>
+                        <span class="text-xs font-mono font-bold group-hover:translate-x-1 transition-transform">DEPLOY →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Live Routing</h3>
+                        <p class="text-sm opacity-90">Real-time logistical dispatch ensuring perishable goods reach communities before expiration windows close.</p>
+                    </div>
+                </div>
+
+                <!-- Card D -->
+                <div class="notched-card-alt p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(d)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">EXPAND →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Essential Goods</h3>
+                        <p class="text-sm text-neutral-400">Scaling beyond meals to route survival essentials, hygiene kits, and warm blankets seamlessly.</p>
+                    </div>
+                </div>
+
+                <!-- Card E -->
+                <div class="notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(e)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">VERIFY →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Safety Verification</h3>
+                        <p class="text-sm text-neutral-400">Automated quality checks and compliance monitoring maintaining strict health & safety standards.</p>
+                    </div>
+                </div>
+
+                <!-- Card F -->
+                <div class="notched-card-alt p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(f)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">CONNECT →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Community Sync</h3>
+                        <p class="text-sm text-neutral-400">Unifying local businesses and support shelters into a single, highly efficient distribution loop.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pipeline" class="mb-24 py-16 border-t border-b border-neutral-800">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                <div>
+                    <span class="text-xs font-mono text-[#ff4500] uppercase tracking-widest block mb-3">// MISSION ARCHITECTURE</span>
+                    <h2 class="text-4xl font-black uppercase tracking-tight mb-6">Bridging Abundance and Need via Python ML Pipelines</h2>
+                    <p class="text-neutral-400 leading-relaxed mb-6">
+                        Res-Q eliminates the friction in food and asset redistribution. By processing real-time inventory feeds through custom Python forecasting models and geospatial matching scripts, we replace manual phone calls with automated precision.
+                    </p>
+                    <div class="grid grid-cols-2 gap-6 font-mono text-xs">
+                        <div class="p-4 bg-neutral-900 rounded-xl border border-neutral-800">
+                            <span class="text-[#ff4500] text-lg font-bold block mb-1">99.4%</span>
+                            <span class="text-neutral-400">Match Accuracy Rate</span>
+                        </div>
+                        <div class="p-4 bg-neutral-900 rounded-xl border border-neutral-800">
+                            <span class="text-[#ff4500] text-lg font-bold block mb-1">&lt; 15 min</span>
+                            <span class="text-neutral-400">Average Routing Speed</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 font-mono text-xs text-neutral-300">
+                    <div class="flex items-center justify-between pb-4 mb-4 border-b border-neutral-800">
+                        <span class="text-neutral-500">resq_pipeline.py</span>
+                        <span class="flex items-center space-x-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span class="text-emerald-500">ACTIVE</span>
+                        </span>
+                    </div>
+                    <pre class="overflow-x-auto text-neutral-400 leading-relaxed"><code>def run_matching_pipeline(surplus_list, shelters):
+    valid_pairs = []
+    for item in surplus_list:
+        for shelter in shelters:
+            if hard_filter(item, shelter):
+                score = calculate_match_score(item, shelter)
+                valid_pairs.append((score, item, shelter))
+    return optimize_global_allocation(valid_pairs)</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="get-started" class="mb-12">
+            <div class="notched-orange p-12 md:p-20 text-black flex flex-col md:flex-row items-start md:items-center justify-between">
+                <div class="max-w-2xl mb-8 md:mb-0">
+                    <span class="text-xs font-mono uppercase tracking-widest block mb-3 font-bold opacity-70">// JOIN THE NETWORK</span>
+                    <h2 class="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-4">
+                        Get Started
+                    </h2>
+                    <p class="text-lg opacity-90 font-medium">
+                        Whether you operate a food business, manage a shelter relief center, or want to contribute to our ML pipeline, join Res-Q today.
+                    </p>
+                </div>
+                <div>
+                    <button onclick="openModal()" class="inline-flex items-center px-8 py-5 bg-black text-white text-lg font-bold rounded-full hover:bg-neutral-900 transition-all shadow-xl group">
+                        Initialize Portal 
+                        <span class="ml-3 group-hover:translate-x-2 transition-transform">→</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-neutral-800 py-12 text-neutral-500 text-xs font-mono">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between">
+            <div class="flex items-center space-x-4 mb-4 md:mb-0">
+                <span class="text-white font-bold">RES-Q PLATFORM</span>
+                <span>—</span>
+                <span>AI FOR COMMUNITY SERVICES</span>
+            </div>
+            <div class="flex space-x-6">
+                <a href="#pipeline" class="hover:text-white transition-colors">Pipeline</a>
+                <a href="#features" class="hover:text-white transition-colors">Documentation</a>
+                <a href="#get-started" class="hover:text-white transition-colors">GitHub Repository</a>
+            </div>
+        </div>
+    </footer>
+
+    <div id="actionModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-6">
+        <div class="bg-[#141414] border border-neutral-800 rounded-3xl max-w-md w-full p-8 relative">
+            <button onclick="closeModal()" class="absolute top-6 right-6 text-neutral-400 hover:text-white text-lg font-mono">✕</button>
+            <span class="text-xs font-mono text-[#ff4500] uppercase block mb-2">// PORTAL ACCESS</span>
+            <h3 class="text-2xl font-bold mb-6">Select Your Role</h3>
+            <div class="space-y-4">
+                <button onclick="handleRole('business')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
+                    <div>
+                        <span class="font-bold block text-sm">Food Business / Donor</span>
+                        <span class="text-xs text-neutral-400">Post daily surplus and essentials</span>
+                    </div>
+                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
+                </button>
+                <button onclick="handleRole('shelter')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
+                    <div>
+                        <span class="font-bold block text-sm">Shelter / Recipient</span>
+                        <span class="text-xs text-neutral-400">View incoming allocations & pickups</span>
+                    </div>
+                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openModal() {
+            document.getElementById('actionModal').classList.remove('hidden');
+            document.getElementById('actionModal').classList.add('flex');
+        }
+        function closeModal() {
+            document.getElementById('actionModal').classList.remove('flex');
+            document.getElementById('actionModal').classList.add('hidden');
+        }
+        function handleRole(role) {
+            alert('Welcome to Res-Q! Redirecting to ' + role + ' portal...');
+            closeModal();
+        }
+    </script>
+</body>
+</html>
