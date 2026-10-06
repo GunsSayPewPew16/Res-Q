@@ -187,33 +187,14 @@
                             class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
                     </div>
 
-                    <!-- Recipient-only business name -->
-                    <div id="recipientBusiness" class="hidden">
+                    <!-- Business name -->
+                    <div id="recipientBusiness">
                         <input type="text" name="businessName" placeholder="Business name"
                             class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
                     </div>
 
-                    <!-- Donor-only contact: phone + email -->
-                    <div id="donorContact" class="space-y-4">
-                        <div class="flex">
-                            <select name="dialCode" aria-label="Country code"
-                                class="bg-neutral-900 border border-neutral-800 rounded-l-xl px-4 py-4 text-sm text-neutral-300 focus:outline-none focus:border-[#ff4500] transition-colors cursor-pointer">
-                                <option>+1</option>
-                                <option>+44</option>
-                                <option>+91</option>
-                                <option>+61</option>
-                                <option>+234</option>
-                            </select>
-                            <input type="tel" name="phone" placeholder="081234 56789"
-                                class="flex-1 min-w-0 bg-neutral-900 border border-l-0 border-neutral-800 rounded-r-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
-                        </div>
-
-                        <input type="email" name="email" placeholder="Email address" required
-                            class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
-                    </div>
-
-                    <!-- Recipient-only contact: email box with phone-mode dialogue -->
-                    <div id="recipientContact" class="hidden">
+                    <!-- Contact: email box with phone-mode dialogue -->
+                    <div id="recipientContact">
                         <div id="contactEmailBox" class="border border-neutral-800 rounded-xl bg-neutral-900 overflow-hidden">
                             <input type="email" name="contactEmail" placeholder="Email address"
                                 class="w-full bg-transparent px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none">
@@ -244,8 +225,23 @@
                         </div>
                     </div>
 
-                    <!-- Recipient-only address: 3 lines -->
-                    <div id="recipientAddress" class="hidden space-y-4">
+                    <div id="passwordBlock" class="space-y-4">
+                        <div class="relative">
+                            <input id="pwInput" type="password" name="password" placeholder="Password"
+                                class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 pr-24 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+                            <button type="button" id="pwToggle" onclick="togglePw()"
+                                class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-neutral-400 hover:text-[#ff4500] transition-colors cursor-pointer">SHOW</button>
+                        </div>
+
+                        <ul class="font-mono text-xs space-y-2 pt-1">
+                            <li id="req-length" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 8 characters</span></li>
+                            <li id="req-upper" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 1 uppercase letter</span></li>
+                            <li id="req-digit" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 1 number</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- Delivery address: 3 lines -->
+                    <div id="recipientAddress" class="space-y-4">
                         <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest">// DELIVERY ADDRESS</span>
                         <input type="text" name="street" placeholder="Street name"
                             class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
@@ -263,45 +259,6 @@
                             <input type="text" name="postal" placeholder="Postal code"
                                 class="w-full md:w-32 bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
                         </div>
-                    </div>
-
-                    <!-- Donor-only extras -->
-                    <div id="donorExtras" class="space-y-4">
-                        <div>
-                            <label for="onboardLang" class="block text-xs font-mono text-neutral-500 uppercase tracking-widest mb-2">Preferred language</label>
-                            <select id="onboardLang" name="language"
-                                class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] focus:outline-none focus:border-[#ff4500] transition-colors cursor-pointer">
-                                <option>English</option>
-                                <option>Spanish</option>
-                                <option>French</option>
-                                <option>Hindi</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="onboardVehicle" class="block text-xs font-mono text-neutral-500 uppercase tracking-widest mb-2">Vehicle (Optional)</label>
-                            <select id="onboardVehicle" name="vehicle"
-                                class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] focus:outline-none focus:border-[#ff4500] transition-colors cursor-pointer">
-                                <option>No vehicle</option>
-                                <option>Cargo van</option>
-                                <option>Refrigerated van</option>
-                                <option>Box truck</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="passwordBlock" class="space-y-4">
-                        <div class="relative">
-                            <input id="pwInput" type="password" name="password" placeholder="Password"
-                                class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 pr-24 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
-                            <button type="button" id="pwToggle" onclick="togglePw()"
-                                class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-neutral-400 hover:text-[#ff4500] transition-colors cursor-pointer">SHOW</button>
-                        </div>
-
-                        <ul class="font-mono text-xs space-y-2 pt-1">
-                            <li id="req-length" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 8 characters</span></li>
-                            <li id="req-upper" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 1 uppercase letter</span></li>
-                            <li id="req-digit" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 1 number</span></li>
-                        </ul>
                     </div>
 
                     <button type="submit"
@@ -549,19 +506,7 @@
             document.getElementById('onboardLabel').textContent = copy.label;
             document.getElementById('onboardSubtitle').textContent = copy.subtitle;
             document.getElementById('onboardSideText').textContent = copy.side;
-            var isRecipient = role === 'recipient';
-            document.getElementById('donorContact').classList.toggle('hidden', isRecipient);
-            document.getElementById('donorExtras').classList.toggle('hidden', isRecipient);
-            document.getElementById('recipientContact').classList.toggle('hidden', !isRecipient);
-            document.getElementById('recipientAddress').classList.toggle('hidden', !isRecipient);
-            document.getElementById('recipientBusiness').classList.toggle('hidden', !isRecipient);
-            var pwBlock = document.getElementById('passwordBlock');
-            if (isRecipient) {
-                document.getElementById('recipientContact').insertAdjacentElement('afterend', pwBlock);
-                setContactMode('email');
-            } else {
-                document.getElementById('donorExtras').insertAdjacentElement('afterend', pwBlock);
-            }
+            setContactMode('email');
             closeModal();
             document.getElementById('onboardView').classList.remove('hidden');
         }
@@ -603,15 +548,10 @@
                 alert('Please fill in your name to continue.');
                 return;
             }
-            if (currentRole === 'recipient') {
-                var phoneActive = !document.getElementById('contactPhoneBox').classList.contains('hidden');
-                var contactValue = phoneActive ? form.contactPhone.value.trim() : form.contactEmail.value.trim();
-                if (!contactValue) {
-                    alert(phoneActive ? 'Please enter your phone number to continue.' : 'Please enter your email address to continue.');
-                    return;
-                }
-            } else if (!form.email.value.trim()) {
-                alert('Please fill in your name and email to continue.');
+            var phoneActive = !document.getElementById('contactPhoneBox').classList.contains('hidden');
+            var contactValue = phoneActive ? form.contactPhone.value.trim() : form.contactEmail.value.trim();
+            if (!contactValue) {
+                alert(phoneActive ? 'Please enter your phone number to continue.' : 'Please enter your email address to continue.');
                 return;
             }
             if (!checkPassword()) {
