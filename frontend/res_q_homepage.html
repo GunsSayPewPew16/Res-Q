@@ -80,6 +80,175 @@
 </head>
 <body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
 
+    <!-- ROLE SELECTION GATE: opens on load, donor vs recipient -->
+    <div id="roleGate" class="fixed inset-0 z-[100] bg-[#0c0c0c] text-[#f4f4f0] flex flex-col md:flex-row overflow-y-auto">
+
+        <!-- Left panel: brand + visual (Res-Q style, no external logos) -->
+        <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </div>
+
+            <div class="py-10 md:py-0">
+                <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
+                    <span class="text-xs font-mono uppercase tracking-widest font-bold opacity-70 block mb-2">// AI-POWERED PROVISION PIPELINE</span>
+                    <span class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none block">Surplus<br>Matched.<br>Delivered.</span>
+                </div>
+                <h2 class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none mb-4">Centralized Dashboard</h2>
+                <p class="text-neutral-400 text-sm leading-relaxed max-w-md">Manage donors, shelter capacity, and live routing from a single console — with ease.</p>
+                <div class="flex space-x-2 mt-6" aria-hidden="true">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#ff4500]"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                </div>
+            </div>
+
+            <div class="font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES</div>
+        </div>
+
+        <!-- Right panel: role selection -->
+        <div class="md:w-1/2 flex items-center justify-center p-8 md:p-12">
+            <div class="w-full max-w-md">
+                <span class="text-xs font-mono text-[#ff4500] uppercase tracking-widest block mb-3">// PORTAL ACCESS</span>
+                <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none mb-4">Get Started Today</h1>
+                <p class="text-neutral-400 text-sm mb-10">Select how you'll be using Res-Q.</p>
+
+                <!-- Donor -->
+                <button onclick="handleRole('donor')" class="notched-card w-full text-left p-6 md:p-7 mb-6 group cursor-pointer">
+                    <div class="flex justify-between items-start mb-6">
+                        <span class="text-xs font-mono text-neutral-500">(a)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">SELECT →</span>
+                    </div>
+                    <span class="text-xs font-mono text-neutral-400 block mb-1">I want to contribute</span>
+                    <span class="text-xl md:text-2xl font-bold uppercase tracking-tight block mb-2">Donor</span>
+                    <span class="text-sm text-neutral-400 block">Post daily food and essential surplus for redistribution.</span>
+                </button>
+
+                <!-- Recipient -->
+                <button onclick="handleRole('recipient')" class="notched-card-alt w-full text-left p-6 md:p-7 mb-8 group cursor-pointer">
+                    <div class="flex justify-between items-start mb-6">
+                        <span class="text-xs font-mono text-neutral-500">(b)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">SELECT →</span>
+                    </div>
+                    <span class="text-xs font-mono text-neutral-400 block mb-1">I need supplies</span>
+                    <span class="text-xl md:text-2xl font-bold uppercase tracking-tight block mb-2">Recipient</span>
+                    <span class="text-sm text-neutral-400 block">Shelter or community requesting incoming allocations.</span>
+                </button>
+
+                <p class="text-center text-sm text-neutral-400">Already have an account? <a href="#" onclick="handleRole('login')" class="text-[#ff4500] font-bold hover:underline">Login</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ONBOARDING VIEW: About You form, shown after donor/recipient selection -->
+    <div id="onboardView" class="fixed inset-0 z-[100] bg-[#0c0c0c] text-[#f4f4f0] flex flex-col md:flex-row overflow-y-auto hidden">
+
+        <!-- Left panel: brand + visual (Res-Q style, no external logos) -->
+        <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </div>
+
+            <div class="py-10 md:py-0">
+                <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
+                    <span class="text-xs font-mono uppercase tracking-widest font-bold opacity-70 block mb-2">// PRIORITY ROUTING</span>
+                    <span class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none block">Profiled<br>Once.<br>Matched.</span>
+                </div>
+                <h2 class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none mb-4">Join The Network</h2>
+                <p id="onboardSideText" class="text-neutral-400 text-sm leading-relaxed max-w-md">Your surplus, profiled once — then routed to the shelters nearest to you.</p>
+                <div class="flex space-x-2 mt-6" aria-hidden="true">
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#ff4500]"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                </div>
+            </div>
+
+            <div class="font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES</div>
+        </div>
+
+        <!-- Right panel: About You form -->
+        <div class="md:w-1/2 flex items-start md:items-center justify-center p-8 md:p-12">
+            <div class="w-full max-w-md">
+                <span id="onboardLabel" class="text-xs font-mono text-[#ff4500] uppercase tracking-widest block mb-3">// DONOR ONBOARDING</span>
+                <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none mb-2">About You</h1>
+                <p id="onboardSubtitle" class="text-neutral-400 text-sm mb-8">Tell us where your surplus comes from.</p>
+
+                <form id="onboardForm" class="space-y-4" novalidate>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" name="firstName" placeholder="First Name" required
+                            class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+                        <input type="text" name="lastName" placeholder="Last Name" required
+                            class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+                    </div>
+
+                    <div class="flex">
+                        <select name="dialCode" aria-label="Country code"
+                            class="bg-neutral-900 border border-neutral-800 rounded-l-xl px-4 py-4 text-sm text-neutral-300 focus:outline-none focus:border-[#ff4500] transition-colors cursor-pointer">
+                            <option>+1</option>
+                            <option>+44</option>
+                            <option>+91</option>
+                            <option>+61</option>
+                            <option>+234</option>
+                        </select>
+                        <input type="tel" name="phone" placeholder="081234 56789"
+                            class="flex-1 min-w-0 bg-neutral-900 border border-l-0 border-neutral-800 rounded-r-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+                    </div>
+
+                    <input type="email" name="email" placeholder="Email address" required
+                        class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+
+                    <div>
+                        <label for="onboardLang" class="block text-xs font-mono text-neutral-500 uppercase tracking-widest mb-2">Preferred language</label>
+                        <select id="onboardLang" name="language"
+                            class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] focus:outline-none focus:border-[#ff4500] transition-colors cursor-pointer">
+                            <option>English</option>
+                            <option>Spanish</option>
+                            <option>French</option>
+                            <option>Hindi</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="onboardVehicle" class="block text-xs font-mono text-neutral-500 uppercase tracking-widest mb-2">Vehicle (Optional)</label>
+                        <select id="onboardVehicle" name="vehicle"
+                            class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] focus:outline-none focus:border-[#ff4500] transition-colors cursor-pointer">
+                            <option>No vehicle</option>
+                            <option>Cargo van</option>
+                            <option>Refrigerated van</option>
+                            <option>Box truck</option>
+                        </select>
+                    </div>
+
+                    <div class="relative">
+                        <input id="pwInput" type="password" name="password" placeholder="Password"
+                            class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 pr-24 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+                        <button type="button" id="pwToggle" onclick="togglePw()"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-neutral-400 hover:text-[#ff4500] transition-colors cursor-pointer">SHOW</button>
+                    </div>
+
+                    <ul class="font-mono text-xs space-y-2 pt-1">
+                        <li id="req-length" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 8 characters</span></li>
+                        <li id="req-upper" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 1 uppercase letter</span></li>
+                        <li id="req-digit" class="flex items-center space-x-3 text-neutral-500"><span class="req-icon">✕</span><span>At least 1 number</span></li>
+                    </ul>
+
+                    <button type="submit"
+                        class="w-full inline-flex items-center justify-center px-8 py-4 bg-[#ff4500] text-white text-sm font-bold rounded-full hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20 cursor-pointer">
+                        Complete Registration <span class="ml-3">→</span>
+                    </button>
+                </form>
+
+                <p class="text-center text-xs font-mono text-neutral-500 mt-6">STEP 02 / 02 — <button onclick="backToGate()" class="text-[#ff4500] hover:underline cursor-pointer">CHANGE ROLE</button></p>
+            </div>
+        </div>
+    </div>
+
     <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -267,43 +436,92 @@
         </div>
     </footer>
 
-    <div id="actionModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-6">
-        <div class="bg-[#141414] border border-neutral-800 rounded-3xl max-w-md w-full p-8 relative">
-            <button onclick="closeModal()" class="absolute top-6 right-6 text-neutral-400 hover:text-white text-lg font-mono">✕</button>
-            <span class="text-xs font-mono text-[#ff4500] uppercase block mb-2">// PORTAL ACCESS</span>
-            <h3 class="text-2xl font-bold mb-6">Select Your Role</h3>
-            <div class="space-y-4">
-                <button onclick="handleRole('business')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
-                    <div>
-                        <span class="font-bold block text-sm">Food Business / Donor</span>
-                        <span class="text-xs text-neutral-400">Post daily surplus and essentials</span>
-                    </div>
-                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
-                </button>
-                <button onclick="handleRole('shelter')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
-                    <div>
-                        <span class="font-bold block text-sm">Shelter / Recipient</span>
-                        <span class="text-xs text-neutral-400">View incoming allocations & pickups</span>
-                    </div>
-                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
+        var currentRole = 'donor';
+        var roleCopy = {
+            donor: {
+                label: '// DONOR ONBOARDING',
+                subtitle: 'Tell us where your surplus comes from.',
+                side: 'Your surplus, profiled once — then routed to the shelters nearest to you.'
+            },
+            recipient: {
+                label: '// RECIPIENT ONBOARDING',
+                subtitle: 'Tell us about your shelter or community.',
+                side: 'Your needs, profiled once — then matched with incoming allocations.'
+            }
+        };
+
         function openModal() {
-            document.getElementById('actionModal').classList.remove('hidden');
-            document.getElementById('actionModal').classList.add('flex');
+            document.getElementById('onboardView').classList.add('hidden');
+            document.getElementById('roleGate').classList.remove('hidden');
         }
         function closeModal() {
-            document.getElementById('actionModal').classList.remove('flex');
-            document.getElementById('actionModal').classList.add('hidden');
+            document.getElementById('roleGate').classList.add('hidden');
+        }
+        function backToGate() {
+            document.getElementById('onboardView').classList.add('hidden');
+            document.getElementById('roleGate').classList.remove('hidden');
         }
         function handleRole(role) {
-            alert('Welcome to Res-Q! Redirecting to ' + role + ' portal...');
+            if (role === 'login') {
+                alert('Welcome back to Res-Q! Redirecting to login...');
+                return;
+            }
+            currentRole = role;
+            var copy = roleCopy[role];
+            document.getElementById('onboardLabel').textContent = copy.label;
+            document.getElementById('onboardSubtitle').textContent = copy.subtitle;
+            document.getElementById('onboardSideText').textContent = copy.side;
             closeModal();
+            document.getElementById('onboardView').classList.remove('hidden');
         }
+        function togglePw() {
+            var input = document.getElementById('pwInput');
+            var btn = document.getElementById('pwToggle');
+            var showing = input.type === 'text';
+            input.type = showing ? 'password' : 'text';
+            btn.textContent = showing ? 'SHOW' : 'HIDE';
+        }
+        function checkPassword() {
+            var v = document.getElementById('pwInput').value;
+            var checks = {
+                'req-length': v.length >= 8,
+                'req-upper': /[A-Z]/.test(v),
+                'req-digit': /\d/.test(v)
+            };
+            var allOk = true;
+            for (var id in checks) {
+                var el = document.getElementById(id);
+                var icon = el.querySelector('.req-icon');
+                if (checks[id]) {
+                    el.classList.remove('text-neutral-500');
+                    el.classList.add('text-emerald-500');
+                    icon.textContent = '✓';
+                } else {
+                    el.classList.add('text-neutral-500');
+                    el.classList.remove('text-emerald-500');
+                    icon.textContent = '✕';
+                    allOk = false;
+                }
+            }
+            return allOk;
+        }
+        document.getElementById('onboardForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var form = e.target;
+            if (!form.firstName.value.trim() || !form.lastName.value.trim() || !form.email.value.trim()) {
+                alert('Please fill in your name and email to continue.');
+                return;
+            }
+            if (!checkPassword()) {
+                alert('Please meet all password requirements.');
+                return;
+            }
+            document.getElementById('onboardView').classList.add('hidden');
+            window.scrollTo(0, 0);
+            alert('Welcome to Res-Q, ' + form.firstName.value.trim() + '! Redirecting to ' + currentRole + ' portal...');
+        });
+        document.getElementById('pwInput').addEventListener('input', checkPassword);
     </script>
 </body>
 </html>
