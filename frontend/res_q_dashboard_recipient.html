@@ -76,55 +76,261 @@
                 0 100%
             );
         }
+
+        /* Custom scrollbar for the long dropdown and queue lists */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0c0c0c;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #262626;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ff4500;
+        }
     </style>
 </head>
-<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
+<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white min-h-screen flex flex-col">
 
-    <!-- RECIPIENT DASHBOARD: where a recipient lands once the goods profile is saved, content to come -->
+    <!-- RECIPIENT DASHBOARD: where a recipient lands once the goods profile is saved -->
 
     <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
             <a href="index.html" class="brand-home flex items-center space-x-3">
                 <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
                 <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+                <span class="hidden xl:inline text-xs font-mono text-neutral-400 ml-2">// RECIPIENT INTAKE &amp; DELIVERY</span>
             </a>
-            <nav class="hidden md:flex items-center space-x-8 text-sm font-mono text-neutral-400">
-                <span class="cursor-default">01 / INTAKE</span>
-                <span class="cursor-default">02 / DELIVERIES</span>
-                <span class="cursor-default">03 / HISTORY</span>
-            </nav>
-            <div>
-                <a href="index.html" class="inline-flex items-center px-5 py-2.5 rounded-full bg-[#ff4500] text-white text-sm font-bold tracking-wide hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20">
-                    Home →
-                </a>
+            <div class="flex items-center space-x-3">
+                <button type="button" onclick="triggerNotification()" aria-label="System notifications" class="p-2.5 rounded-xl bg-[#141414] border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-all relative">
+                    <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ff4500]"></span>
+                    <span aria-hidden="true">🔔</span>
+                </button>
+                <div class="flex items-center space-x-3 bg-[#141414] border border-neutral-800 rounded-full px-4 py-1.5">
+                    <div id="userInitials" class="w-7 h-7 rounded-full bg-[#ff4500] flex items-center justify-center font-bold text-xs text-black font-mono">R</div>
+                    <span id="userName" class="text-xs font-mono text-neutral-300 hidden md:inline">SIGNED IN</span>
+                </div>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-6 py-12">
+    <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-10">
 
-        <section class="mb-12 pt-8">
-            <span class="text-xs font-mono text-[#ff4500] tracking-widest uppercase block mb-3">// RECIPIENT DASHBOARD</span>
-            <h1 class="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-none">
+        <section class="mb-10">
+            <span class="text-xs font-mono text-[#ff4500] tracking-widest uppercase block mb-3">// RECIPIENT INTAKE CENTER</span>
+            <h1 class="text-4xl md:text-6xl font-black tracking-tighter uppercase leading-none">
                 Recipient Dashboard
             </h1>
         </section>
 
-        <!-- Intentionally empty content area, ready to be built out -->
-        <section class="notched-card p-8 md:p-12 min-h-[360px] flex items-center justify-center">
-            <span class="font-mono text-xs text-neutral-600 uppercase tracking-widest">// no deliveries scheduled yet</span>
-        </section>
+        <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- Left rail (vertical navigation) -->
+            <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
+                <div>
+                    <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-3">// NAVIGATION</span>
+                    <nav class="space-y-2 font-mono text-xs" aria-label="Dashboard sections">
+                        <a href="#" onclick="setActiveNav(this); return false;" class="nav-item flex items-center space-x-3 p-3 rounded-xl bg-neutral-900 text-[#ff4500] border border-neutral-800 font-bold transition-all">
+                            <span aria-hidden="true">⚡</span>
+                            <span>OVERVIEW</span>
+                        </a>
+                        <a href="#" onclick="setActiveNav(this); return false;" class="nav-item flex items-center space-x-3 p-3 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-900/50 border border-transparent transition-all">
+                            <span aria-hidden="true">🧾</span>
+                            <span>REQUEST INTAKE</span>
+                        </a>
+                        <a href="#" onclick="setActiveNav(this); return false;" class="nav-item flex items-center space-x-3 p-3 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-900/50 border border-transparent transition-all">
+                            <span aria-hidden="true">🚚</span>
+                            <span>INCOMING ROUTES</span>
+                        </a>
+                        <a href="#" onclick="setActiveNav(this); return false;" class="nav-item flex items-center space-x-3 p-3 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-900/50 border border-transparent transition-all">
+                            <span aria-hidden="true">📊</span>
+                            <span>HISTORY</span>
+                        </a>
+                    </nav>
+                </div>
+
+                <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
+                    <div class="p-3 bg-neutral-900 rounded-2xl border border-neutral-800">
+                        <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">// your registration</span>
+                        <span id="profileSummary" class="text-[10px] font-mono text-neutral-300 block leading-relaxed">—</span>
+                    </div>
+                    <div class="p-3 bg-neutral-900 rounded-2xl border border-neutral-800 flex items-center space-x-3">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <div>
+                            <span class="text-[11px] font-mono font-bold block text-white">DELIVERY SYNC</span>
+                            <span class="text-[10px] font-mono text-neutral-500">98.7% &middot; Latency: 14ms</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Working area -->
+            <div class="lg:col-span-10 space-y-6">
+
+                <!-- Metric row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="notched-card p-6 flex flex-col justify-between h-40">
+                        <div class="flex justify-between items-start">
+                            <span class="text-xs font-mono text-neutral-500">(01) COMMITTED INTAKE</span>
+                            <span class="px-2.5 py-1 rounded-full bg-orange-950/50 text-[#ff4500] text-[10px] font-mono border border-orange-900/50">LIVE</span>
+                        </div>
+                        <div>
+                            <div class="text-3xl font-black font-mono tracking-tight" id="metricIntake">132.0 KG</div>
+                            <p class="text-xs text-neutral-400 mt-1">Promised by partner donors for this week</p>
+                        </div>
+                    </div>
+
+                    <div class="notched-card p-6 flex flex-col justify-between h-40">
+                        <div class="flex justify-between items-start">
+                            <span class="text-xs font-mono text-neutral-500">(02) MATCH EFFICIENCY</span>
+                            <span class="px-2.5 py-1 rounded-full bg-emerald-950/50 text-emerald-400 text-[10px] font-mono border border-emerald-900/50">OPTIMIZED</span>
+                        </div>
+                        <div>
+                            <div class="text-3xl font-black font-mono tracking-tight">99.4%</div>
+                            <p class="text-xs text-neutral-400 mt-1">Geospatial routing confidence score</p>
+                        </div>
+                    </div>
+
+                    <div class="notched-orange p-6 flex flex-col justify-between h-40 text-black">
+                        <div class="flex justify-between items-start">
+                            <span class="text-xs font-mono font-bold opacity-80">(03) DELIVERIES RECEIVED</span>
+                            <span class="px-2.5 py-1 rounded-full bg-black/20 text-black text-[10px] font-mono font-bold">RECEIVED</span>
+                        </div>
+                        <div>
+                            <div class="text-3xl font-black font-mono tracking-tight" id="metricDeliveries">21</div>
+                            <p class="text-xs font-medium opacity-90 mt-1">Consignments accepted at the shelter</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map + quick request, then the queue rail -->
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+                    <div class="xl:col-span-8 space-y-6">
+
+                        <!-- Live routing map -->
+                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
+                            <div class="flex items-center justify-between mb-4 gap-4">
+                                <div>
+                                    <span class="text-[10px] font-mono text-[#ff4500] uppercase tracking-widest block mb-1">// LIVE GEOSPATIAL PIPELINE</span>
+                                    <h2 class="text-xl font-bold uppercase tracking-tight">Incoming Relief Routing Node Map</h2>
+                                </div>
+                                <div class="flex items-center space-x-2 font-mono text-xs bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-800 shrink-0">
+                                    <span class="w-2 h-2 rounded-full bg-[#ff4500] animate-ping"></span>
+                                    <span class="text-neutral-300 hidden sm:inline">SIMULATION ACTIVE</span>
+                                </div>
+                            </div>
+
+                            <div class="w-full h-72 rounded-2xl overflow-hidden border border-neutral-800 bg-[#0c0c0c] relative">
+                                <canvas id="dashCanvas" class="w-full h-full cursor-crosshair" aria-label="Interactive incoming relief routing map"></canvas>
+                                <div class="absolute bottom-3 left-3 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neutral-800 font-mono text-[10px] text-neutral-300 pointer-events-none">
+                                    Nodes: <span id="canvasNodeCount" class="text-[#ff4500] font-bold">6</span> | Received: <span id="canvasDeliveryCount" class="text-emerald-400 font-bold">21</span>
+                                </div>
+                            </div>
+                            <p class="text-[10px] font-mono text-neutral-500 mt-3">Click the map to drop an intake point and watch the nearest donor route into it.</p>
+                        </div>
+
+
+                    </div>
+
+                    <!-- Queue rail -->
+                    <div class="xl:col-span-4 space-y-6">
+
+                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
+                            <div class="flex items-center justify-between mb-6 pb-4 border-b border-neutral-800">
+                                <div>
+                                    <span class="text-[10px] font-mono text-[#ff4500] uppercase tracking-widest block mb-1">// INTAKE QUEUE</span>
+                                    <h2 class="text-xl font-bold uppercase tracking-tight">Incoming Deliveries</h2>
+                                </div>
+                                <span class="w-3 h-3 rounded-full bg-[#ff4500]"></span>
+                            </div>
+
+                            <div class="space-y-4 max-h-[420px] overflow-y-auto" id="deliveryQueueList">
+                                <div class="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all relative">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <span class="text-[10px] font-mono text-neutral-500">#INB-4417</span>
+                                        <span class="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 text-[9px] font-mono border border-emerald-900/50">RECEIVED</span>
+                                    </div>
+                                    <div class="font-bold text-sm mb-1">Bakery Batch Intake</div>
+                                    <div class="text-xs text-neutral-400 flex justify-between font-mono gap-2">
+                                        <span class="truncate">Source: Metro Store #1</span>
+                                        <span class="text-[#ff4500] shrink-0">35 kg</span>
+                                    </div>
+                                </div>
+
+                                <div class="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all relative">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <span class="text-[10px] font-mono text-neutral-500">#INB-4416</span>
+                                        <span class="px-2 py-0.5 rounded-full bg-orange-950/60 text-[#ff4500] text-[9px] font-mono border border-orange-900/50">IN_TRANSIT</span>
+                                    </div>
+                                    <div class="font-bold text-sm mb-1">Fresh Produce Crate</div>
+                                    <div class="text-xs text-neutral-400 flex justify-between font-mono gap-2">
+                                        <span class="truncate">Source: Fresh Market</span>
+                                        <span class="text-[#ff4500] shrink-0">50 kg</span>
+                                    </div>
+                                </div>
+
+                                <div class="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all relative">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <span class="text-[10px] font-mono text-neutral-500">#INB-4415</span>
+                                        <span class="px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 text-[9px] font-mono border border-neutral-700">SCHEDULED</span>
+                                    </div>
+                                    <div class="font-bold text-sm mb-1">Prepared Meals Pack</div>
+                                    <div class="text-xs text-neutral-400 flex justify-between font-mono gap-2">
+                                        <span class="truncate">Source: Central Bakery</span>
+                                        <span class="text-[#ff4500] shrink-0">28 kg</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 pt-4 border-t border-neutral-800/60 text-center font-mono text-[10px] text-neutral-500">
+                                + 18 more consignments in the matching buffer
+                            </div>
+                        </div>
+
+                        <div class="notched-card-alt p-6 border border-neutral-800">
+                            <span class="text-[10px] font-mono text-[#ff4500] uppercase tracking-widest block mb-2">// SYSTEM DIAGNOSTICS</span>
+                            <h2 class="text-lg font-bold uppercase tracking-tight mb-4">Python ML Node Health</h2>
+                            <div class="space-y-3 font-mono text-xs">
+                                <div class="flex justify-between items-center bg-neutral-900 p-3 rounded-xl border border-neutral-800 gap-3">
+                                    <span class="text-neutral-400">Demand Forecast</span>
+                                    <span class="text-emerald-400 font-bold shrink-0">STABLE (98.8%)</span>
+                                </div>
+                                <div class="flex justify-between items-center bg-neutral-900 p-3 rounded-xl border border-neutral-800 gap-3">
+                                    <span class="text-neutral-400">Geospatial Router</span>
+                                    <span class="text-emerald-400 font-bold shrink-0">ACTIVE (14ms)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
 
     </main>
 
-    <footer class="max-w-7xl mx-auto px-6 pb-10">
+    <footer class="max-w-7xl mx-auto px-6 pb-10 w-full">
         <div class="border-t border-neutral-800 pt-6 font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES — RECIPIENT</div>
     </footer>
 
+
+
     <script>
-        // THIS_PAGE is the dashboard this file represents. dashboardBoot() keeps the brand
-        // lockup pointed at the signed-in user's own dashboard and sends anyone who lands
-        // on the wrong one to the dashboard that matches their account role.
+        // ---------------------------------------------------------------------------
+        // Session: the dashboard is private. THIS_PAGE is the dashboard this file
+        // represents, and dashboardBoot() keeps the brand lockup pointed at the
+        // signed-in user's own dashboard, sending anyone who lands on the wrong one
+        // to the dashboard that matches their account role.
+        // ---------------------------------------------------------------------------
         var THIS_PAGE = 'recipient';
         var DASHBOARDS = {
             donor: 'res_q_dashboard_donor.html',
@@ -132,6 +338,20 @@
         };
         var TOKEN_KEY = 'resqToken';
         var ROLE_KEY = 'resqRole';
+
+        // Shared display names for the goods categories the goods profile saves.
+        var CATEGORY_LABELS = {
+            prepared_meals: 'Prepared Meals',
+            fresh_produce: 'Fresh Produce',
+            bakery_items: 'Bakery Items',
+            packaged_goods: 'Packaged Goods',
+            dairy_beverages: 'Dairy & Beverages',
+            household_essentials: 'Household & Essentials'
+        };
+        var DAY_SHORT = {
+            sat: 'SAT', sun: 'SUN', mon: 'MON', tue: 'TUE',
+            wed: 'WED', thu: 'THU', fri: 'FRI'
+        };
 
         function dashboardFor(role) {
             return DASHBOARDS[role] || '';
@@ -144,6 +364,36 @@
         }
         function dropStore(key) {
             try { window.localStorage.removeItem(key); } catch (err) { /* storage blocked */ }
+        }
+
+        function initialsOf(name) {
+            var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+            if (!parts.length) { return 'R'; }
+            var first = parts[0].charAt(0);
+            var last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+            return (first + last).toUpperCase();
+        }
+
+        // Paint the saved account into the header chip and the rail summary. The goods
+        // profile is optional, so an account without one simply reads "not set".
+        function renderUser(user) {
+            var name = user.business_name
+                || [user.first_name, user.last_name].filter(Boolean).join(' ')
+                || 'Res-Q Account';
+            document.getElementById('userName').textContent = name;
+            document.getElementById('userInitials').textContent = initialsOf(name);
+
+            var days = (user.delivery_days || []).map(function (key) {
+                return DAY_SHORT[key] || key.toUpperCase();
+            });
+            var needs = (user.surplus_types || []).map(function (key) {
+                return CATEGORY_LABELS[key] || key;
+            });
+            var parts = [
+                'days: ' + (days.length ? days.join(' + ') : 'not set'),
+                'needs: ' + (needs.length ? needs.join(' + ') : 'not set')
+            ];
+            document.getElementById('profileSummary').textContent = parts.join(' · ');
         }
 
         (function dashboardBoot() {
@@ -166,7 +416,7 @@
                 return;
             }
 
-            // ...then let the backend settle both the link and which dashboard this is.
+            // ...then let the backend settle the link, the header and which dashboard this is.
             fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
@@ -181,15 +431,132 @@
                         window.location.replace('index.html');
                         return;
                     }
-                    var role = (res.data.user && res.data.user.role) || '';
+                    var user = res.data.user || {};
+                    var role = user.role || '';
                     writeStore(ROLE_KEY, role);
                     setHome(dashboardFor(role) || 'index.html');
+                    renderUser(user);
                     if (role && role !== THIS_PAGE) {
                         window.location.replace(dashboardFor(role));
                     }
                 })
                 .catch(function () { /* offline: leave the cached links in place */ });
         })();
+
+        // ---------------------------------------------------------------------------
+        // Navigation rail
+        // ---------------------------------------------------------------------------
+        function setActiveNav(element) {
+            document.querySelectorAll('.nav-item').forEach(function (item) {
+                item.classList.remove('bg-neutral-900', 'text-[#ff4500]', 'border-neutral-800', 'font-bold');
+                item.classList.add('text-neutral-400', 'border-transparent');
+            });
+            element.classList.add('bg-neutral-900', 'text-[#ff4500]', 'border-neutral-800', 'font-bold');
+            element.classList.remove('text-neutral-400', 'border-transparent');
+        }
+
+        function triggerNotification() {
+            alert('Res-Q System: All nodes operating at peak efficiency. 2 donors matched to your requests.');
+        }
+
+        // ---------------------------------------------------------------------------
+        // Canvas routing simulation
+        // ---------------------------------------------------------------------------
+        window.addEventListener('load', function () {
+            var canvas = document.getElementById('dashCanvas');
+            var ctx = canvas.getContext('2d');
+            var nodeCount = document.getElementById('canvasNodeCount');
+
+            function resizeCanvas() {
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight;
+            }
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            var nodes = [
+                { x: 80, y: 80, type: 'donor', label: 'Metro Store #1', color: '#ff4500' },
+                { x: 260, y: 180, type: 'donor', label: 'Central Bakery', color: '#ff4500' },
+                { x: 140, y: 240, type: 'shelter', label: 'Hope Haven', color: '#10b981' },
+                { x: 420, y: 90, type: 'donor', label: 'Fresh Market', color: '#ff4500' },
+                { x: 520, y: 220, type: 'donor', label: 'Green Grocer', color: '#ff4500' },
+                { x: 340, y: 260, type: 'shelter', label: 'Your Intake Node', color: '#10b981' }
+            ];
+            var routingPackets = [];
+
+            canvas.addEventListener('click', function (e) {
+                var rect = canvas.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+                nodes.push({ x: x, y: y, type: 'shelter', label: 'New Intake Point', color: '#10b981' });
+                nodeCount.textContent = nodes.length;
+
+                // A new intake point pulls from the donor closest to it.
+                var donors = nodes.filter(function (n) { return n.type === 'donor'; });
+                if (donors.length) {
+                    var nearest = donors.reduce(function (best, donor) {
+                        var dx = donor.x - x;
+                        var dy = donor.y - y;
+                        var dist = Math.sqrt(dx * dx + dy * dy);
+                        return !best || dist < best.dist ? { node: donor, dist: dist } : best;
+                    }, null).node;
+                    routingPackets.push({ x: nearest.x, y: nearest.y, targetX: x, targetY: y, progress: 0 });
+                }
+            });
+
+            function animateMap() {
+                ctx.fillStyle = '#0c0c0c';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Faint mesh between nearby nodes.
+                ctx.strokeStyle = '#1f1f1f';
+                ctx.lineWidth = 1;
+                for (var i = 0; i < nodes.length; i++) {
+                    for (var j = i + 1; j < nodes.length; j++) {
+                        var dx = nodes[i].x - nodes[j].x;
+                        var dy = nodes[i].y - nodes[j].y;
+                        if (Math.sqrt(dx * dx + dy * dy) < 200) {
+                            ctx.beginPath();
+                            ctx.moveTo(nodes[i].x, nodes[i].y);
+                            ctx.lineTo(nodes[j].x, nodes[j].y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Packets travelling into a new intake point.
+                for (var k = routingPackets.length - 1; k >= 0; k--) {
+                    var p = routingPackets[k];
+                    p.progress += 0.025;
+                    ctx.fillStyle = '#ff4500';
+                    ctx.beginPath();
+                    ctx.arc(p.x + (p.targetX - p.x) * p.progress, p.y + (p.targetY - p.y) * p.progress, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    if (p.progress >= 1) { routingPackets.splice(k, 1); }
+                }
+
+                nodes.forEach(function (node) {
+                    ctx.fillStyle = node.color;
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = node.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 10, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#888888';
+                    ctx.font = '10px monospace';
+                    ctx.fillText(node.label, node.x + 14, node.y + 4);
+                });
+
+                requestAnimationFrame(animateMap);
+            }
+
+            animateMap();
+        });
     </script>
 </body>
 </html>
