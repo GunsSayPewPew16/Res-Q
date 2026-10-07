@@ -85,10 +85,10 @@
 
         <!-- Left panel: brand + visual (Res-Q style, no external logos) -->
         <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
-            <div class="flex items-center space-x-3">
+            <a href="index.html" class="brand-home flex items-center space-x-3">
                 <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
                 <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-            </div>
+            </a>
 
             <div class="py-10 md:py-0">
                 <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
@@ -148,10 +148,10 @@
 
         <!-- Left panel: brand + visual (Res-Q style, no external logos) -->
         <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
-            <div class="flex items-center space-x-3">
+            <a href="index.html" class="brand-home flex items-center space-x-3">
                 <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
                 <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-            </div>
+            </a>
 
             <div class="py-10 md:py-0">
                 <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
@@ -278,10 +278,10 @@
     <div id="loginView" class="fixed inset-0 z-[100] bg-[#0c0c0c] text-[#f4f4f0] flex flex-col md:flex-row overflow-y-auto hidden">
 
         <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
-            <div class="flex items-center space-x-3">
+            <a href="index.html" class="brand-home flex items-center space-x-3">
                 <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
                 <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-            </div>
+            </a>
 
             <div class="py-10 md:py-0">
                 <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
@@ -333,10 +333,10 @@
 
     <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
+            <a href="index.html" class="brand-home flex items-center space-x-3">
                 <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
                 <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-            </div>
+            </a>
             <nav class="hidden md:flex items-center space-x-8 text-sm font-mono text-neutral-400">
                 <a href="#pipeline" class="hover:text-[#f4f4f0] transition-colors">01 / PIPELINE</a>
                 <a href="#features" class="hover:text-[#f4f4f0] transition-colors">02 / CAPABILITIES</a>
@@ -624,12 +624,23 @@
             session.token = '';
             session.user = null;
             try { window.localStorage.removeItem(TOKEN_KEY); } catch (err) { /* storage blocked */ }
+            setBrandHome('index.html');
         }
         function escapeHtml(value) {
             return String(value).replace(/[&<>"']/g, function (c) {
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
             });
         }
+
+        // The brand lockup in the corner sends signed-in visitors to their dashboard and
+        // everyone else to the landing page. restoreSession() below keeps it in step with
+        // the session this page already resolves, so signing out updates it too.
+        function setBrandHome(href) {
+            Array.prototype.forEach.call(document.querySelectorAll('.brand-home'), function (link) {
+                link.setAttribute('href', href);
+            });
+        }
+        setBrandHome(session.token ? 'res_q_dashboard.html' : 'index.html');
 
         // Every call answers with { status, data } so the UI can react to the reason
         function api(path, options) {
@@ -708,6 +719,7 @@
         function renderSignedIn() {
             var line = document.getElementById('gateAccountLine');
             if (!session.user) { return; }
+            setBrandHome('res_q_dashboard.html');
             var name = escapeHtml(session.user.first_name || 'there');
             line.innerHTML = 'Signed in as <span class="text-[#f4f4f0] font-bold">' + name +
                 '</span> · <button onclick="gotoProfile()" class="text-[#ff4500] font-bold hover:underline cursor-pointer">CONTINUE →</button>' +

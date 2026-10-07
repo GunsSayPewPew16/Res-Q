@@ -117,10 +117,10 @@
 
         <!-- Left panel: brand + visual (Res-Q style, no external logos) -->
         <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
-            <div class="flex items-center space-x-3">
+            <a href="index.html" class="brand-home flex items-center space-x-3">
                 <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
                 <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-            </div>
+            </a>
 
             <div class="py-10 md:py-0">
                 <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
@@ -579,6 +579,31 @@
                     submitBtn.classList.remove('opacity-60');
                 });
         });
+
+        // The brand lockup in the corner sends signed-in visitors to their dashboard and
+        // everyone else to the landing page.
+        (function brandLink() {
+            var links = document.querySelectorAll('.brand-home');
+            if (!links.length) return;
+
+            function setHome(href) {
+                Array.prototype.forEach.call(links, function (link) {
+                    link.setAttribute('href', href);
+                });
+            }
+
+            var token = '';
+            try { token = window.localStorage.getItem('resqToken') || ''; } catch (err) { token = ''; }
+
+            // Trust the stored token first so the click lands instantly...
+            setHome(token ? 'res_q_dashboard.html' : 'index.html');
+            if (!token) return;
+
+            // ...then let the backend settle it, in case the session has expired.
+            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+                .then(function (response) { if (!response.ok) { setHome('index.html'); } })
+                .catch(function () { setHome('index.html'); });
+        })();
     </script>
 </body>
 </html>

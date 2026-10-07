@@ -69,6 +69,12 @@ the matching logic, and invites visitors into the flow above.
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
 | `frontend/res_q_dashboard.html` | Post-profile landing page — site chrome with an empty content area, to be built out |
 
+Every page's top-left Res-Q lockup is a link. It goes to the dashboard for a
+signed-in visitor and to the landing page otherwise. Each page works this out
+from the stored token and confirms it against `/api/me`, so an expired session
+falls back to the landing page rather than stranding the visitor on a page they
+can no longer use.
+
 ## Running it locally
 
 Start the backend, which serves the pages and the API on one origin:
