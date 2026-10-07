@@ -263,11 +263,11 @@
 
                     <button type="submit"
                         class="w-full inline-flex items-center justify-center px-8 py-4 bg-[#ff4500] text-white text-sm font-bold rounded-full hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20 cursor-pointer">
-                        Complete Registration <span class="ml-3">→</span>
+                        Complete Onboarding <span class="ml-3">→</span>
                     </button>
                 </form>
 
-                <p class="text-center text-xs font-mono text-neutral-500 mt-6">STEP 02 / 02 — <button onclick="backToGate()" class="text-[#ff4500] hover:underline cursor-pointer">CHANGE ROLE</button></p>
+                <p class="text-center text-xs font-mono text-neutral-500 mt-6">STEP 02 / 03 — <button onclick="backToGate()" class="text-[#ff4500] hover:underline cursor-pointer">CHANGE ROLE</button></p>
             </div>
         </div>
     </div>
@@ -558,9 +558,13 @@
                 alert('Please meet all password requirements.');
                 return;
             }
-            document.getElementById('onboardView').classList.add('hidden');
-            window.scrollTo(0, 0);
-            alert('Welcome to Res-Q, ' + form.firstName.value.trim() + '! Redirecting to ' + currentRole + ' portal...');
+            var firstName = form.firstName.value.trim();
+            try {
+                window.sessionStorage.setItem('resqFirstName', firstName);
+            } catch (err) {
+                // storage unavailable, profile page falls back to a generic greeting
+            }
+            window.location.href = 'res_q_surplus_profile.html?role=' + encodeURIComponent(currentRole);
         });
         document.getElementById('pwInput').addEventListener('input', checkPassword);
     </script>

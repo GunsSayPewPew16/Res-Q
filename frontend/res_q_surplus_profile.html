@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Res-Q | Surplus Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0c0c0c',
+                        cardbg: '#141414',
+                        cardhover: '#1c1c1c',
+                        accent: '#ff4500',
+                        cream: '#f4f4f0',
+                        muted: '#888888'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom notched corners to mimic the Apptronik reference style */
+        .notched-card {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                0 0, 
+                calc(100% - 35px) 0, 
+                100% 35px, 
+                100% 100%, 
+                0 100%
+            );
+        }
+        .notched-card:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Inverse notch variant */
+        .notched-card-alt {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                35px 0, 
+                100% 0, 
+                100% 100%, 
+                0 100%, 
+                0 35px
+            );
+        }
+        .notched-card-alt:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Orange accent CTA card with notch */
+        .notched-orange {
+            background-color: #ff4500;
+            border-radius: 1.5rem;
+            clip-path: polygon(
+                0 0, 
+                100% 0, 
+                100% calc(100% - 35px), 
+                calc(100% - 35px) 100%, 
+                0 100%
+            );
+        }
+
+        /* Selected state for the firm classification radio cards */
+        .firm-option input:checked + .firm-card {
+            border-color: #ff4500;
+            background-color: rgba(23, 23, 23, 0.8);
+        }
+        .firm-option input:checked + .firm-card .firm-dot {
+            border-color: #ff4500;
+            background-color: #ff4500;
+        }
+        .firm-option input:checked + .firm-card .firm-dot-inner {
+            opacity: 1;
+        }
+
+        /* Thin scrollbar for the item selector list */
+        .resq-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #333 #141414;
+        }
+        .resq-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .resq-scroll::-webkit-scrollbar-track {
+            background: #141414;
+        }
+        .resq-scroll::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+        .resq-scroll::-webkit-scrollbar-thumb:hover {
+            background: #ff4500;
+        }
+    </style>
+</head>
+<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
+
+    <!-- SURPLUS PROFILE: step 03, opened from the About You form -->
+    <div class="min-h-screen flex flex-col md:flex-row">
+
+        <!-- Left panel: brand + visual (Res-Q style, no external logos) -->
+        <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </div>
+
+            <div class="py-10 md:py-0">
+                <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
+                    <span class="text-xs font-mono uppercase tracking-widest font-bold opacity-70 block mb-2">// GOODS ROUTING</span>
+                    <span class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none block">Select.<br>Profile.<br>Route.</span>
+                </div>
+                <h2 class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none mb-4">Surplus Profile</h2>
+                <p id="profileSideText" class="text-neutral-400 text-sm leading-relaxed max-w-md">Your surplus, profiled once — then routed to the shelters nearest to you.</p>
+                <div class="flex space-x-2 mt-6" aria-hidden="true">
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#ff4500]"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                </div>
+            </div>
+
+            <div class="font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES</div>
+        </div>
+
+        <!-- Right panel: goods profile form -->
+        <div class="md:w-1/2 flex items-start md:items-center justify-center p-8 md:p-12">
+            <div class="w-full max-w-md">
+                <span id="profileLabel" class="text-xs font-mono text-[#ff4500] uppercase tracking-widest block mb-3">// DONOR SURPLUS PROFILE</span>
+                <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none mb-2">Goods Profile</h1>
+                <p id="profileSubtitle" class="text-neutral-400 text-sm mb-8">Select your establishment type and the goods you handle most.</p>
+
+                <form id="surplusForm" class="space-y-6" novalidate>
+
+                    <!-- 01. Firm classification -->
+                    <div>
+                        <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 01. SELECT FIRM CLASSIFICATION</span>
+                        <div class="grid grid-cols-1 gap-4">
+
+                            <!-- Retail Store -->
+                            <label class="firm-option relative cursor-pointer group block">
+                                <input type="radio" name="firmType" value="retail" class="peer sr-only" required onchange="updateSurplusOptions('retail')">
+                                <div class="firm-card p-5 md:p-6 rounded-2xl bg-neutral-900 border border-neutral-800 peer-checked:border-[#ff4500] peer-checked:bg-neutral-900/80 peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-all flex items-center justify-between">
+                                    <div class="flex items-center space-x-4 min-w-0">
+                                        <div class="w-12 h-12 shrink-0 rounded-xl bg-neutral-800 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                            🏬
+                                        </div>
+                                        <div class="min-w-0">
+                                            <span class="font-bold block text-base text-white">Retail Store</span>
+                                            <span class="text-xs font-mono text-neutral-400">Supermarket, grocery, or convenience store</span>
+                                        </div>
+                                    </div>
+                                    <div class="firm-dot w-6 h-6 shrink-0 rounded-full border border-neutral-700 flex items-center justify-center transition-all">
+                                        <div class="firm-dot-inner w-2 h-2 rounded-full bg-black opacity-0 transition-opacity"></div>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <!-- Eatery / Restaurant -->
+                            <label class="firm-option relative cursor-pointer group block">
+                                <input type="radio" name="firmType" value="eatery" class="peer sr-only" required onchange="updateSurplusOptions('eatery')">
+                                <div class="firm-card p-5 md:p-6 rounded-2xl bg-neutral-900 border border-neutral-800 peer-checked:border-[#ff4500] peer-checked:bg-neutral-900/80 peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-all flex items-center justify-between">
+                                    <div class="flex items-center space-x-4 min-w-0">
+                                        <div class="w-12 h-12 shrink-0 rounded-xl bg-neutral-800 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                            🍲
+                                        </div>
+                                        <div class="min-w-0">
+                                            <span class="font-bold block text-base text-white">Eatery / Restaurant</span>
+                                            <span class="text-xs font-mono text-neutral-400">Kitchen, bakery, cafe, or dining hall</span>
+                                        </div>
+                                    </div>
+                                    <div class="firm-dot w-6 h-6 shrink-0 rounded-full border border-neutral-700 flex items-center justify-center transition-all">
+                                        <div class="firm-dot-inner w-2 h-2 rounded-full bg-black opacity-0 transition-opacity"></div>
+                                    </div>
+                                </div>
+                            </label>
+
+                        </div>
+                    </div>
+
+                    <!-- 02. Item selector -->
+                    <div>
+                        <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 02. PRIMARY USUAL SURPLUS CATEGORY</span>
+
+                        <div class="relative">
+                            <!-- Dropdown trigger -->
+                            <div id="dropdownTrigger" onclick="toggleDropdown()" role="button" tabindex="0" aria-haspopup="listbox"
+                                class="w-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl px-5 py-4 cursor-pointer flex items-center justify-between transition-colors">
+                                <div id="selectedDisplay" class="flex items-center space-x-3 text-neutral-500 min-w-0">
+                                    <span class="text-xl">📦</span>
+                                    <span class="font-mono text-sm truncate">Select usual surplus category...</span>
+                                </div>
+                                <span id="dropdownArrow" class="text-neutral-500 font-mono text-xs transform transition-transform duration-200">▼</span>
+                            </div>
+
+                            <!-- Native select kept for validation -->
+                            <select id="surplusSelect" name="surplusType" required class="sr-only" tabindex="-1" aria-hidden="true">
+                                <option value="" disabled selected>Select surplus...</option>
+                                <option value="prepared_meals">Prepared Meals</option>
+                                <option value="fresh_produce">Fresh Produce</option>
+                                <option value="bakery_items">Bakery Items</option>
+                                <option value="packaged_goods">Packaged Goods</option>
+                                <option value="dairy_beverages">Dairy &amp; Beverages</option>
+                                <option value="household_essentials">Household &amp; Essentials</option>
+                            </select>
+
+                            <!-- Item selector list: three items visible, scroll for the rest -->
+                            <div id="dropdownMenu" class="hidden absolute top-full left-0 right-0 mt-2 bg-[#141414] border border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+                                <div id="dropdownMenuList" class="resq-scroll p-2 space-y-1 max-h-[212px] overflow-y-auto font-mono text-sm">
+                                    <div onclick="selectOption('prepared_meals', 'Prepared Meals', '🍲')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                        <span class="text-xl">🍲</span>
+                                        <div>
+                                            <span class="font-bold block text-white text-sm">Prepared Meals</span>
+                                            <span class="text-xs text-neutral-500">Cooked dishes, catered trays, hot meals</span>
+                                        </div>
+                                    </div>
+                                    <div onclick="selectOption('fresh_produce', 'Fresh Produce', '🥦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                        <span class="text-xl">🥦</span>
+                                        <div>
+                                            <span class="font-bold block text-white text-sm">Fresh Produce</span>
+                                            <span class="text-xs text-neutral-500">Fruits, vegetables, leafy greens</span>
+                                        </div>
+                                    </div>
+                                    <div onclick="selectOption('bakery_items', 'Bakery Items', '🥐')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                        <span class="text-xl">🥐</span>
+                                        <div>
+                                            <span class="font-bold block text-white text-sm">Bakery Items</span>
+                                            <span class="text-xs text-neutral-500">Breads, pastries, cakes, daily bake</span>
+                                        </div>
+                                    </div>
+                                    <div onclick="selectOption('packaged_goods', 'Packaged Goods', '📦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                        <span class="text-xl">📦</span>
+                                        <div>
+                                            <span class="font-bold block text-white text-sm">Packaged Goods</span>
+                                            <span class="text-xs text-neutral-500">Canned food, dry goods, snacks</span>
+                                        </div>
+                                    </div>
+                                    <div onclick="selectOption('dairy_beverages', 'Dairy &amp; Beverages', '🥛')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                        <span class="text-xl">🥛</span>
+                                        <div>
+                                            <span class="font-bold block text-white text-sm">Dairy &amp; Beverages</span>
+                                            <span class="text-xs text-neutral-500">Milk, yogurt, juices, bottled drinks</span>
+                                        </div>
+                                    </div>
+                                    <div onclick="selectOption('household_essentials', 'Household &amp; Essentials', '🧴')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                        <span class="text-xl">🧴</span>
+                                        <div>
+                                            <span class="font-bold block text-white text-sm">Household &amp; Essentials</span>
+                                            <span class="text-xs text-neutral-500">Hygiene kits, soap, blankets, paper goods</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full inline-flex items-center justify-center px-8 py-4 bg-[#ff4500] text-white text-sm font-bold rounded-full hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20 cursor-pointer">
+                        Initialize Profile <span class="ml-3">→</span>
+                    </button>
+                </form>
+
+                <p class="text-center text-xs font-mono text-neutral-500 mt-6">STEP 03 / 03 — <a href="res_q_homepage.html" class="text-[#ff4500] hover:underline cursor-pointer">BACK TO ABOUT YOU</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var currentRole = 'donor';
+        var profileCopy = {
+            donor: {
+                label: '// DONOR SURPLUS PROFILE',
+                subtitle: 'Select your establishment type and the goods you handle most.',
+                side: 'Your surplus, profiled once — then routed to the shelters nearest to you.'
+            },
+            recipient: {
+                label: '// RECIPIENT NEEDS PROFILE',
+                subtitle: 'Select your establishment type and the goods you need most.',
+                side: 'Your needs, profiled once — then matched with incoming allocations.'
+            }
+        };
+
+        // Apply the role passed from the About You form
+        (function applyRole() {
+            var match = window.location.search.match(/[?&]role=([^&]+)/);
+            currentRole = (match && match[1] === 'recipient') ? 'recipient' : 'donor';
+            var copy = profileCopy[currentRole];
+            document.getElementById('profileLabel').textContent = copy.label;
+            document.getElementById('profileSubtitle').textContent = copy.subtitle;
+            document.getElementById('profileSideText').textContent = copy.side;
+        })();
+
+        // Toggle the item selector
+        function toggleDropdown() {
+            var menu = document.getElementById('dropdownMenu');
+            var arrow = document.getElementById('dropdownArrow');
+            var trigger = document.getElementById('dropdownTrigger');
+
+            menu.classList.toggle('hidden');
+            arrow.classList.toggle('rotate-180');
+            trigger.classList.toggle('border-[#ff4500]');
+
+            if (!menu.classList.contains('hidden')) {
+                sizeDropdownMenu();
+            }
+        }
+
+        // Size the open list so exactly three items are visible, the rest scroll
+        function sizeDropdownMenu() {
+            var menu = document.getElementById('dropdownMenu');
+            var list = document.getElementById('dropdownMenuList');
+            if (!menu || !list || menu.classList.contains('hidden')) return;
+            var rows = list.children;
+            if (rows.length < 3) return;
+
+            // Open at the first item, then measure in layout space so a stale
+            // scroll offset can never shrink the window
+            list.scrollTop = 0;
+            var thirdRow = rows[2];
+            var nextRow = rows[3];
+            var spacing = nextRow
+                ? (parseFloat(getComputedStyle(nextRow).marginTop) || 0)
+                : (parseFloat(getComputedStyle(list).paddingBottom) || 0);
+            var threeItemHeight = (thirdRow.offsetTop + thirdRow.offsetHeight) - list.offsetTop + spacing;
+
+            list.style.maxHeight = Math.ceil(threeItemHeight) + 'px';
+        }
+
+        window.addEventListener('resize', function() {
+            if (!document.getElementById('dropdownMenu').classList.contains('hidden')) {
+                sizeDropdownMenu();
+            }
+        });
+
+        // Pick an item from the selector
+        function selectOption(value, label, icon) {
+            document.getElementById('surplusSelect').value = value;
+            document.getElementById('selectedDisplay').innerHTML =
+                '<span class="text-xl">' + icon + '</span><span class="font-mono text-sm text-white font-bold truncate">' + label + '</span>';
+            toggleDropdown();
+        }
+
+        // Close the selector when clicking outside
+        window.addEventListener('click', function(e) {
+            var trigger = document.getElementById('dropdownTrigger');
+            var menu = document.getElementById('dropdownMenu');
+            var arrow = document.getElementById('dropdownArrow');
+
+            if (!trigger.contains(e.target) && !menu.contains(e.target)) {
+                menu.classList.add('hidden');
+                arrow.classList.remove('rotate-180');
+                trigger.classList.remove('border-[#ff4500]');
+            }
+        });
+
+        // Keyboard support for the trigger
+        document.getElementById('dropdownTrigger').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleDropdown();
+            }
+            if (e.key === 'Escape') {
+                document.getElementById('dropdownMenu').classList.add('hidden');
+                document.getElementById('dropdownArrow').classList.remove('rotate-180');
+                this.classList.remove('border-[#ff4500]');
+            }
+        });
+
+        function updateSurplusOptions(type) {
+            console.log('Firm type selected:', type);
+        }
+
+        document.getElementById('surplusForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var firmType = document.querySelector('input[name="firmType"]:checked');
+            if (!firmType) {
+                alert('Please select your firm classification to continue.');
+                return;
+            }
+            var surplusType = document.getElementById('surplusSelect').value;
+            if (!surplusType) {
+                alert('Please select a usual surplus category.');
+                return;
+            }
+            var firstName = '';
+            try {
+                firstName = window.sessionStorage.getItem('resqFirstName') || '';
+            } catch (err) {
+                firstName = '';
+            }
+            var who = firstName ? firstName : 'friend';
+            alert('Welcome to Res-Q, ' + who + '! Your ' + currentRole + ' profile is active and routing is now enabled.');
+        });
+    </script>
+</body>
+</html>
