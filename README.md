@@ -39,11 +39,14 @@ role chosen at the start.
    either an email address or a phone number (toggleable in place), a password
    with live requirement checks, and a delivery address. Nothing invalid can be
    submitted.
-3. **Goods profile** — the visitor classifies their establishment as a
-   *Retail Store* or an *Eatery / Restaurant* and picks their primary surplus
-   category from Prepared Meals, Fresh Produce, Bakery Items, Packaged Goods,
-   Dairy & Beverages and Household & Essentials. The selector shows three
-   categories at a time and scrolls for the rest.
+3. **Goods profile** — the questions differ by role. A donor classifies their
+   establishment as a *Retail Store* or an *Eatery / Restaurant* and picks their
+   primary surplus category from Prepared Meals, Fresh Produce, Bakery Items,
+   Packaged Goods, Dairy & Beverages and Household & Essentials. A recipient
+   instead picks a preferred delivery day (Saturday through Friday) and their
+   primary need from Prepared Meals, Fresh Produce, Dairy & Beverages, Household
+   & Essentials and Packaged Goods. The selector shows three categories at a time
+   and scrolls for the rest.
 
 Completing the goods profile confirms that the profile is active. All
 completion states are client-side only.
@@ -104,7 +107,7 @@ and `sessions`. Restart the server for a mode change to take effect.
 | `POST` | `/api/login` | Sign in with an email or phone plus password |
 | `GET` | `/api/me` | Return the signed-in user for a bearer token |
 | `POST` | `/api/logout` | Drop the session |
-| `POST` | `/api/profile` | Save the establishment type and surplus category |
+| `POST` | `/api/profile` | Save the goods profile — establishment type and surplus category for donors, preferred delivery day and primary need for recipients |
 
 How the pieces connect:
 

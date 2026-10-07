@@ -150,9 +150,9 @@
 
                 <form id="surplusForm" class="space-y-6" novalidate>
 
-                    <!-- 01. Firm classification -->
-                    <div>
-                        <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 01. SELECT FIRM CLASSIFICATION</span>
+                    <!-- 01. Firm classification (donors) -->
+                    <div id="firmStep">
+                        <span id="stepOneLabel" class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 01. SELECT FIRM CLASSIFICATION</span>
                         <div class="grid grid-cols-1 gap-4">
 
                             <!-- Retail Store -->
@@ -196,9 +196,44 @@
                         </div>
                     </div>
 
+                    <!-- 01. Preferred delivery day (recipients) -->
+                    <div id="dayStep" class="hidden">
+                        <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 01. SELECT PREFERRED DAY OF DELIVERY</span>
+                        <div class="grid grid-cols-7 gap-2">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="deliveryDay" value="sat" class="peer sr-only">
+                                <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">SAT</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="deliveryDay" value="sun" class="peer sr-only">
+                                <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">SUN</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="deliveryDay" value="mon" class="peer sr-only">
+                                <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">MON</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="deliveryDay" value="tue" class="peer sr-only">
+                                <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">TUE</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="deliveryDay" value="wed" class="peer sr-only">
+                                <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">WED</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="deliveryDay" value="thu" class="peer sr-only">
+                                <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">THU</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="deliveryDay" value="fri" class="peer sr-only">
+                                <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">FRI</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- 02. Item selector -->
                     <div>
-                        <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 02. PRIMARY USUAL SURPLUS CATEGORY</span>
+                        <span id="stepTwoLabel" class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 02. PRIMARY USUAL SURPLUS CATEGORY</span>
 
                         <div class="relative">
                             <!-- Dropdown trigger -->
@@ -239,7 +274,7 @@
                                             <span class="text-xs text-neutral-500">Fruits, vegetables, leafy greens</span>
                                         </div>
                                     </div>
-                                    <div onclick="selectOption('bakery_items', 'Bakery Items', '🥐')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div data-donor-only="true" onclick="selectOption('bakery_items', 'Bakery Items', '🥐')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🥐</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Bakery Items</span>
@@ -295,7 +330,7 @@
             },
             recipient: {
                 label: '// RECIPIENT NEEDS PROFILE',
-                subtitle: 'Select your establishment type and the goods you need most.',
+                subtitle: 'Tell us when you would like deliveries and what you need most.',
                 side: 'Your needs, profiled once — then matched with incoming allocations.'
             }
         };
@@ -308,6 +343,26 @@
             document.getElementById('profileLabel').textContent = copy.label;
             document.getElementById('profileSubtitle').textContent = copy.subtitle;
             document.getElementById('profileSideText').textContent = copy.side;
+
+            // Donors describe their establishment; recipients pick a delivery day instead,
+            // so the first step and its heading swap over.
+            var isRecipient = currentRole === 'recipient';
+            document.getElementById('firmStep').classList.toggle('hidden', isRecipient);
+            document.getElementById('dayStep').classList.toggle('hidden', !isRecipient);
+            document.getElementById('stepOneLabel').textContent = isRecipient
+                ? '// 01. SELECT PREFERRED DAY OF DELIVERY'
+                : '// 01. SELECT FIRM CLASSIFICATION';
+            document.getElementById('stepTwoLabel').textContent = isRecipient
+                ? '// 02. PRIMARY NEEDS'
+                : '// 02. PRIMARY USUAL SURPLUS CATEGORY';
+
+            if (isRecipient) {
+                // Bakery items are a donor category only
+                var bakeryRow = document.querySelector('#dropdownMenu div[data-donor-only]');
+                if (bakeryRow) { bakeryRow.remove(); }
+                var bakeryOption = document.querySelector('#surplusSelect option[value="bakery_items"]');
+                if (bakeryOption) { bakeryOption.remove(); }
+            }
         })();
 
         // Toggle the item selector
@@ -408,16 +463,34 @@
 
         document.getElementById('surplusForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            var firmType = document.querySelector('input[name="firmType"]:checked');
-            if (!firmType) {
-                showProfileMessage('Please select your firm classification to continue.');
-                return;
+            // Donors answer with an establishment type, recipients with a delivery day
+            var isRecipient = currentRole === 'recipient';
+            var payload = {};
+
+            if (isRecipient) {
+                var day = document.querySelector('input[name="deliveryDay"]:checked');
+                if (!day) {
+                    showProfileMessage('Please select the day you would prefer deliveries.');
+                    return;
+                }
+                payload.deliveryDay = day.value;
+            } else {
+                var firmType = document.querySelector('input[name="firmType"]:checked');
+                if (!firmType) {
+                    showProfileMessage('Please select your firm classification to continue.');
+                    return;
+                }
+                payload.firmType = firmType.value;
             }
+
             var surplusType = document.getElementById('surplusSelect').value;
             if (!surplusType) {
-                showProfileMessage('Please select a usual surplus category.');
+                showProfileMessage(isRecipient
+                    ? 'Please select your primary need.'
+                    : 'Please select a usual surplus category.');
                 return;
             }
+            payload.surplusType = surplusType;
 
             var token = readToken();
             if (!token) {
@@ -432,7 +505,7 @@
             fetch('/api/profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-                body: JSON.stringify({ firmType: firmType.value, surplusType: surplusType })
+                body: JSON.stringify(payload)
             })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
@@ -444,7 +517,10 @@
                         var user = res.data.user || {};
                         var who = user.first_name || 'there';
                         var role = user.role || currentRole;
-                        showProfileMessage('Saved. Welcome to Res-Q, ' + who + ' — your ' + role + ' profile is active and routing is now enabled.', 'ok');
+                        var detail = role === 'recipient'
+                            ? ' deliveries are set for ' + (payload.deliveryDay || '').toUpperCase() + '.'
+                            : '';
+                        showProfileMessage('Saved. Welcome to Res-Q, ' + who + ' — your ' + role + ' profile is active and routing is now enabled.' + detail, 'ok');
                         return;
                     }
                     var problem = (res.data && res.data.error) || 'We could not save your profile. Please try again.';

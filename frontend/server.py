@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT    NOT NULL,
     password_salt TEXT    NOT NULL,
     firm_type     TEXT,
+    delivery_day  TEXT,
     surplus_type  TEXT,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -79,7 +80,19 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PUBLIC_FIELDS = (
     "id", "role", "first_name", "last_name", "business_name", "email", "phone",
     "dial_code", "street", "sub_locality", "locality", "province", "city",
-    "postal", "firm_type", "surplus_type", "created_at",
+    "postal", "firm_type", "delivery_day", "surplus_type", "created_at",
+)
+
+# The goods profile asks different questions per role: donors describe where the goods
+# come from, recipients when they want them delivered and what they need.
+DELIVERY_DAYS = ("sat", "sun", "mon", "tue", "wed", "thu", "fri")
+DONOR_SURPLUS = (
+    "prepared_meals", "fresh_produce", "bakery_items", "packaged_goods",
+    "dairy_beverages", "household_essentials",
+)
+RECIPIENT_NEEDS = (
+    "prepared_meals", "fresh_produce", "dairy_beverages", "household_essentials",
+    "packaged_goods",
 )
 
 
@@ -93,6 +106,10 @@ def connect():
 def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
+        # Databases created before recipients chose a delivery day need the extra column.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+        if "delivery_day" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN delivery_day TEXT")
 
 
 def hash_password(password, salt=None):
@@ -292,6 +309,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "phone": phone,
                 "dial_code": dial_code,
                 "firm_type": None,
+                "delivery_day": None,
                 "surplus_type": None,
                 "demo": True,
             }
@@ -467,38 +485,12 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
 
-        firm_type = (data.get("firmType") or "").strip()
-        surplus_type = (data.get("surplusType") or "").strip()
-        if firm_type not in ("retail", "eatery"):
-            return self.send_json(
-                400,
-                {
-                    "error": "Select whether you are a retail store or an eatery.",
-                    "field": "firmType",
-                },
-            )
-        if not surplus_type:
-            return self.send_json(
-                400,
-                {"error": "Select a usual surplus category.", "field": "surplusType"},
-            )
-
         token = self.bearer_token()
-        if not PERSIST:
-            user = DEMO_SESSIONS.get(token)
-            if user is None:
-                return self.send_json(
-                    401,
-                    {
-                        "error": "Your session has expired. Please sign in again.",
-                        "code": "no_session",
-                    },
-                )
-            user["firm_type"] = firm_type
-            user["surplus_type"] = surplus_type
-            return self.send_json(200, {"ok": True, "demo": True, "user": user})
-        with connect() as conn:
-            row = self.user_for_token(conn, token)
+
+        # Resolve the signed-in user first: the role decides which answers are expected.
+        if PERSIST:
+            with connect() as conn:
+                row = self.user_for_token(conn, token)
             if row is None:
                 return self.send_json(
                     401,
@@ -507,12 +499,68 @@ class ResQHandler(SimpleHTTPRequestHandler):
                         "code": "no_session",
                     },
                 )
+            session_user = self.public_user(row)
+        else:
+            session_user = DEMO_SESSIONS.get(token)
+            if session_user is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+
+        role = session_user.get("role", "donor")
+        firm_type = (data.get("firmType") or "").strip().lower()
+        delivery_day = (data.get("deliveryDay") or "").strip().lower()
+        surplus_type = (data.get("surplusType") or "").strip().lower()
+
+        if role == "recipient":
+            if delivery_day not in DELIVERY_DAYS:
+                return self.send_json(
+                    400,
+                    {
+                        "error": "Select the day you would prefer deliveries.",
+                        "field": "deliveryDay",
+                    },
+                )
+            if surplus_type not in RECIPIENT_NEEDS:
+                return self.send_json(
+                    400, {"error": "Select your primary need.", "field": "surplusType"}
+                )
+            firm_type = None
+        else:
+            if firm_type not in ("retail", "eatery"):
+                return self.send_json(
+                    400,
+                    {
+                        "error": "Select whether you are a retail store or an eatery.",
+                        "field": "firmType",
+                    },
+                )
+            if surplus_type not in DONOR_SURPLUS:
+                return self.send_json(
+                    400,
+                    {"error": "Select a usual surplus category.", "field": "surplusType"},
+                )
+            delivery_day = None
+
+        if not PERSIST:
+            session_user["firm_type"] = firm_type
+            session_user["delivery_day"] = delivery_day
+            session_user["surplus_type"] = surplus_type
+            return self.send_json(200, {"ok": True, "demo": True, "user": session_user})
+
+        with connect() as conn:
             conn.execute(
-                "UPDATE users SET firm_type = ?, surplus_type = ? WHERE id = ?",
-                (firm_type, surplus_type, row["id"]),
+                "UPDATE users SET firm_type = ?, delivery_day = ?, surplus_type = ? WHERE id = ?",
+                (firm_type, delivery_day, surplus_type, session_user["id"]),
             )
             conn.commit()
-            updated = conn.execute("SELECT * FROM users WHERE id = ?", (row["id"],)).fetchone()
+            updated = conn.execute(
+                "SELECT * FROM users WHERE id = ?", (session_user["id"],)
+            ).fetchone()
 
         return self.send_json(200, {"ok": True, "user": self.public_user(updated)})
 
