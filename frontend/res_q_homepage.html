@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Res-Q | AI-Powered Provision Pipeline</title>
+    <title>Res-Q | Onboarding</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -138,7 +138,7 @@
                     <span class="text-sm text-neutral-400 block">Shelter or community requesting incoming allocations.</span>
                 </button>
 
-                <p class="text-center text-sm text-neutral-400">Already have an account? <a href="#" onclick="handleRole('login')" class="text-[#ff4500] font-bold hover:underline">Login</a></p>
+                <p id="gateAccountLine" class="text-center text-sm text-neutral-400">Already have an account? <a href="#" onclick="handleRole('login')" class="text-[#ff4500] font-bold hover:underline">Login</a></p>
             </div>
         </div>
     </div>
@@ -261,6 +261,8 @@
                         </div>
                     </div>
 
+                    <p id="onboardError" role="alert" class="hidden text-xs font-mono text-[#ff9b73] border border-[#ff4500]/40 bg-[#ff4500]/5 rounded-xl px-5 py-4 leading-relaxed"></p>
+
                     <button type="submit"
                         class="w-full inline-flex items-center justify-center px-8 py-4 bg-[#ff4500] text-white text-sm font-bold rounded-full hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20 cursor-pointer">
                         Complete Onboarding <span class="ml-3">→</span>
@@ -268,6 +270,63 @@
                 </form>
 
                 <p class="text-center text-xs font-mono text-neutral-500 mt-6">STEP 02 / 03 — <button onclick="backToGate()" class="text-[#ff4500] hover:underline cursor-pointer">CHANGE ROLE</button></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIN VIEW: returning users sign in here and are remembered -->
+    <div id="loginView" class="fixed inset-0 z-[100] bg-[#0c0c0c] text-[#f4f4f0] flex flex-col md:flex-row overflow-y-auto hidden">
+
+        <div class="md:w-1/2 bg-[#141414] border-b md:border-b-0 md:border-r border-neutral-800 p-8 md:p-10 flex flex-col justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </div>
+
+            <div class="py-10 md:py-0">
+                <div class="notched-orange p-7 md:p-8 mb-10 max-w-sm text-black">
+                    <span class="text-xs font-mono uppercase tracking-widest font-bold opacity-70 block mb-2">// WELCOME BACK</span>
+                    <span class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none block">Your<br>Profile<br>Awaits.</span>
+                </div>
+                <h2 class="text-3xl md:text-4xl font-black uppercase tracking-tighter leading-none mb-4">Already Registered</h2>
+                <p class="text-neutral-400 text-sm leading-relaxed max-w-md">Sign in and Res-Q picks up exactly where you left off — your profile is already on file.</p>
+                <div class="flex space-x-2 mt-6" aria-hidden="true">
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#ff4500]"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
+                </div>
+            </div>
+
+            <div class="font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES</div>
+        </div>
+
+        <div class="md:w-1/2 flex items-start md:items-center justify-center p-8 md:p-12">
+            <div class="w-full max-w-md">
+                <span class="text-xs font-mono text-[#ff4500] uppercase tracking-widest block mb-3">// RETURNING MEMBER</span>
+                <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none mb-2">Sign In</h1>
+                <p class="text-neutral-400 text-sm mb-8">Use the email address or phone number you onboarded with.</p>
+
+                <form id="loginForm" class="space-y-4" novalidate>
+                    <input type="text" name="contact" placeholder="Email address or phone number" autocomplete="username"
+                        class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+                    <div class="relative">
+                        <input id="loginPw" type="password" name="password" placeholder="Password" autocomplete="current-password"
+                            class="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-5 py-4 pr-24 text-sm text-[#f4f4f0] placeholder:text-neutral-500 focus:outline-none focus:border-[#ff4500] transition-colors">
+                        <button type="button" onclick="toggleLoginPw()"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-neutral-400 hover:text-[#ff4500] transition-colors cursor-pointer">SHOW</button>
+                    </div>
+
+                    <p id="loginError" role="alert" class="hidden text-xs font-mono text-[#ff9b73] border border-[#ff4500]/40 bg-[#ff4500]/5 rounded-xl px-5 py-4 leading-relaxed"></p>
+
+                    <button type="submit"
+                        class="w-full inline-flex items-center justify-center px-8 py-4 bg-[#ff4500] text-white text-sm font-bold rounded-full hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20 cursor-pointer">
+                        Sign In <span class="ml-3">→</span>
+                    </button>
+                </form>
+
+                <p class="text-center text-xs font-mono text-neutral-500 mt-6">NEW TO RES-Q? <button onclick="showGate()" class="text-[#ff4500] hover:underline cursor-pointer">ONBOARD</button> · <button onclick="showGate()" class="text-[#ff4500] hover:underline cursor-pointer">← BACK</button></p>
             </div>
         </div>
     </div>
@@ -498,7 +557,7 @@
         }
         function handleRole(role) {
             if (role === 'login') {
-                alert('Welcome back to Res-Q! Redirecting to login...');
+                showLogin();
                 return;
             }
             currentRole = role;
@@ -541,32 +600,209 @@
             }
             return allOk;
         }
-        document.getElementById('onboardForm').addEventListener('submit', function(e) {
+        document.getElementById('pwInput').addEventListener('input', checkPassword);
+
+        // -------------------------------------------------------------- backend
+        var API = {
+            register: '/api/register',
+            login: '/api/login',
+            me: '/api/me',
+            logout: '/api/logout'
+        };
+        var TOKEN_KEY = 'resqToken';
+        var session = { token: readToken(), user: null };
+        var OFFLINE = 'Could not reach the Res-Q service. Start the backend with "python3 server.py" and try again.';
+
+        function readToken() {
+            try { return window.localStorage.getItem(TOKEN_KEY) || ''; } catch (err) { return ''; }
+        }
+        function storeToken(token) {
+            session.token = token || '';
+            try { window.localStorage.setItem(TOKEN_KEY, session.token); } catch (err) { /* storage blocked */ }
+        }
+        function clearToken() {
+            session.token = '';
+            session.user = null;
+            try { window.localStorage.removeItem(TOKEN_KEY); } catch (err) { /* storage blocked */ }
+        }
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        // Every call answers with { status, data } so the UI can react to the reason
+        function api(path, options) {
+            var opts = options || {};
+            var headers = { 'Content-Type': 'application/json' };
+            if (session.token) { headers.Authorization = 'Bearer ' + session.token; }
+            return fetch(path, {
+                method: opts.method || 'POST',
+                headers: headers,
+                body: opts.body ? JSON.stringify(opts.body) : undefined
+            }).then(function (response) {
+                return response.json().catch(function () { return {}; }).then(function (data) {
+                    return { status: response.status, data: data };
+                });
+            });
+        }
+
+        function showMessage(el, text) {
+            el.textContent = text;
+            el.classList.remove('hidden');
+        }
+        function hideMessage(el) {
+            el.textContent = '';
+            el.classList.add('hidden');
+        }
+
+        // ------------------------------------------------------------- login view
+        function showLogin() {
+            hideMessage(document.getElementById('loginError'));
+            document.getElementById('roleGate').classList.add('hidden');
+            document.getElementById('onboardView').classList.add('hidden');
+            document.getElementById('loginView').classList.remove('hidden');
+            window.scrollTo(0, 0);
+        }
+        function showGate() {
+            document.getElementById('loginView').classList.add('hidden');
+            document.getElementById('onboardView').classList.add('hidden');
+            document.getElementById('roleGate').classList.remove('hidden');
+            window.scrollTo(0, 0);
+        }
+        function toggleLoginPw() {
+            var input = document.getElementById('loginPw');
+            var showing = input.type === 'text';
+            input.type = showing ? 'password' : 'text';
+            event.target.textContent = showing ? 'SHOW' : 'HIDE';
+        }
+        function gotoProfile() {
+            var role = (session.user && session.user.role) || currentRole;
+            window.location.href = 'res_q_surplus_profile.html?role=' + encodeURIComponent(role);
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', function (e) {
             e.preventDefault();
             var form = e.target;
+            var errorEl = document.getElementById('loginError');
+            hideMessage(errorEl);
+
+            if (!form.contact.value.trim() || !form.password.value) {
+                return showMessage(errorEl, 'Enter the email or phone you registered with, plus your password.');
+            }
+
+            api(API.login, { body: { contact: form.contact.value.trim(), password: form.password.value } })
+                .then(function (res) {
+                    if (res.status === 200) {
+                        storeToken(res.data.token);
+                        session.user = res.data.user;
+                        gotoProfile();
+                        return;
+                    }
+                    showMessage(errorEl, (res.data && res.data.error) || 'Sign in failed. Please try again.');
+                })
+                .catch(function () { showMessage(errorEl, OFFLINE); });
+        });
+
+        // ------------------------------------------------- remember signed-in user
+        function renderSignedIn() {
+            var line = document.getElementById('gateAccountLine');
+            if (!session.user) { return; }
+            var name = escapeHtml(session.user.first_name || 'there');
+            line.innerHTML = 'Signed in as <span class="text-[#f4f4f0] font-bold">' + name +
+                '</span> · <button onclick="gotoProfile()" class="text-[#ff4500] font-bold hover:underline cursor-pointer">CONTINUE →</button>' +
+                ' · <button onclick="signOut()" class="text-neutral-500 hover:text-white cursor-pointer">SIGN OUT</button>';
+        }
+        function signOut() {
+            api(API.logout).catch(function () { /* signing out locally is enough */ });
+            clearToken();
+            document.getElementById('gateAccountLine').innerHTML =
+                'Already have an account? <a href="#" onclick="handleRole(\'login\')" class="text-[#ff4500] font-bold hover:underline">Login</a>';
+        }
+        function restoreSession() {
+            if (!session.token) { return; }
+            fetch(API.me, { headers: { Authorization: 'Bearer ' + session.token } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status === 200) {
+                        session.user = res.data.user;
+                        renderSignedIn();
+                    } else {
+                        clearToken();
+                    }
+                })
+                .catch(function () { /* backend offline: leave the gate as it is */ });
+        }
+        restoreSession();
+
+        // ------------------------------------------------------ onboarding submit
+        document.getElementById('onboardForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            var form = e.target;
+            var errorEl = document.getElementById('onboardError');
+            hideMessage(errorEl);
+
             if (!form.firstName.value.trim() || !form.lastName.value.trim()) {
-                alert('Please fill in your name to continue.');
-                return;
+                return showMessage(errorEl, 'Please fill in your name to continue.');
             }
             var phoneActive = !document.getElementById('contactPhoneBox').classList.contains('hidden');
             var contactValue = phoneActive ? form.contactPhone.value.trim() : form.contactEmail.value.trim();
             if (!contactValue) {
-                alert(phoneActive ? 'Please enter your phone number to continue.' : 'Please enter your email address to continue.');
-                return;
+                return showMessage(errorEl, phoneActive
+                    ? 'Please enter your phone number to continue.'
+                    : 'Please enter your email address to continue.');
             }
             if (!checkPassword()) {
-                alert('Please meet all password requirements.');
-                return;
+                return showMessage(errorEl, 'Please meet all password requirements.');
             }
-            var firstName = form.firstName.value.trim();
-            try {
-                window.sessionStorage.setItem('resqFirstName', firstName);
-            } catch (err) {
-                // storage unavailable, profile page falls back to a generic greeting
-            }
-            window.location.href = 'res_q_surplus_profile.html?role=' + encodeURIComponent(currentRole);
+
+            var payload = {
+                role: currentRole,
+                firstName: form.firstName.value.trim(),
+                lastName: form.lastName.value.trim(),
+                businessName: form.businessName.value.trim(),
+                contact: phoneActive
+                    ? { type: 'phone', value: contactValue, dial: form.recipientDial.value }
+                    : { type: 'email', value: contactValue },
+                password: form.password.value,
+                address: {
+                    street: form.street.value.trim(),
+                    subLocality: form.subLocality.value.trim(),
+                    locality: form.locality.value.trim(),
+                    province: form.province.value.trim(),
+                    city: form.city.value.trim(),
+                    postal: form.postal.value.trim()
+                }
+            };
+
+            var submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-60');
+
+            api(API.register, { body: payload })
+                .then(function (res) {
+                    if (res.status === 201) {
+                        storeToken(res.data.token);
+                        session.user = res.data.user;
+                        gotoProfile();
+                        return;
+                    }
+                    var problem = res.data || {};
+                    // Put the user back on the contact mode the server complained about
+                    if (problem.field === 'phone' && !phoneActive) { setContactMode('phone'); }
+                    if (problem.field === 'email' && phoneActive) { setContactMode('email'); }
+                    showMessage(errorEl, problem.error || 'We could not save your details. Please try again.');
+                })
+                .catch(function () { showMessage(errorEl, OFFLINE); })
+                .then(function () {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-60');
+                });
         });
-        document.getElementById('pwInput').addEventListener('input', checkPassword);
     </script>
 </body>
 </html>

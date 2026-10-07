@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Res-Q | Landing Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0c0c0c',
+                        cardbg: '#141414',
+                        cardhover: '#1c1c1c',
+                        accent: '#ff4500',
+                        cream: '#f4f4f0',
+                        muted: '#888888'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom notched corners to mimic the Apptronik reference style */
+        .notched-card {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                0 0, 
+                calc(100% - 35px) 0, 
+                100% 35px, 
+                100% 100%, 
+                0 100%
+            );
+        }
+        .notched-card:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Inverse notch variant */
+        .notched-card-alt {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                35px 0, 
+                100% 0, 
+                100% 100%, 
+                0 100%, 
+                0 35px
+            );
+        }
+        .notched-card-alt:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Orange accent CTA card with notch */
+        .notched-orange {
+            background-color: #ff4500;
+            border-radius: 1.5rem;
+            clip-path: polygon(
+                0 0, 
+                100% 0, 
+                100% calc(100% - 35px), 
+                calc(100% - 35px) 100%, 
+                0 100%
+            );
+        }
+
+        /* Capability cards: fill with the accent orange and turn their text black while
+           hovered, then return to the resting dark card on mouse out. Declared after the
+           notch rules above so it wins the tie on specificity. */
+        .surplus-card:hover {
+            background-color: #ff4500;
+        }
+        .surplus-card:hover * {
+            color: #000000;
+        }
+    </style>
+</head>
+<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
+
+    <!-- RES-Q LANDING PAGE: default document for the site, served on load and reload -->
+
+    <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </div>
+            <!-- Only the capabilities section remains, so the other nav labels stay inert -->
+            <nav class="hidden md:flex items-center space-x-8 text-sm font-mono text-neutral-400">
+                <span class="cursor-default">01 / PIPELINE</span>
+                <a href="#features" class="hover:text-[#f4f4f0] transition-colors">02 / CAPABILITIES</a>
+                <span class="cursor-default">03 / IMPACT</span>
+            </nav>
+            <div>
+                <!-- Opens the onboarding flow (role gate → About You → goods profile) -->
+                <a href="res_q_homepage.html" class="inline-flex items-center px-5 py-2.5 rounded-full bg-[#ff4500] text-white text-sm font-bold tracking-wide hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20">
+                    Onboarding →
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-12">
+
+        <section class="mb-24 pt-8">
+            <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+                <div>
+                    <span class="text-xs font-mono text-[#ff4500] tracking-widest uppercase block mb-3">// AI-POWERED PROVISION PIPELINE</span>
+                    <h1 class="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-none">
+                        Surplus <br>Matched. <br><span class="text-neutral-500">Delivered.</span>
+                    </h1>
+                </div>
+                <div class="mt-6 md:mt-0 max-w-md">
+                    <p class="text-neutral-400 text-sm md:text-base leading-relaxed">
+                        End-to-end Python machine learning pipelines transforming daily corporate food and life-essential surplus into automated relief networks for shelters and vulnerable communities.
+                    </p>
+                </div>
+            </div>
+
+            <div id="features" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Card A -->
+                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(a)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">INITIALIZE →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Predictive Surplus</h3>
+                        <p class="text-sm text-neutral-400">Regression pipelines forecasting daily inventory yields based on time, weather, and historical metrics.</p>
+                    </div>
+                </div>
+
+                <!-- Card B -->
+                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(b)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">OPTIMIZE →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Smart Matching</h3>
+                        <p class="text-sm text-neutral-400">Algorithms pairing surplus stocks with nearest shelter capacity using distance and urgency scores.</p>
+                    </div>
+                </div>
+
+                <!-- Card C -->
+                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(c)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">DEPLOY →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Live Routing</h3>
+                        <p class="text-sm text-neutral-400">Real-time logistical dispatch ensuring perishable goods reach communities before expiration windows close.</p>
+                    </div>
+                </div>
+
+                <!-- Card D -->
+                <div class="surplus-card notched-card-alt p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(d)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">EXPAND →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Essential Goods</h3>
+                        <p class="text-sm text-neutral-400">Scaling beyond meals to route survival essentials, hygiene kits, and warm blankets seamlessly.</p>
+                    </div>
+                </div>
+
+                <!-- Card E -->
+                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(e)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">VERIFY →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Safety Verification</h3>
+                        <p class="text-sm text-neutral-400">Automated quality checks and compliance monitoring maintaining strict health & safety standards.</p>
+                    </div>
+                </div>
+
+                <!-- Card F -->
+                <div class="surplus-card notched-card-alt p-8 flex flex-col justify-between h-72 cursor-pointer group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-mono text-neutral-500">(f)</span>
+                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">CONNECT →</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Community Sync</h3>
+                        <p class="text-sm text-neutral-400">Unifying local businesses and support shelters into a single, highly efficient distribution loop.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-neutral-800 py-12 text-neutral-500 text-xs font-mono">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between">
+            <div class="flex items-center space-x-4 mb-4 md:mb-0">
+                <span class="text-white font-bold">RES-Q PLATFORM</span>
+                <span>—</span>
+                <span>AI FOR COMMUNITY SERVICES</span>
+            </div>
+            <div class="flex space-x-6">
+                <span class="cursor-default">Pipeline</span>
+                <a href="#features" class="hover:text-white transition-colors">Documentation</a>
+                <span class="cursor-default">GitHub Repository</span>
+            </div>
+        </div>
+    </footer>
+
+    <div id="actionModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-6">
+        <div class="bg-[#141414] border border-neutral-800 rounded-3xl max-w-md w-full p-8 relative">
+            <button onclick="closeModal()" class="absolute top-6 right-6 text-neutral-400 hover:text-white text-lg font-mono">✕</button>
+            <span class="text-xs font-mono text-[#ff4500] uppercase block mb-2">// PORTAL ACCESS</span>
+            <h3 class="text-2xl font-bold mb-6">Select Your Role</h3>
+            <div class="space-y-4">
+                <button onclick="handleRole('business')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
+                    <div>
+                        <span class="font-bold block text-sm">Food Business / Donor</span>
+                        <span class="text-xs text-neutral-400">Post daily surplus and essentials</span>
+                    </div>
+                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
+                </button>
+                <button onclick="handleRole('shelter')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
+                    <div>
+                        <span class="font-bold block text-sm">Shelter / Recipient</span>
+                        <span class="text-xs text-neutral-400">View incoming allocations & pickups</span>
+                    </div>
+                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openModal() {
+            document.getElementById('actionModal').classList.remove('hidden');
+            document.getElementById('actionModal').classList.add('flex');
+        }
+        function closeModal() {
+            document.getElementById('actionModal').classList.remove('flex');
+            document.getElementById('actionModal').classList.add('hidden');
+        }
+
+        // The role chooser is no longer opened by the header button, which now links
+        // straight to the onboarding page. Kept for the wiring that is still pending:
+        // the role chosen here still needs to reach the onboarding flow.
+        function handleRole(role) {
+            alert('Welcome to Res-Q! ' + (role === 'business' ? 'Food business' : 'Shelter') + ' portal selected — onboarding is not connected yet.');
+            closeModal();
+        }
+
+        // Close the modal on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>

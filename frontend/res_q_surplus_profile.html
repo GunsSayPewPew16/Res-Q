@@ -272,6 +272,8 @@
                         </div>
                     </div>
 
+                    <p id="profileMessage" role="status" class="hidden text-xs font-mono rounded-xl px-5 py-4 leading-relaxed border"></p>
+
                     <button type="submit"
                         class="w-full inline-flex items-center justify-center px-8 py-4 bg-[#ff4500] text-white text-sm font-bold rounded-full hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20 cursor-pointer">
                         Initialize Profile <span class="ml-3">→</span>
@@ -388,26 +390,74 @@
             console.log('Firm type selected:', type);
         }
 
+        // -------------------------------------------------------------- backend
+        var TOKEN_KEY = 'resqToken';
+        var OFFLINE = 'Could not reach the Res-Q service. Start the backend with "python3 server.py" and try again.';
+
+        function readToken() {
+            try { return window.localStorage.getItem(TOKEN_KEY) || ''; } catch (err) { return ''; }
+        }
+        function showProfileMessage(text, tone) {
+            var el = document.getElementById('profileMessage');
+            el.textContent = text;
+            el.className = 'text-xs font-mono rounded-xl px-5 py-4 leading-relaxed border ' +
+                (tone === 'ok'
+                    ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/5'
+                    : 'text-[#ff9b73] border-[#ff4500]/40 bg-[#ff4500]/5');
+        }
+
         document.getElementById('surplusForm').addEventListener('submit', function(e) {
             e.preventDefault();
             var firmType = document.querySelector('input[name="firmType"]:checked');
             if (!firmType) {
-                alert('Please select your firm classification to continue.');
+                showProfileMessage('Please select your firm classification to continue.');
                 return;
             }
             var surplusType = document.getElementById('surplusSelect').value;
             if (!surplusType) {
-                alert('Please select a usual surplus category.');
+                showProfileMessage('Please select a usual surplus category.');
                 return;
             }
-            var firstName = '';
-            try {
-                firstName = window.sessionStorage.getItem('resqFirstName') || '';
-            } catch (err) {
-                firstName = '';
+
+            var token = readToken();
+            if (!token) {
+                showProfileMessage('You are not signed in, so this profile cannot be saved yet. Complete the onboarding form first — it creates your account.');
+                return;
             }
-            var who = firstName ? firstName : 'friend';
-            alert('Welcome to Res-Q, ' + who + '! Your ' + currentRole + ' profile is active and routing is now enabled.');
+
+            var submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-60');
+
+            fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify({ firmType: firmType.value, surplusType: surplusType })
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status === 200) {
+                        var user = res.data.user || {};
+                        var who = user.first_name || 'there';
+                        var role = user.role || currentRole;
+                        showProfileMessage('Saved. Welcome to Res-Q, ' + who + ' — your ' + role + ' profile is active and routing is now enabled.', 'ok');
+                        return;
+                    }
+                    var problem = (res.data && res.data.error) || 'We could not save your profile. Please try again.';
+                    if (res.status === 401) {
+                        problem += ' Sign in again from the onboarding page.';
+                    }
+                    showProfileMessage(problem);
+                })
+                .catch(function () { showProfileMessage(OFFLINE); })
+                .then(function () {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-60');
+                });
         });
     </script>
 </body>

@@ -1,0 +1,12 @@
+# Local database created and written by frontend/server.py — never commit user data.
+resq.db
+*.db
+*.db-journal
+*.sqlite3
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local preview runner workspace (logs and notes, not part of the site)
+.freebuff/
