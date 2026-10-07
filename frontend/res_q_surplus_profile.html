@@ -260,42 +260,42 @@
                             <!-- Item selector list: three items visible, scroll for the rest -->
                             <div id="dropdownMenu" class="hidden absolute top-full left-0 right-0 mt-2 bg-[#141414] border border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden">
                                 <div id="dropdownMenuList" class="resq-scroll p-2 space-y-1 max-h-[212px] overflow-y-auto font-mono text-sm">
-                                    <div onclick="selectOption('prepared_meals', 'Prepared Meals', '🍲')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div data-value="prepared_meals" onclick="selectOption('prepared_meals', 'Prepared Meals', '🍲')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🍲</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Prepared Meals</span>
                                             <span class="text-xs text-neutral-500">Cooked dishes, catered trays, hot meals</span>
                                         </div>
                                     </div>
-                                    <div onclick="selectOption('fresh_produce', 'Fresh Produce', '🥦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div data-value="fresh_produce" onclick="selectOption('fresh_produce', 'Fresh Produce', '🥦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🥦</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Fresh Produce</span>
                                             <span class="text-xs text-neutral-500">Fruits, vegetables, leafy greens</span>
                                         </div>
                                     </div>
-                                    <div data-donor-only="true" onclick="selectOption('bakery_items', 'Bakery Items', '🥐')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div data-value="bakery_items" data-donor-only="true" onclick="selectOption('bakery_items', 'Bakery Items', '🥐')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🥐</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Bakery Items</span>
                                             <span class="text-xs text-neutral-500">Breads, pastries, cakes, daily bake</span>
                                         </div>
                                     </div>
-                                    <div onclick="selectOption('packaged_goods', 'Packaged Goods', '📦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div data-value="packaged_goods" onclick="selectOption('packaged_goods', 'Packaged Goods', '📦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">📦</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Packaged Goods</span>
                                             <span class="text-xs text-neutral-500">Canned food, dry goods, snacks</span>
                                         </div>
                                     </div>
-                                    <div onclick="selectOption('dairy_beverages', 'Dairy &amp; Beverages', '🥛')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div data-value="dairy_beverages" onclick="selectOption('dairy_beverages', 'Dairy &amp; Beverages', '🥛')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🥛</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Dairy &amp; Beverages</span>
                                             <span class="text-xs text-neutral-500">Milk, yogurt, juices, bottled drinks</span>
                                         </div>
                                     </div>
-                                    <div onclick="selectOption('household_essentials', 'Household &amp; Essentials', '🧴')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div data-value="household_essentials" onclick="selectOption('household_essentials', 'Household &amp; Essentials', '🧴')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🧴</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Household &amp; Essentials</span>
@@ -385,7 +385,10 @@
             var menu = document.getElementById('dropdownMenu');
             var list = document.getElementById('dropdownMenuList');
             if (!menu || !list || menu.classList.contains('hidden')) return;
-            var rows = list.children;
+            // Only visible rows count: the donor list is narrowed by firm classification
+            var rows = Array.prototype.filter.call(list.children, function (row) {
+                return !row.classList.contains('hidden');
+            });
             if (rows.length < 3) return;
 
             // Open at the first item, then measure in layout space so a stale
@@ -441,8 +444,54 @@
             }
         });
 
+        // Which firm classifications may hand over each surplus category. A retail
+        // store can donate anything it stocks, but an eatery only produces prepared
+        // food, bakery goods and drinks.
+        var SURPLUS_FIRMS = {
+            prepared_meals: ['retail', 'eatery'],
+            fresh_produce: ['retail'],
+            bakery_items: ['retail', 'eatery'],
+            packaged_goods: ['retail'],
+            dairy_beverages: ['retail', 'eatery'],
+            household_essentials: ['retail']
+        };
+
+        // Narrow the category list to what the chosen firm classification can donate
         function updateSurplusOptions(type) {
-            console.log('Firm type selected:', type);
+            var allowed = function (value) {
+                return (SURPLUS_FIRMS[value] || ['retail', 'eatery']).indexOf(type) !== -1;
+            };
+
+            Array.prototype.forEach.call(document.getElementById('dropdownMenuList').children, function (row) {
+                row.classList.toggle('hidden', !allowed(row.getAttribute('data-value')));
+            });
+
+            Array.prototype.forEach.call(document.getElementById('surplusSelect').options, function (option) {
+                if (!option.value) return;
+                var ok = allowed(option.value);
+                option.hidden = !ok;
+                option.disabled = !ok;
+            });
+
+            // Drop a pick the new classification can no longer offer
+            if (document.getElementById('surplusSelect').value &&
+                !allowed(document.getElementById('surplusSelect').value)) {
+                resetSurplusSelection();
+            }
+
+            if (!document.getElementById('dropdownMenu').classList.contains('hidden')) {
+                sizeDropdownMenu();
+            }
+        }
+
+        // Put the selector back to its untouched placeholder state
+        function resetSurplusSelection() {
+            var select = document.getElementById('surplusSelect');
+            var placeholder = select.querySelector('option[value=""]');
+            if (placeholder) { placeholder.disabled = false; }
+            select.value = '';
+            document.getElementById('selectedDisplay').innerHTML =
+                '<span class="text-xl">📦</span><span class="font-mono text-sm truncate">Select usual surplus category...</span>';
         }
 
         // -------------------------------------------------------------- backend
