@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Res-Q | Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0c0c0c',
+                        cardbg: '#141414',
+                        cardhover: '#1c1c1c',
+                        accent: '#ff4500',
+                        cream: '#f4f4f0',
+                        muted: '#888888'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom notched corners to mimic the Apptronik reference style */
+        .notched-card {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                0 0, 
+                calc(100% - 35px) 0, 
+                100% 35px, 
+                100% 100%, 
+                0 100%
+            );
+        }
+        .notched-card:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Inverse notch variant */
+        .notched-card-alt {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                35px 0, 
+                100% 0, 
+                100% 100%, 
+                0 100%, 
+                0 35px
+            );
+        }
+        .notched-card-alt:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Orange accent CTA card with notch */
+        .notched-orange {
+            background-color: #ff4500;
+            border-radius: 1.5rem;
+            clip-path: polygon(
+                0 0, 
+                100% 0, 
+                100% calc(100% - 35px), 
+                calc(100% - 35px) 100%, 
+                0 100%
+            );
+        }
+    </style>
+</head>
+<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
+
+    <!-- DASHBOARD: landing spot after the goods profile is saved, content to come -->
+
+    <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </div>
+            <nav class="hidden md:flex items-center space-x-8 text-sm font-mono text-neutral-400">
+                <span class="cursor-default">01 / PIPELINE</span>
+                <span class="cursor-default">02 / CAPABILITIES</span>
+                <span class="cursor-default">03 / IMPACT</span>
+            </nav>
+            <div>
+                <a href="index.html" class="inline-flex items-center px-5 py-2.5 rounded-full bg-[#ff4500] text-white text-sm font-bold tracking-wide hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20">
+                    Home →
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-12">
+
+        <section class="mb-12 pt-8">
+            <span class="text-xs font-mono text-[#ff4500] tracking-widest uppercase block mb-3">// CENTRALIZED DASHBOARD</span>
+            <h1 class="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-none">
+                Dashboard
+            </h1>
+        </section>
+
+        <!-- Intentionally empty content area, ready to be built out -->
+        <section class="notched-card p-8 md:p-12 min-h-[360px] flex items-center justify-center">
+            <span class="font-mono text-xs text-neutral-600 uppercase tracking-widest">// nothing here yet</span>
+        </section>
+
+    </main>
+
+    <footer class="max-w-7xl mx-auto px-6 pb-10">
+        <div class="border-t border-neutral-800 pt-6 font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES</div>
+    </footer>
+
+</body>
+</html>

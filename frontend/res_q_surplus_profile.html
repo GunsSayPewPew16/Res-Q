@@ -563,13 +563,8 @@
                 })
                 .then(function (res) {
                     if (res.status === 200) {
-                        var user = res.data.user || {};
-                        var who = user.first_name || 'there';
-                        var role = user.role || currentRole;
-                        var detail = role === 'recipient'
-                            ? ' deliveries are set for ' + (payload.deliveryDay || '').toUpperCase() + '.'
-                            : '';
-                        showProfileMessage('Saved. Welcome to Res-Q, ' + who + ' — your ' + role + ' profile is active and routing is now enabled.' + detail, 'ok');
+                        // Profile saved: hand off to the dashboard, which is built out separately
+                        window.location.href = 'res_q_dashboard.html';
                         return;
                     }
                     var problem = (res.data && res.data.error) || 'We could not save your profile. Please try again.';

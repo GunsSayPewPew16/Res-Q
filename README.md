@@ -41,15 +41,19 @@ role chosen at the start.
    submitted.
 3. **Goods profile** — the questions differ by role. A donor classifies their
    establishment as a *Retail Store* or an *Eatery / Restaurant* and picks their
-   primary surplus category from Prepared Meals, Fresh Produce, Bakery Items,
-   Packaged Goods, Dairy & Beverages and Household & Essentials. A recipient
-   instead picks a preferred delivery day (Saturday through Friday) and their
-   primary need from Prepared Meals, Fresh Produce, Dairy & Beverages, Household
-   & Essentials and Packaged Goods. The selector shows three categories at a time
-   and scrolls for the rest.
+   primary surplus category. A recipient instead picks a preferred delivery day
+   (Saturday through Friday) and their primary need from Prepared Meals, Fresh
+   Produce, Dairy & Beverages, Household & Essentials and Packaged Goods. The
+   selector shows three categories at a time and scrolls for the rest.
+4. **Dashboard** — saving the goods profile posts it to the backend and sends
+   the visitor to `res_q_dashboard.html`. The page currently carries only the
+   site chrome and an empty content area, ready to be built out.
 
-Completing the goods profile confirms that the profile is active. All
-completion states are client-side only.
+The category list follows the donor's firm classification: a retail store can
+hand over all six categories, while an eatery is limited to the three it
+actually produces — Prepared Meals, Bakery Items and Dairy & Beverages.
+Switching to a classification that cannot offer the selected category clears
+the selection rather than leaving an invalid one behind.
 
 The onboarding page still carries its own copy of the marketing sections: it
 introduces the pipeline, lists the platform's capabilities, shows a sample of
@@ -63,6 +67,7 @@ the matching logic, and invites visitors into the flow above.
 | `frontend/server.py` | Backend: serves the pages and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
+| `frontend/res_q_dashboard.html` | Post-profile landing page — site chrome with an empty content area, to be built out |
 
 ## Running it locally
 
@@ -107,7 +112,7 @@ and `sessions`. Restart the server for a mode change to take effect.
 | `POST` | `/api/login` | Sign in with an email or phone plus password |
 | `GET` | `/api/me` | Return the signed-in user for a bearer token |
 | `POST` | `/api/logout` | Drop the session |
-| `POST` | `/api/profile` | Save the goods profile — establishment type and surplus category for donors, preferred delivery day and primary need for recipients |
+| `POST` | `/api/profile` | Save the goods profile — establishment type and surplus category for donors, preferred delivery day and primary need for recipients. The page sends the visitor to the dashboard once this returns 200 |
 
 How the pieces connect:
 
