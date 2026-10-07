@@ -269,28 +269,50 @@
             if (e.key === 'Escape') closeModal();
         });
 
-        // The brand lockup in the corner sends signed-in visitors to their dashboard and
-        // everyone else to this landing page.
+        // The brand lockup in the corner sends signed-in visitors to the dashboard for their
+        // role and everyone else to this landing page.
         (function brandLink() {
             var links = document.querySelectorAll('.brand-home');
             if (!links.length) return;
 
+            var DASHBOARDS = {
+                donor: 'res_q_dashboard_donor.html',
+                recipient: 'res_q_dashboard_recipient.html'
+            };
+            var TOKEN_KEY = 'resqToken';
+            var ROLE_KEY = 'resqRole';
+
+            function dashboardFor(role) {
+                return DASHBOARDS[role] || '';
+            }
+            function readStore(key) {
+                try { return window.localStorage.getItem(key) || ''; } catch (err) { return ''; }
+            }
             function setHome(href) {
                 Array.prototype.forEach.call(links, function (link) {
                     link.setAttribute('href', href);
                 });
             }
 
-            var token = '';
-            try { token = window.localStorage.getItem('resqToken') || ''; } catch (err) { token = ''; }
+            var token = readStore(TOKEN_KEY);
 
-            // Trust the stored token first so the click lands instantly...
-            setHome(token ? 'res_q_dashboard.html' : 'index.html');
+            // Trust the stored session first so the click lands instantly...
+            setHome(token ? (dashboardFor(readStore(ROLE_KEY)) || 'index.html') : 'index.html');
             if (!token) return;
 
-            // ...then let the backend settle it, in case the session has expired.
+            // ...then let the backend settle the role and the session behind it.
             fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
-                .then(function (response) { if (!response.ok) { setHome('index.html'); } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200) { setHome('index.html'); return; }
+                    var role = (res.data.user && res.data.user.role) || '';
+                    try { window.localStorage.setItem(ROLE_KEY, role); } catch (err) { /* storage blocked */ }
+                    setHome(dashboardFor(role) || 'index.html');
+                })
                 .catch(function () { setHome('index.html'); });
         })();
     </script>

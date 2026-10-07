@@ -90,6 +90,18 @@
             opacity: 1;
         }
 
+        /* A picked row in the item selector: the choice is checked, not highlighted away */
+        .resq-row[data-picked="true"] {
+            background-color: #171717;
+            color: #ff4500;
+        }
+        .resq-row[data-picked="true"]::after {
+            content: '✓';
+            margin-left: auto;
+            font-weight: 700;
+            color: #ff4500;
+        }
+
         /* Thin scrollbar for the item selector list */
         .resq-scroll {
             scrollbar-width: thin;
@@ -198,34 +210,37 @@
 
                     <!-- 01. Preferred delivery day (recipients) -->
                     <div id="dayStep" class="hidden">
-                        <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 01. SELECT PREFERRED DAY OF DELIVERY</span>
+                        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+                            <span class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest">// 01. SELECT PREFERRED DAY OF DELIVERY</span>
+                            <span class="text-[10px] font-mono text-neutral-500">pick a maximum of 2 days</span>
+                        </div>
                         <div class="grid grid-cols-7 gap-2">
                             <label class="cursor-pointer">
-                                <input type="radio" name="deliveryDay" value="sat" class="peer sr-only">
+                                <input type="checkbox" name="deliveryDay" value="sat" class="peer sr-only" checked>
                                 <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">SAT</span>
                             </label>
                             <label class="cursor-pointer">
-                                <input type="radio" name="deliveryDay" value="sun" class="peer sr-only">
+                                <input type="checkbox" name="deliveryDay" value="sun" class="peer sr-only">
                                 <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">SUN</span>
                             </label>
                             <label class="cursor-pointer">
-                                <input type="radio" name="deliveryDay" value="mon" class="peer sr-only">
+                                <input type="checkbox" name="deliveryDay" value="mon" class="peer sr-only">
                                 <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">MON</span>
                             </label>
                             <label class="cursor-pointer">
-                                <input type="radio" name="deliveryDay" value="tue" class="peer sr-only">
+                                <input type="checkbox" name="deliveryDay" value="tue" class="peer sr-only">
                                 <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">TUE</span>
                             </label>
                             <label class="cursor-pointer">
-                                <input type="radio" name="deliveryDay" value="wed" class="peer sr-only">
+                                <input type="checkbox" name="deliveryDay" value="wed" class="peer sr-only">
                                 <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">WED</span>
                             </label>
                             <label class="cursor-pointer">
-                                <input type="radio" name="deliveryDay" value="thu" class="peer sr-only">
+                                <input type="checkbox" name="deliveryDay" value="thu" class="peer sr-only">
                                 <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">THU</span>
                             </label>
                             <label class="cursor-pointer">
-                                <input type="radio" name="deliveryDay" value="fri" class="peer sr-only">
+                                <input type="checkbox" name="deliveryDay" value="fri" class="peer sr-only">
                                 <span class="block text-center py-3 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-neutral-400 peer-checked:bg-[#ff4500] peer-checked:border-[#ff4500] peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff4500]/40 transition-colors">FRI</span>
                             </label>
                         </div>
@@ -233,7 +248,10 @@
 
                     <!-- 02. Item selector -->
                     <div>
-                        <span id="stepTwoLabel" class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest mb-4">// 02. PRIMARY USUAL SURPLUS CATEGORY</span>
+                        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+                            <span id="stepTwoLabel" class="block text-xs font-mono text-[#ff4500] uppercase tracking-widest">// 02. PRIMARY USUAL SURPLUS CATEGORY</span>
+                            <span class="text-[10px] font-mono text-neutral-500">pick a maximum of 2</span>
+                        </div>
 
                         <div class="relative">
                             <!-- Dropdown trigger -->
@@ -259,43 +277,43 @@
 
                             <!-- Item selector list: three items visible, scroll for the rest -->
                             <div id="dropdownMenu" class="hidden absolute top-full left-0 right-0 mt-2 bg-[#141414] border border-neutral-800 rounded-xl shadow-2xl z-50 overflow-hidden">
-                                <div id="dropdownMenuList" class="resq-scroll p-2 space-y-1 max-h-[212px] overflow-y-auto font-mono text-sm">
-                                    <div data-value="prepared_meals" onclick="selectOption('prepared_meals', 'Prepared Meals', '🍲')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                <div id="dropdownMenuList" role="listbox" aria-multiselectable="true" class="resq-scroll p-2 space-y-1 max-h-[212px] overflow-y-auto font-mono text-sm">
+                                    <div role="option" aria-selected="false" data-value="prepared_meals" onclick="selectOption('prepared_meals', 'Prepared Meals', '🍲')" class="resq-row flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🍲</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Prepared Meals</span>
                                             <span class="text-xs text-neutral-500">Cooked dishes, catered trays, hot meals</span>
                                         </div>
                                     </div>
-                                    <div data-value="fresh_produce" onclick="selectOption('fresh_produce', 'Fresh Produce', '🥦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div role="option" aria-selected="false" data-value="fresh_produce" onclick="selectOption('fresh_produce', 'Fresh Produce', '🥦')" class="resq-row flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🥦</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Fresh Produce</span>
                                             <span class="text-xs text-neutral-500">Fruits, vegetables, leafy greens</span>
                                         </div>
                                     </div>
-                                    <div data-value="bakery_items" data-donor-only="true" onclick="selectOption('bakery_items', 'Bakery Items', '🥐')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div role="option" aria-selected="false" data-value="bakery_items" data-donor-only="true" onclick="selectOption('bakery_items', 'Bakery Items', '🥐')" class="resq-row flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🥐</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Bakery Items</span>
                                             <span class="text-xs text-neutral-500">Breads, pastries, cakes, daily bake</span>
                                         </div>
                                     </div>
-                                    <div data-value="packaged_goods" onclick="selectOption('packaged_goods', 'Packaged Goods', '📦')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div role="option" aria-selected="false" data-value="packaged_goods" onclick="selectOption('packaged_goods', 'Packaged Goods', '📦')" class="resq-row flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">📦</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Packaged Goods</span>
                                             <span class="text-xs text-neutral-500">Canned food, dry goods, snacks</span>
                                         </div>
                                     </div>
-                                    <div data-value="dairy_beverages" onclick="selectOption('dairy_beverages', 'Dairy &amp; Beverages', '🥛')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div role="option" aria-selected="false" data-value="dairy_beverages" onclick="selectOption('dairy_beverages', 'Dairy &amp; Beverages', '🥛')" class="resq-row flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🥛</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Dairy &amp; Beverages</span>
                                             <span class="text-xs text-neutral-500">Milk, yogurt, juices, bottled drinks</span>
                                         </div>
                                     </div>
-                                    <div data-value="household_essentials" onclick="selectOption('household_essentials', 'Household &amp; Essentials', '🧴')" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
+                                    <div role="option" aria-selected="false" data-value="household_essentials" onclick="selectOption('household_essentials', 'Household &amp; Essentials', '🧴')" class="resq-row flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-900 hover:text-[#ff4500] cursor-pointer transition-all">
                                         <span class="text-xl">🧴</span>
                                         <div>
                                             <span class="font-bold block text-white text-sm">Household &amp; Essentials</span>
@@ -410,13 +428,76 @@
             }
         });
 
-        // Pick an item from the selector
-        function selectOption(value, label, icon) {
-            document.getElementById('surplusSelect').value = value;
-            document.getElementById('selectedDisplay').innerHTML =
-                '<span class="text-xl">' + icon + '</span><span class="font-mono text-sm text-white font-bold truncate">' + label + '</span>';
-            toggleDropdown();
+        // -------------------------------------------------- item picks (max 2)
+        // The selector holds up to MAX_PICKS picks. Once two are chosen a further pick
+        // does nothing until one of them is taken back.
+        var MAX_PICKS = 2;
+        var picked = [];   // [{ value, label, icon }] in the order they were chosen
+
+        function pickedIndex(value) {
+            for (var i = 0; i < picked.length; i++) {
+                if (picked[i].value === value) { return i; }
+            }
+            return -1;
         }
+
+        function pickedValues() {
+            return picked.map(function (item) { return item.value; });
+        }
+
+        // Keep the trigger, the rows and the hidden select in step with the picks
+        function renderPicked() {
+            var display = document.getElementById('selectedDisplay');
+            if (!picked.length) {
+                display.innerHTML = '<span class="text-xl">📦</span>' +
+                    '<span class="font-mono text-sm truncate">Select usual surplus category...</span>';
+            } else {
+                display.innerHTML = picked.map(function (item) {
+                    return '<span class="text-xl">' + item.icon + '</span>' +
+                        '<span class="font-mono text-sm text-white font-bold truncate">' + item.label + '</span>';
+                }).join('<span class="font-mono text-xs text-neutral-600 px-2">+</span>');
+            }
+
+            Array.prototype.forEach.call(document.querySelectorAll('#dropdownMenuList .resq-row'), function (row) {
+                var on = pickedIndex(row.getAttribute('data-value')) !== -1;
+                row.setAttribute('data-picked', on ? 'true' : 'false');
+                row.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+
+            // The native select mirrors the first pick so it still reflects the control
+            document.getElementById('surplusSelect').value = picked.length ? picked[0].value : '';
+        }
+
+        // Pick an item, or take one back. The list stays open so the second can follow.
+        function selectOption(value, label, icon) {
+            var at = pickedIndex(value);
+            if (at !== -1) {
+                picked.splice(at, 1);
+            } else if (picked.length < MAX_PICKS) {
+                picked.push({ value: value, label: label, icon: icon });
+            } else {
+                return;   // at the cap: ignored until one of the picks is taken back
+            }
+            renderPicked();
+        }
+
+        // Days work the same way: two at most, and a third tick is undone on the spot
+        function selectedDays() {
+            return Array.prototype.filter.call(
+                document.querySelectorAll('input[name="deliveryDay"]'),
+                function (box) { return box.checked; }
+            ).map(function (box) { return box.value; });
+        }
+
+        Array.prototype.forEach.call(document.querySelectorAll('input[name="deliveryDay"]'), function (box) {
+            box.addEventListener('change', function () {
+                if (selectedDays().length > MAX_PICKS) {
+                    box.checked = false;
+                }
+            });
+        });
+
+        renderPicked();
 
         // Close the selector when clicking outside
         window.addEventListener('click', function(e) {
@@ -473,33 +554,38 @@
                 option.disabled = !ok;
             });
 
-            // Drop a pick the new classification can no longer offer
-            if (document.getElementById('surplusSelect').value &&
-                !allowed(document.getElementById('surplusSelect').value)) {
-                resetSurplusSelection();
-            }
+            // Drop any pick the new classification can no longer offer
+            picked = picked.filter(function (item) { return allowed(item.value); });
+            renderPicked();
 
             if (!document.getElementById('dropdownMenu').classList.contains('hidden')) {
                 sizeDropdownMenu();
             }
         }
 
-        // Put the selector back to its untouched placeholder state
-        function resetSurplusSelection() {
-            var select = document.getElementById('surplusSelect');
-            var placeholder = select.querySelector('option[value=""]');
-            if (placeholder) { placeholder.disabled = false; }
-            select.value = '';
-            document.getElementById('selectedDisplay').innerHTML =
-                '<span class="text-xl">📦</span><span class="font-mono text-sm truncate">Select usual surplus category...</span>';
-        }
-
         // -------------------------------------------------------------- backend
         var TOKEN_KEY = 'resqToken';
+        var ROLE_KEY = 'resqRole';
         var OFFLINE = 'Could not reach the Res-Q service. Start the backend with "python3 server.py" and try again.';
+
+        // Donors and recipients each get their own dashboard; the role decides which
+        var DASHBOARDS = {
+            donor: 'res_q_dashboard_donor.html',
+            recipient: 'res_q_dashboard_recipient.html'
+        };
+
+        function dashboardFor(role) {
+            return DASHBOARDS[role] || '';
+        }
 
         function readToken() {
             try { return window.localStorage.getItem(TOKEN_KEY) || ''; } catch (err) { return ''; }
+        }
+        function readRole() {
+            try { return window.localStorage.getItem(ROLE_KEY) || ''; } catch (err) { return ''; }
+        }
+        function storeRole(role) {
+            try { window.localStorage.setItem(ROLE_KEY, role || ''); } catch (err) { /* storage blocked */ }
         }
         function showProfileMessage(text, tone) {
             var el = document.getElementById('profileMessage');
@@ -512,17 +598,19 @@
 
         document.getElementById('surplusForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            // Donors answer with an establishment type, recipients with a delivery day
+            // Donors answer with an establishment type plus their surplus categories,
+            // recipients with delivery days and the goods they need. Both lists take up
+            // to two answers.
             var isRecipient = currentRole === 'recipient';
             var payload = {};
 
             if (isRecipient) {
-                var day = document.querySelector('input[name="deliveryDay"]:checked');
-                if (!day) {
-                    showProfileMessage('Please select the day you would prefer deliveries.');
+                var days = selectedDays();
+                if (!days.length) {
+                    showProfileMessage('Please select the days you would prefer deliveries.');
                     return;
                 }
-                payload.deliveryDay = day.value;
+                payload.deliveryDays = days;
             } else {
                 var firmType = document.querySelector('input[name="firmType"]:checked');
                 if (!firmType) {
@@ -532,14 +620,13 @@
                 payload.firmType = firmType.value;
             }
 
-            var surplusType = document.getElementById('surplusSelect').value;
-            if (!surplusType) {
+            if (!picked.length) {
                 showProfileMessage(isRecipient
-                    ? 'Please select your primary need.'
-                    : 'Please select a usual surplus category.');
+                    ? 'Please pick the goods you need — up to 2.'
+                    : 'Please pick your usual surplus categories — up to 2.');
                 return;
             }
-            payload.surplusType = surplusType;
+            payload.surplusTypes = pickedValues();
 
             var token = readToken();
             if (!token) {
@@ -563,8 +650,11 @@
                 })
                 .then(function (res) {
                     if (res.status === 200) {
-                        // Profile saved: hand off to the dashboard, which is built out separately
-                        window.location.href = 'res_q_dashboard.html';
+                        // Profile saved: hand off to the dashboard for this role, which is
+                        // built out separately. The saved user is the authority on the role.
+                        var savedRole = (res.data && res.data.user && res.data.user.role) || currentRole;
+                        storeRole(savedRole);
+                        window.location.href = dashboardFor(savedRole) || 'index.html';
                         return;
                     }
                     var problem = (res.data && res.data.error) || 'We could not save your profile. Please try again.';
@@ -592,16 +682,25 @@
                 });
             }
 
-            var token = '';
-            try { token = window.localStorage.getItem('resqToken') || ''; } catch (err) { token = ''; }
+            var token = readToken();
 
-            // Trust the stored token first so the click lands instantly...
-            setHome(token ? 'res_q_dashboard.html' : 'index.html');
+            // Trust the stored session first so the click lands instantly...
+            setHome(token ? (dashboardFor(readRole()) || 'index.html') : 'index.html');
             if (!token) return;
 
-            // ...then let the backend settle it, in case the session has expired.
+            // ...then let the backend settle the role and the session behind it.
             fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
-                .then(function (response) { if (!response.ok) { setHome('index.html'); } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200) { setHome('index.html'); return; }
+                    var role = (res.data.user && res.data.user.role) || '';
+                    storeRole(role);
+                    setHome(dashboardFor(role) || 'index.html');
+                })
                 .catch(function () { setHome('index.html'); });
         })();
     </script>

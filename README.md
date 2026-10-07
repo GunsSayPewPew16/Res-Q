@@ -40,14 +40,19 @@ role chosen at the start.
    with live requirement checks, and a delivery address. Nothing invalid can be
    submitted.
 3. **Goods profile** — the questions differ by role. A donor classifies their
-   establishment as a *Retail Store* or an *Eatery / Restaurant* and picks their
-   primary surplus category. A recipient instead picks a preferred delivery day
-   (Saturday through Friday) and their primary need from Prepared Meals, Fresh
-   Produce, Dairy & Beverages, Household & Essentials and Packaged Goods. The
-   selector shows three categories at a time and scrolls for the rest.
+   establishment as a *Retail Store* or an *Eatery / Restaurant* and picks up to
+   **2** usual surplus categories. A recipient instead picks up to **2** scheduled
+   delivery days (Saturday through Friday) and up to **2** required goods from
+   Prepared Meals, Fresh Produce, Dairy & Beverages, Household & Essentials and
+   Packaged Goods. Each option carries a small grey note reminding the visitor of
+   the two-item limit; once two are chosen, picking a third does nothing until one
+   is unchecked. The selector shows three categories at a time and scrolls for the
+   rest.
 4. **Dashboard** — saving the goods profile posts it to the backend and sends
-   the visitor to `res_q_dashboard.html`. The page currently carries only the
-   site chrome and an empty content area, ready to be built out.
+   the visitor to the dashboard for their role: `res_q_dashboard_donor.html` for
+   a donor, `res_q_dashboard_recipient.html` for a recipient. Both currently
+   carry only the site chrome and an empty content area, ready to be built out,
+   so they are separated by role rather than by content.
 
 The category list follows the donor's firm classification: a retail store can
 hand over all six categories, while an eatery is limited to the three it
@@ -67,13 +72,20 @@ the matching logic, and invites visitors into the flow above.
 | `frontend/server.py` | Backend: serves the pages and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard.html` | Post-profile landing page — site chrome with an empty content area, to be built out |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page, site chrome with an empty content area, to be built out |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients |
 
-Every page's top-left Res-Q lockup is a link. It goes to the dashboard for a
-signed-in visitor and to the landing page otherwise. Each page works this out
-from the stored token and confirms it against `/api/me`, so an expired session
-falls back to the landing page rather than stranding the visitor on a page they
-can no longer use.
+Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
+visitor's role when signed in, and to the landing page otherwise. Each page works
+this out from the stored token plus a cached `resqRole`, and confirms both
+against `/api/me`, so an expired session falls back to the landing page rather
+than stranding the visitor on a page they can no longer use.
+
+Because a dashboard belongs to one role, each one checks the session on load: a
+visitor with no token is sent to the landing page, and a signed-in visitor whose
+account role does not match the page they opened is sent to their own dashboard.
+So a recipient who follows a donor dashboard link lands on the recipient one
+rather than a page built for somebody else.
 
 ## Running it locally
 
@@ -118,7 +130,7 @@ and `sessions`. Restart the server for a mode change to take effect.
 | `POST` | `/api/login` | Sign in with an email or phone plus password |
 | `GET` | `/api/me` | Return the signed-in user for a bearer token |
 | `POST` | `/api/logout` | Drop the session |
-| `POST` | `/api/profile` | Save the goods profile — establishment type and surplus category for donors, preferred delivery day and primary need for recipients. The page sends the visitor to the dashboard once this returns 200 |
+| `POST` | `/api/profile` | Save the goods profile — establishment type and up to 2 surplus categories for donors, up to 2 delivery days and up to 2 required goods for recipients. Answers beyond the limit are rejected with `400`. The page sends the visitor to the dashboard for their role once this returns 200 |
 
 How the pieces connect:
 

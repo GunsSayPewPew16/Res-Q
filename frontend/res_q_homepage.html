@@ -610,11 +610,33 @@
             logout: '/api/logout'
         };
         var TOKEN_KEY = 'resqToken';
+        var ROLE_KEY = 'resqRole';
         var session = { token: readToken(), user: null };
         var OFFLINE = 'Could not reach the Res-Q service. Start the backend with "python3 server.py" and try again.';
 
+        // Donors and recipients each get their own dashboard; the role decides which. The
+        // role is cached next to the token so the brand lockup can resolve before the
+        // backend answers, and /api/me overwrites it once the session is confirmed.
+        var DASHBOARDS = {
+            donor: 'res_q_dashboard_donor.html',
+            recipient: 'res_q_dashboard_recipient.html'
+        };
+
+        function dashboardFor(role) {
+            return DASHBOARDS[role] || '';
+        }
+
         function readToken() {
             try { return window.localStorage.getItem(TOKEN_KEY) || ''; } catch (err) { return ''; }
+        }
+        function readRole() {
+            try { return window.localStorage.getItem(ROLE_KEY) || ''; } catch (err) { return ''; }
+        }
+        function storeRole(role) {
+            try { window.localStorage.setItem(ROLE_KEY, role || ''); } catch (err) { /* storage blocked */ }
+        }
+        function clearRole() {
+            try { window.localStorage.removeItem(ROLE_KEY); } catch (err) { /* storage blocked */ }
         }
         function storeToken(token) {
             session.token = token || '';
@@ -624,6 +646,7 @@
             session.token = '';
             session.user = null;
             try { window.localStorage.removeItem(TOKEN_KEY); } catch (err) { /* storage blocked */ }
+            clearRole();
             setBrandHome('index.html');
         }
         function escapeHtml(value) {
@@ -640,7 +663,7 @@
                 link.setAttribute('href', href);
             });
         }
-        setBrandHome(session.token ? 'res_q_dashboard.html' : 'index.html');
+        setBrandHome(session.token ? (dashboardFor(readRole()) || 'index.html') : 'index.html');
 
         // Every call answers with { status, data } so the UI can react to the reason
         function api(path, options) {
@@ -719,7 +742,8 @@
         function renderSignedIn() {
             var line = document.getElementById('gateAccountLine');
             if (!session.user) { return; }
-            setBrandHome('res_q_dashboard.html');
+            storeRole(session.user.role);
+            setBrandHome(dashboardFor(session.user.role) || 'index.html');
             var name = escapeHtml(session.user.first_name || 'there');
             line.innerHTML = 'Signed in as <span class="text-[#f4f4f0] font-bold">' + name +
                 '</span> · <button onclick="gotoProfile()" class="text-[#ff4500] font-bold hover:underline cursor-pointer">CONTINUE →</button>' +

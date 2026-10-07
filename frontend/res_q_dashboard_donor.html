@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Res-Q | Donor Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#0c0c0c',
+                        cardbg: '#141414',
+                        cardhover: '#1c1c1c',
+                        accent: '#ff4500',
+                        cream: '#f4f4f0',
+                        muted: '#888888'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom notched corners to mimic the Apptronik reference style */
+        .notched-card {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                0 0, 
+                calc(100% - 35px) 0, 
+                100% 35px, 
+                100% 100%, 
+                0 100%
+            );
+        }
+        .notched-card:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Inverse notch variant */
+        .notched-card-alt {
+            background-color: #141414;
+            border-radius: 1.5rem;
+            position: relative;
+            transition: all 0.3s ease;
+            clip-path: polygon(
+                35px 0, 
+                100% 0, 
+                100% 100%, 
+                0 100%, 
+                0 35px
+            );
+        }
+        .notched-card-alt:hover {
+            background-color: #1c1c1c;
+            transform: translateY(-4px);
+        }
+
+        /* Orange accent CTA card with notch */
+        .notched-orange {
+            background-color: #ff4500;
+            border-radius: 1.5rem;
+            clip-path: polygon(
+                0 0, 
+                100% 0, 
+                100% calc(100% - 35px), 
+                calc(100% - 35px) 100%, 
+                0 100%
+            );
+        }
+    </style>
+</head>
+<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
+
+    <!-- DONOR DASHBOARD: where a donor lands once the goods profile is saved, content to come -->
+
+    <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <a href="index.html" class="brand-home flex items-center space-x-3">
+                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
+                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
+            </a>
+            <nav class="hidden md:flex items-center space-x-8 text-sm font-mono text-neutral-400">
+                <span class="cursor-default">01 / SURPLUS</span>
+                <span class="cursor-default">02 / ROUTING</span>
+                <span class="cursor-default">03 / IMPACT</span>
+            </nav>
+            <div>
+                <a href="index.html" class="inline-flex items-center px-5 py-2.5 rounded-full bg-[#ff4500] text-white text-sm font-bold tracking-wide hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20">
+                    Home →
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-12">
+
+        <section class="mb-12 pt-8">
+            <span class="text-xs font-mono text-[#ff4500] tracking-widest uppercase block mb-3">// DONOR DASHBOARD</span>
+            <h1 class="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-none">
+                Donor Dashboard
+            </h1>
+        </section>
+
+        <!-- Intentionally empty content area, ready to be built out -->
+        <section class="notched-card p-8 md:p-12 min-h-[360px] flex items-center justify-center">
+            <span class="font-mono text-xs text-neutral-600 uppercase tracking-widest">// no surplus routed yet</span>
+        </section>
+
+    </main>
+
+    <footer class="max-w-7xl mx-auto px-6 pb-10">
+        <div class="border-t border-neutral-800 pt-6 font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES — DONOR</div>
+    </footer>
+
+    <script>
+        // THIS_PAGE is the dashboard this file represents. dashboardBoot() keeps the brand
+        // lockup pointed at the signed-in user's own dashboard and sends anyone who lands
+        // on the wrong one to the dashboard that matches their account role.
+        var THIS_PAGE = 'donor';
+        var DASHBOARDS = {
+            donor: 'res_q_dashboard_donor.html',
+            recipient: 'res_q_dashboard_recipient.html'
+        };
+        var TOKEN_KEY = 'resqToken';
+        var ROLE_KEY = 'resqRole';
+
+        function dashboardFor(role) {
+            return DASHBOARDS[role] || '';
+        }
+        function readStore(key) {
+            try { return window.localStorage.getItem(key) || ''; } catch (err) { return ''; }
+        }
+        function writeStore(key, value) {
+            try { window.localStorage.setItem(key, value); } catch (err) { /* storage blocked */ }
+        }
+        function dropStore(key) {
+            try { window.localStorage.removeItem(key); } catch (err) { /* storage blocked */ }
+        }
+
+        (function dashboardBoot() {
+            var links = document.querySelectorAll('.brand-home');
+            function setHome(href) {
+                Array.prototype.forEach.call(links, function (link) {
+                    link.setAttribute('href', href);
+                });
+            }
+
+            var token = readStore(TOKEN_KEY);
+            var cachedRole = readStore(ROLE_KEY);
+
+            // Trust the stored session first so the click lands instantly...
+            setHome(token ? (dashboardFor(cachedRole) || 'index.html') : 'index.html');
+
+            // ...a dashboard is private, so a visitor with no token starts over.
+            if (!token) {
+                window.location.replace('index.html');
+                return;
+            }
+
+            // ...then let the backend settle both the link and which dashboard this is.
+            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200) {
+                        dropStore(TOKEN_KEY);
+                        dropStore(ROLE_KEY);
+                        setHome('index.html');
+                        window.location.replace('index.html');
+                        return;
+                    }
+                    var role = (res.data.user && res.data.user.role) || '';
+                    writeStore(ROLE_KEY, role);
+                    setHome(dashboardFor(role) || 'index.html');
+                    if (role && role !== THIS_PAGE) {
+                        window.location.replace(dashboardFor(role));
+                    }
+                })
+                .catch(function () { /* offline: leave the cached links in place */ });
+        })();
+    </script>
+</body>
+</html>

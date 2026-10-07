@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT    NOT NULL,
     password_salt TEXT    NOT NULL,
     firm_type     TEXT,
-    delivery_day  TEXT,
-    surplus_type  TEXT,
+    delivery_days TEXT,
+    surplus_types TEXT,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -80,8 +80,12 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PUBLIC_FIELDS = (
     "id", "role", "first_name", "last_name", "business_name", "email", "phone",
     "dial_code", "street", "sub_locality", "locality", "province", "city",
-    "postal", "firm_type", "delivery_day", "surplus_type", "created_at",
+    "postal", "firm_type", "delivery_days", "surplus_types", "created_at",
 )
+
+# These two arrive as lists and are stored as JSON text, so a row has to be decoded
+# before it goes out.
+LIST_FIELDS = ("delivery_days", "surplus_types")
 
 # The goods profile asks different questions per role: donors describe where the goods
 # come from, recipients when they want them delivered and what they need.
@@ -95,6 +99,21 @@ RECIPIENT_NEEDS = (
     "packaged_goods",
 )
 
+# Which firm classifications may hand over each surplus category. This mirrors the rule
+# the goods profile applies to the dropdown, so a crafted request cannot save a category
+# the chosen establishment does not actually produce.
+FIRM_SURPLUS = {
+    "prepared_meals": ("retail", "eatery"),
+    "fresh_produce": ("retail",),
+    "bakery_items": ("retail", "eatery"),
+    "packaged_goods": ("retail",),
+    "dairy_beverages": ("retail", "eatery"),
+    "household_essentials": ("retail",),
+}
+
+# Every profile question takes at most two answers.
+MAX_PICKS = 2
+
 
 def connect():
     conn = sqlite3.connect(DB_PATH)
@@ -103,13 +122,71 @@ def connect():
     return conn
 
 
+def clean_selection(value, allowed, limit=MAX_PICKS):
+    """Normalise a 1..limit multi-select answer. None means it is not a valid answer.
+
+    A bare string is accepted so a caller that still sends a single value keeps working.
+    """
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return None
+    picked = []
+    for item in value:
+        if not isinstance(item, str):
+            return None
+        key = item.strip().lower()
+        if not key or key in picked:
+            continue
+        if key not in allowed:
+            return None
+        picked.append(key)
+    if not picked or len(picked) > limit:
+        return None
+    return picked
+
+
+def decode_list(value):
+    """Read a stored JSON list back as a list of strings."""
+    if isinstance(value, list):
+        return value
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [item for item in parsed if isinstance(item, str)]
+
+
 def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
-        # Databases created before recipients chose a delivery day need the extra column.
+        # Databases created while each question took a single answer carry singular
+        # columns; add the list columns and carry the old answers across as one-item lists.
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
-        if "delivery_day" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN delivery_day TEXT")
+        if "delivery_days" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN delivery_days TEXT")
+        if "surplus_types" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN surplus_types TEXT")
+        if "delivery_day" in columns or "surplus_type" in columns:
+            old_day = "delivery_day" if "delivery_day" in columns else "NULL"
+            old_type = "surplus_type" if "surplus_type" in columns else "NULL"
+            rows = conn.execute(
+                "SELECT id, %s AS delivery_day, %s AS surplus_type FROM users "
+                "WHERE delivery_days IS NULL AND surplus_types IS NULL" % (old_day, old_type)
+            ).fetchall()
+            for row in rows:
+                days = [row["delivery_day"]] if row["delivery_day"] else []
+                types = [row["surplus_type"]] if row["surplus_type"] else []
+                if not days and not types:
+                    continue
+                conn.execute(
+                    "UPDATE users SET delivery_days = ?, surplus_types = ? WHERE id = ?",
+                    (json.dumps(days), json.dumps(types), row["id"]),
+                )
 
 
 def hash_password(password, salt=None):
@@ -202,7 +279,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
     def public_user(self, row):
         keys = row.keys()
-        return {field: row[field] for field in PUBLIC_FIELDS if field in keys}
+        user = {field: row[field] for field in PUBLIC_FIELDS if field in keys}
+        for field in LIST_FIELDS:
+            if field in user:
+                user[field] = decode_list(user[field])
+        return user
 
     def start_session(self, conn, user_id):
         token = secrets.token_urlsafe(24)
@@ -257,7 +338,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 400, {"error": "Please fill in your name to continue.", "field": "firstName"}
             )
 
-        contact = data.get("contact") or {}
+        # Anything that is not the expected shape is treated as an empty one, so a
+        # malformed request is answered rather than killing the request thread.
+        contact = data.get("contact")
+        if not isinstance(contact, dict):
+            contact = {}
         kind = "phone" if (contact.get("type") == "phone") else "email"
         value = (contact.get("value") or "").strip()
         dial_code = (contact.get("dial") or "").strip() or None
@@ -295,7 +380,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if problem:
             return self.send_json(400, {"error": problem, "field": "password"})
 
-        address = data.get("address") or {}
+        address = data.get("address")
+        if not isinstance(address, dict):
+            address = {}
 
         # Demo mode: take the answers, keep them in memory for this run, store nothing.
         if not PERSIST:
@@ -309,8 +396,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "phone": phone,
                 "dial_code": dial_code,
                 "firm_type": None,
-                "delivery_day": None,
-                "surplus_type": None,
+                "delivery_days": [],
+                "surplus_types": [],
                 "demo": True,
             }
             token = "demo-" + secrets.token_urlsafe(12)
@@ -513,23 +600,32 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
         role = session_user.get("role", "donor")
         firm_type = (data.get("firmType") or "").strip().lower()
-        delivery_day = (data.get("deliveryDay") or "").strip().lower()
-        surplus_type = (data.get("surplusType") or "").strip().lower()
+        # Both questions take up to MAX_PICKS answers. The singular keys are still read so
+        # a page from before the multi-select change keeps working.
+        raw_days = data.get("deliveryDays", data.get("deliveryDay"))
+        raw_types = data.get("surplusTypes", data.get("surplusType"))
+        delivery_days = []
+        surplus_types = []
 
         if role == "recipient":
-            if delivery_day not in DELIVERY_DAYS:
+            days = clean_selection(raw_days, DELIVERY_DAYS)
+            if days is None:
                 return self.send_json(
                     400,
                     {
-                        "error": "Select the day you would prefer deliveries.",
-                        "field": "deliveryDay",
+                        "error": "Select up to 2 days you would prefer deliveries.",
+                        "field": "deliveryDays",
                     },
                 )
-            if surplus_type not in RECIPIENT_NEEDS:
+            needs = clean_selection(raw_types, RECIPIENT_NEEDS)
+            if needs is None:
                 return self.send_json(
-                    400, {"error": "Select your primary need.", "field": "surplusType"}
+                    400,
+                    {"error": "Select up to 2 goods you need.", "field": "surplusTypes"},
                 )
             firm_type = None
+            delivery_days = days
+            surplus_types = needs
         else:
             if firm_type not in ("retail", "eatery"):
                 return self.send_json(
@@ -539,23 +635,43 @@ class ResQHandler(SimpleHTTPRequestHandler):
                         "field": "firmType",
                     },
                 )
-            if surplus_type not in DONOR_SURPLUS:
+            categories = clean_selection(raw_types, DONOR_SURPLUS)
+            if categories is None:
                 return self.send_json(
                     400,
-                    {"error": "Select a usual surplus category.", "field": "surplusType"},
+                    {
+                        "error": "Select up to 2 usual surplus categories.",
+                        "field": "surplusTypes",
+                    },
                 )
-            delivery_day = None
+            offered = tuple(
+                name for name in DONOR_SURPLUS if firm_type in FIRM_SURPLUS.get(name, ())
+            )
+            if [name for name in categories if name not in offered]:
+                return self.send_json(
+                    400,
+                    {
+                        "error": "That establishment cannot offer one of the categories you picked.",
+                        "field": "surplusTypes",
+                    },
+                )
+            surplus_types = categories
 
         if not PERSIST:
             session_user["firm_type"] = firm_type
-            session_user["delivery_day"] = delivery_day
-            session_user["surplus_type"] = surplus_type
+            session_user["delivery_days"] = delivery_days
+            session_user["surplus_types"] = surplus_types
             return self.send_json(200, {"ok": True, "demo": True, "user": session_user})
 
         with connect() as conn:
             conn.execute(
-                "UPDATE users SET firm_type = ?, delivery_day = ?, surplus_type = ? WHERE id = ?",
-                (firm_type, delivery_day, surplus_type, session_user["id"]),
+                "UPDATE users SET firm_type = ?, delivery_days = ?, surplus_types = ? WHERE id = ?",
+                (
+                    firm_type,
+                    json.dumps(delivery_days),
+                    json.dumps(surplus_types),
+                    session_user["id"],
+                ),
             )
             conn.commit()
             updated = conn.execute(
