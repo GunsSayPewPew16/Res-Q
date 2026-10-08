@@ -219,7 +219,42 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `POST` | `/api/logout` | Drop the session |
 | `POST` | `/api/profile` | Save the goods profile — establishment type and up to 2 surplus categories for donors, up to 2 delivery days and up to 2 required goods for recipients. Answers beyond the limit are rejected with `400`. The page sends the visitor to the dashboard for their role once this returns 200 |
 | `POST` | `/api/delivery-location` | Save the delivery location the dashboard pin points at, from an `address` plus `lat`/`lng`. Needs a bearer token (`401`), and answers `400` for an empty address, coordinates that are not numbers or are off the globe, or a malformed body. Overwrites any earlier confirmation and only ever writes the caller's own row; the refreshed user comes back in the response |
+| `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
+| `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first |
+| `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
+
+### Matching and delivery orders
+
+`GET /api/matches` is where the confirmed pins earn their keep: it measures the
+distance from the signed-in account's pin to every account of the other role that has
+a pin of its own and shares at least one category, then hands back the nearest first.
+Candidates are filtered with a coarse latitude/longitude box and then measured
+properly with the haversine distance; both figures are kilometres, rounded like every
+other measurement here to two decimals. Only the confirmed pin counts — the address
+typed at onboarding was never turned into coordinates — so an account with no pin is
+told to confirm one (`400`, `no_location`) rather than matched against nothing.
+
+`POST /api/orders` turns one of those matches into a delivery. The donor's pin becomes
+the pickup point and the recipient's the drop-off, and both addresses are copied onto
+the order beside the coordinates, so a routing or scheduling pass reads one row
+instead of joining two profiles. Either side can open it — a donor names a recipient,
+a recipient names a donor — and the two are stored on the correct sides whichever way
+round the request came. An optional `scheduledFor` day is checked against the
+recipient's own preferred days before it is booked. Orders start life `proposed`; the
+transitions that move them on are not built yet, and until they are, the one-live-order
+rule keeps the same goods from being put on the road twice.
+
+In demo mode there is no second account to match against, so both endpoints answer
+from a small set of fabricated counterparts — each one placed at a fixed distance and
+bearing from the caller's own pin, with every donor category covered by a recipient
+and every recipient need by a donor, so the pipeline can be walked through wherever the
+pin was dropped. They carry `"demo": true` in the response and are never written
+anywhere. Demo orders live on the session token, the way the demo sessions themselves
+do, and go when the process does.
+
+Nothing calls either endpoint yet: wiring the rails and the impact panel to
+`/api/matches` and `/api/orders` is the next piece of work on the pages.
 
 How the pieces connect:
 
@@ -287,7 +322,9 @@ is needed twice; flip `RESQ_PERSIST=on` for the real thing.
 What it deliberately lacks: email verification, password reset, rate limiting and
 account recovery. The database is a local file, so taking this live would mean
 moving to a managed database and giving the auth a real review. The matching
-pipeline shown on the marketing page remains illustrative.
+pipeline is real on the backend now — `/api/matches` and `/api/orders` — but no page
+calls it yet, so what the marketing page shows remains illustrative, and the donor's
+impact figures are still placeholders rather than a count of the deliveries that ran.
 
 The dashboards are still skeletons: the boxes and the layout are in place, and the
 rails name their sections and switch between them, but every section screen except
