@@ -118,6 +118,9 @@
             background: #ff4500;
         }
     </style>
+    <!-- The shared Supabase client and the surplus_posts calls both dashboards make.
+         It only defines window.ResQDB; the library itself is fetched on first use. -->
+    <script src="resq_supabase.js"></script>
 </head>
 <body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white min-h-screen flex flex-col">
 
@@ -250,10 +253,39 @@
                             <div class="w-full h-72 rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
                         </div>
 
-                        <!-- Quick registration panel -->
+                        <!-- Log surplus panel: the donor's one action. What is typed here
+                             becomes a row in Supabase's surplus_posts table — the same
+                             table the recipient dashboard reads its feed from — so a logged
+                             item is on somebody else's screen the moment it is written. The
+                             row goes straight to the database rather than through the local
+                             backend, which keeps owning sign-in, the profile and the
+                             confirmed delivery location. -->
                         <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative">
-                            <div class="border-b border-neutral-800 pb-4 mb-6"></div>
-                            <div class="min-h-[240px] rounded-xl bg-neutral-800/50"></div>
+                            <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
+                                <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Log surplus</span>
+                                <span id="surplusFormState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                            </div>
+
+                            <form id="surplusForm" onsubmit="submitSurplus(event)" class="space-y-4">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <label class="block">
+                                        <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Item</span>
+                                        <input id="surplusItem" name="item" type="text" maxlength="120" autocomplete="off" placeholder="Crates of ripe tomatoes" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                                    </label>
+                                    <label class="block">
+                                        <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Quantity</span>
+                                        <input id="surplusQuantity" name="quantity" type="text" maxlength="80" autocomplete="off" placeholder="24 kg across 6 crates" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                                    </label>
+                                </div>
+                                <label class="block">
+                                    <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Pickup location</span>
+                                    <input id="surplusLocation" name="location" type="text" maxlength="160" autocomplete="off" placeholder="100 Queen Street West, Toronto" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                                </label>
+                                <div class="flex flex-wrap items-center gap-4">
+                                    <button type="submit" id="surplusSubmit" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Submit to feed</button>
+                                    <span id="surplusNote" class="font-mono text-[10px] text-neutral-600">Every logged item lands in the recipient feed as it is written.</span>
+                                </div>
+                            </form>
                         </div>
 
                     </div>
@@ -300,7 +332,23 @@
 
             </div>
 
-            <!-- The section screens: picking any rail item other than Dashboard wipes
+            <!-- Surplus Received: the donor's own rows, read back from Supabase. The
+                 chip on each one is the same status field a recipient's claim writes,
+                 so an item somebody has taken turns from pending to claimed here
+                 without a reload. -->
+            <div id="viewSurplusReceived" class="hidden lg:col-span-10">
+                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
+                        <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Your surplus</span>
+                        <span id="mySurplusState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                    </div>
+                    <div id="mySurplusList" class="bg-black/20 rounded-2xl border border-neutral-800 p-4 space-y-3 min-h-[240px]">
+                        <span class="block font-mono text-[11px] text-neutral-500">Nothing logged yet.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- The remaining section screens: picking any other rail item wipes
                  the dashboard and opens this blank frame, which carries the tone and
                  nothing else until that section has content of its own. -->
             <div id="viewBlank" class="hidden lg:col-span-10">
@@ -450,6 +498,9 @@
                     resqProfile = user;
                     profileAddress = joinProfileAddress(user);
                     savedLocation = deliveryLocationFrom(user);
+                    // The pickup address defaults to the account's own location so the
+                    // common case is one field left alone rather than typed again.
+                    prefillSurplusLocation();
                     if (role && role !== THIS_PAGE) {
                         window.location.replace(dashboardFor(role));
                     }
@@ -497,10 +548,23 @@
             showView(element.getAttribute('data-view'));
         }
 
+        // Each labelled section owns a screen. Dashboard and the donor's own surplus
+        // have one; every section that has no content of its own yet still opens the
+        // blank frame. Opening a screen that reads the database hands it to that
+        // screen's loader, and leaving it stops the work again.
+        var SECTION_VIEWS = {
+            dashboard: 'viewDashboard',
+            'surplus-received': 'viewSurplusReceived'
+        };
+        var ALL_VIEWS = ['viewDashboard', 'viewSurplusReceived', 'viewBlank'];
+
         function showView(name) {
-            var onDashboard = name === 'dashboard';
-            document.getElementById('viewDashboard').classList.toggle('hidden', !onDashboard);
-            document.getElementById('viewBlank').classList.toggle('hidden', onDashboard);
+            var wanted = SECTION_VIEWS[name] || 'viewBlank';
+            ALL_VIEWS.forEach(function (id) {
+                var view = document.getElementById(id);
+                if (view) { view.classList.toggle('hidden', id !== wanted); }
+            });
+            if (wanted === 'viewSurplusReceived') { openMySurplus(); } else { closeMySurplus(); }
         }
 
         // ---------------------------------------------------------------------------
@@ -1206,6 +1270,230 @@
                     findDeliveryAddress();
                 }
             });
+        }
+
+        // ---------------------------------------------------------------------------
+        // Surplus posts. This is the one place a dashboard talks to Supabase rather
+        // than to the local backend: the form below writes a row into the shared
+        // surplus_posts table, and the Surplus Received screen reads this donor's own
+        // rows back from it. Both go through window.ResQDB, which fetches the Supabase
+        // library on first use and says plainly when the table is not there yet.
+        //
+        // Nothing here is optimistic: a post is only called logged once the database
+        // has answered with the row, so the chip can never say logged for a write that
+        // did not happen.
+        // ---------------------------------------------------------------------------
+        var surplusSubmitting = false;
+        var mySurplusPoll = null;
+        var mySurplusUnwatch = null;
+
+        var CHIP_IDLE = 'text-neutral-500 bg-black/20';
+        var CHIP_BUSY = 'text-[#ff9b73] bg-orange-950/60';
+        var CHIP_DONE = 'text-emerald-400 bg-emerald-950/60';
+
+        function resqDb() {
+            return window.ResQDB || null;
+        }
+
+        function setChip(id, message, tone) {
+            var chip = document.getElementById(id);
+            if (!chip) { return; }
+            chip.textContent = message;
+            chip.className = 'font-mono text-[10px] uppercase tracking-widest rounded-full px-2 py-1 '
+                + (tone || CHIP_IDLE);
+        }
+
+        function setSurplusNote(message, tone) {
+            var note = document.getElementById('surplusNote');
+            if (!note) { return; }
+            note.textContent = message;
+            note.className = 'font-mono text-[10px] ' + (tone || 'text-neutral-600');
+        }
+
+        // Who the post is from, named the way the header names them. It is the value
+        // the Surplus Received screen filters on, so both always agree.
+        function donorName() {
+            var profile = resqProfile || {};
+            var full = [profile.first_name, profile.last_name].filter(function (part) {
+                return part && String(part).trim();
+            }).join(' ');
+            return String(profile.business_name || full || 'Res-Q Donor').trim();
+        }
+
+        function surplusValue(id) {
+            var field = document.getElementById(id);
+            return field ? String(field.value || '').trim() : '';
+        }
+
+        // The account's confirmed location, or the address it onboarded with. Only
+        // ever filled in while the field is still empty, so it never overwrites typing.
+        function prefillSurplusLocation() {
+            var field = document.getElementById('surplusLocation');
+            if (!field || field.value) { return; }
+            field.value = (savedLocation && savedLocation.address) || profileAddress || '';
+        }
+
+        // The same sentence for both failures worth explaining: the table is missing,
+        // or Supabase refused the request for another reason.
+        function surplusFailure(error) {
+            if (error && error.missingTable) {
+                return 'Supabase answered, but surplus_posts is not in the project: run '
+                    + 'supabase/migrations/20261008000000_create_surplus_posts.sql first.';
+            }
+            return 'Supabase did not accept that: '
+                + ((error && error.message) || 'the request did not go through') + '.';
+        }
+
+        function submitSurplus(event) {
+            if (event) { event.preventDefault(); }
+            var db = resqDb();
+            if (surplusSubmitting) { return; }
+            if (!db) {
+                setChip('surplusFormState', 'no client', CHIP_BUSY);
+                setSurplusNote('The Supabase client is not on this page. Check the connection and reload.',
+                    'text-[#ff9b73]');
+                return;
+            }
+
+            // Every column the table insists on is read before anything is sent, so a
+            // half-filled form answers here instead of coming back as a database error.
+            var item = surplusValue('surplusItem');
+            var quantity = surplusValue('surplusQuantity');
+            var location = surplusValue('surplusLocation');
+            if (!item || !quantity || !location) {
+                setChip('surplusFormState', 'incomplete', CHIP_BUSY);
+                setSurplusNote('An item, a quantity and a pickup location are all needed.',
+                    'text-[#ff9b73]');
+                return;
+            }
+
+            surplusSubmitting = true;
+            var button = document.getElementById('surplusSubmit');
+            if (button) { button.disabled = true; }
+            setChip('surplusFormState', 'sending', CHIP_BUSY);
+            setSurplusNote('Writing the post to Supabase\u2026');
+
+            db.createPost({
+                donorName: donorName(),
+                itemName: item,
+                quantity: quantity,
+                location: location
+            }).then(function (res) {
+                surplusSubmitting = false;
+                if (button) { button.disabled = false; }
+                if (!res.ok) {
+                    setChip('surplusFormState', 'failed', CHIP_BUSY);
+                    setSurplusNote(surplusFailure(res.error), 'text-[#ff9b73]');
+                    return;
+                }
+
+                // The fields that describe one item are cleared for the next one; the
+                // pickup address stays, because a donor's address rarely changes.
+                var itemField = document.getElementById('surplusItem');
+                var quantityField = document.getElementById('surplusQuantity');
+                if (itemField) { itemField.value = ''; }
+                if (quantityField) { quantityField.value = ''; }
+                if (itemField) { itemField.focus(); }
+                setChip('surplusFormState', 'logged', CHIP_DONE);
+                setSurplusNote('Logged as '
+                    + ((res.data && res.data.item_name) || item)
+                    + ' \u2014 it is in the recipient feed now.');
+                refreshMySurplus();
+            }).catch(function () {
+                surplusSubmitting = false;
+                if (button) { button.disabled = false; }
+                setChip('surplusFormState', 'failed', CHIP_BUSY);
+                setSurplusNote('Supabase did not accept that: the request did not go through.',
+                    'text-[#ff9b73]');
+            });
+        }
+
+        // This donor's rows, newest first. `donor_name` is what a post is filed under,
+        // so the filter is the same name the form writes.
+        function refreshMySurplus() {
+            var db = resqDb();
+            if (!db) { return; }
+            return db.listPosts({ donorName: donorName() }).then(function (res) {
+                if (!res.ok) {
+                    setChip('mySurplusState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    renderMySurplus(null, surplusFailure(res.error));
+                    return;
+                }
+                var rows = res.data || [];
+                setChip('mySurplusState', rows.length ? rows.length + ' logged' : 'empty', CHIP_DONE);
+                renderMySurplus(rows, '');
+            });
+        }
+
+        // Anything a donor typed is escaped on the way into the markup, and the
+        // message path works even when the client never loaded and there is no db.
+        function surplusText(value) {
+            var db = resqDb();
+            return db ? db.escapeHtml(value)
+                : String(value === null || value === undefined ? '' : value);
+        }
+
+        function renderMySurplus(rows, message) {
+            var list = document.getElementById('mySurplusList');
+            if (!list) { return; }
+            var db = resqDb();
+            if (!rows) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
+                    + surplusText(message) + '</span>';
+                return;
+            }
+            if (!rows.length) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                    + 'Nothing logged yet. Use the Log surplus form on the dashboard.</span>';
+                return;
+            }
+            list.innerHTML = rows.map(function (row) {
+                return '<div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 ' +
+                        'hover:border-neutral-700 transition-all">' +
+                    '<div class="flex flex-wrap items-start justify-between gap-3">' +
+                        '<span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">' +
+                            surplusText(row.item_name) + '</span>' +
+                        '<span class="' + db.statusChip(row.status) + '">' +
+                            db.statusLabel(row.status) + '</span>' +
+                    '</div>' +
+                    '<div class="mt-2 font-mono text-[11px] text-neutral-400">' +
+                        surplusText(db.postNeeds(row)) + '</div>' +
+                    '<div class="mt-1 font-mono text-[10px] text-neutral-600">' +
+                        surplusText(row.location) + ' &#183; logged ' +
+                        surplusText(db.formatWhen(row.created_at)) + '</div>' +
+                    '</div>';
+            }).join('');
+        }
+
+        // The screen is live while it is open: a subscription covers every claim as it
+        // happens, and the timer re-reads the table for a project where the realtime
+        // publication was not set up. Both stop when the section is left.
+        function openMySurplus() {
+            var db = resqDb();
+            setChip('mySurplusState', 'reading\u2026', CHIP_BUSY);
+            refreshMySurplus();
+            if (!db) {
+                setChip('mySurplusState', 'no client', CHIP_BUSY);
+                renderMySurplus(null, 'The Supabase client is not on this page. Check the connection and reload.');
+                return;
+            }
+            if (!mySurplusUnwatch) {
+                mySurplusUnwatch = db.watchPosts(function () { refreshMySurplus(); });
+            }
+            if (!mySurplusPoll) {
+                mySurplusPoll = window.setInterval(refreshMySurplus, db.pollMs);
+            }
+        }
+
+        function closeMySurplus() {
+            if (mySurplusPoll) {
+                window.clearInterval(mySurplusPoll);
+                mySurplusPoll = null;
+            }
+            if (mySurplusUnwatch) {
+                mySurplusUnwatch();
+                mySurplusUnwatch = null;
+            }
         }
 
     </script>
