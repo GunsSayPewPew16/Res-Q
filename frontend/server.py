@@ -18,10 +18,12 @@ Endpoints
     GET  /api/me                    return the signed-in user for a bearer token
     POST /api/logout                drop the session
     POST /api/profile               save the goods profile (establishment + surplus category)
+    POST /api/delivery-location     save the location confirmed on the dashboard map
 
 Only the standard library is used, so there is nothing to install.
 """
 
+import datetime
 import hashlib
 import hmac
 import json
@@ -65,6 +67,10 @@ CREATE TABLE IF NOT EXISTS users (
     firm_type     TEXT,
     delivery_days TEXT,
     surplus_types TEXT,
+    delivery_address TEXT,
+    delivery_lat  REAL,
+    delivery_lng  REAL,
+    delivery_confirmed_at TEXT,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -80,8 +86,15 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PUBLIC_FIELDS = (
     "id", "role", "first_name", "last_name", "business_name", "email", "phone",
     "dial_code", "street", "sub_locality", "locality", "province", "city",
-    "postal", "firm_type", "delivery_days", "surplus_types", "created_at",
+    "postal", "firm_type", "delivery_days", "surplus_types",
+    "delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at",
+    "created_at",
 )
+
+# The delivery location confirmed on the dashboard map. The coordinates are the point
+# for routing; the address is what the map showed at that point when it was confirmed.
+DELIVERY_FIELDS = ("delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at")
+MAX_ADDRESS_CHARS = 400
 
 # These two arrive as lists and are stored as JSON text, so a row has to be decoded
 # before it goes out.
@@ -171,6 +184,16 @@ def init_db():
             conn.execute("ALTER TABLE users ADD COLUMN delivery_days TEXT")
         if "surplus_types" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN surplus_types TEXT")
+        # Accounts created before the dashboard map saved anything have no delivery
+        # location: add the columns so a confirmed location has somewhere to land.
+        for column, kind in (
+            ("delivery_address", "TEXT"),
+            ("delivery_lat", "REAL"),
+            ("delivery_lng", "REAL"),
+            ("delivery_confirmed_at", "TEXT"),
+        ):
+            if column not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
         if "delivery_day" in columns or "surplus_type" in columns:
             old_day = "delivery_day" if "delivery_day" in columns else "NULL"
             old_type = "surplus_type" if "surplus_type" in columns else "NULL"
@@ -319,6 +342,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_logout()
         if path == "/api/profile":
             return self.api_profile()
+        if path == "/api/delivery-location":
+            return self.api_delivery_location()
         return self.send_json(404, {"error": "Unknown endpoint."})
 
     # ------------------------------------------------------------------ handlers
@@ -395,9 +420,22 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "email": email,
                 "phone": phone,
                 "dial_code": dial_code,
+                # The address rides along as well, so demo mode answers /api/me with the
+                # same shape persistent mode does; the dashboard map reads it to open on
+                # the address the account onboarded with.
+                "street": (address.get("street") or "").strip() or None,
+                "sub_locality": (address.get("subLocality") or "").strip() or None,
+                "locality": (address.get("locality") or "").strip() or None,
+                "province": (address.get("province") or "").strip() or None,
+                "city": (address.get("city") or "").strip() or None,
+                "postal": (address.get("postal") or "").strip() or None,
                 "firm_type": None,
                 "delivery_days": [],
                 "surplus_types": [],
+                "delivery_address": None,
+                "delivery_lat": None,
+                "delivery_lng": None,
+                "delivery_confirmed_at": None,
                 "demo": True,
             }
             token = "demo-" + secrets.token_urlsafe(12)
@@ -678,6 +716,87 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "SELECT * FROM users WHERE id = ?", (session_user["id"],)
             ).fetchone()
 
+        return self.send_json(200, {"ok": True, "user": self.public_user(updated)})
+
+    def api_delivery_location(self):
+        """Save the location confirmed on the dashboard map.
+
+        The coordinates are the point routing will use; the address is what the map
+        showed at that point when it was confirmed. Only the signed-in account can set
+        its own location, and there is no way to set somebody else's.
+        """
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        token = self.bearer_token()
+        if PERSIST:
+            with connect() as conn:
+                row = self.user_for_token(conn, token)
+            if row is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+        else:
+            session_user = DEMO_SESSIONS.get(token)
+            if session_user is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+
+        address = (data.get("address") or "").strip()
+        if not address:
+            return self.send_json(
+                400,
+                {
+                    "error": "There is no address to save yet: place the pin first.",
+                    "field": "address",
+                },
+            )
+        if len(address) > MAX_ADDRESS_CHARS:
+            address = address[:MAX_ADDRESS_CHARS]
+
+        # A location without usable coordinates is nothing routing can use, so it is
+        # rejected rather than stored as a half-answer.
+        try:
+            lat = float(data.get("lat"))
+            lng = float(data.get("lng"))
+        except (TypeError, ValueError):
+            return self.send_json(
+                400,
+                {"error": "That location came through without usable coordinates.", "field": "lat"},
+            )
+        if lat != lat or lng != lng or not -90 <= lat <= 90 or not -180 <= lng <= 180:
+            return self.send_json(
+                400,
+                {"error": "Those coordinates are not a place on the map.", "field": "lat"},
+            )
+
+        if not PERSIST:
+            session_user["delivery_address"] = address
+            session_user["delivery_lat"] = lat
+            session_user["delivery_lng"] = lng
+            session_user["delivery_confirmed_at"] = datetime.datetime.now(
+                datetime.timezone.utc
+            ).strftime("%Y-%m-%d %H:%M:%S")
+            return self.send_json(200, {"ok": True, "demo": True, "user": session_user})
+
+        with connect() as conn:
+            conn.execute(
+                "UPDATE users SET delivery_address = ?, delivery_lat = ?, delivery_lng = ?,"
+                " delivery_confirmed_at = datetime('now') WHERE id = ?",
+                (address, lat, lng, row["id"]),
+            )
+            conn.commit()
+            updated = conn.execute("SELECT * FROM users WHERE id = ?", (row["id"],)).fetchone()
         return self.send_json(200, {"ok": True, "user": self.public_user(updated)})
 
     # ------------------------------------------------------------------ caching

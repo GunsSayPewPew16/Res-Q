@@ -77,6 +77,31 @@
             );
         }
 
+        /* The delivery card: the sibling silhouette at rest, and the landing page's
+           hero-card treatment while hovered or keyboard-focused — filled with the accent
+           orange and everything inside turned black. Declared after the notch rules above
+           so it wins the tie on specificity, the same way the hero cards do. */
+        .deliver-card {
+            background-color: #141414;
+        }
+        .deliver-card:hover,
+        .deliver-card:focus-visible {
+            background-color: #ff4500;
+        }
+        .deliver-card:hover *,
+        .deliver-card:focus-visible * {
+            color: #000000;
+        }
+        .deliver-card .deliver-chip {
+            background-color: rgba(255, 255, 255, 0.06);
+            border: 1px solid #262626;
+        }
+        .deliver-card:hover .deliver-chip,
+        .deliver-card:focus-visible .deliver-chip {
+            background-color: rgba(0, 0, 0, 0.2);
+            border-color: transparent;
+        }
+
         /* Custom scrollbar for the long rails */
         ::-webkit-scrollbar {
             width: 5px;
@@ -107,15 +132,51 @@
                 <span class="hidden xl:inline text-xs font-mono text-neutral-400 ml-2">// RECIPIENT INTAKE &amp; DELIVERY</span>
             </a>
             <div class="flex items-center space-x-3">
-                <button type="button" onclick="triggerNotification()" aria-label="System notifications" class="p-2.5 rounded-xl bg-[#141414] border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-all relative">
-                    <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ff4500]"></span>
-                    <span aria-hidden="true">🔔</span>
-                </button>
-                <div class="flex items-center space-x-3 bg-[#141414] border border-neutral-800 rounded-full px-4 py-1.5">
-                    <div id="userInitials" class="w-7 h-7 rounded-full bg-[#ff4500] flex items-center justify-center font-bold text-xs text-black font-mono">R</div>
-                    <span id="userName" class="text-xs font-mono text-neutral-300 hidden md:inline">SIGNED IN</span>
+                <!-- The bell opens a small notification panel under itself instead of a
+                     browser alert. Nothing feeds the list yet, so it is left empty on
+                     purpose: the panel carries its own frame and nothing else. -->
+                <div id="notifyWrap" class="relative">
+                    <button type="button" id="notifyButton" onclick="toggleHeaderPanel(this)" aria-label="System notifications" aria-expanded="false" aria-controls="notifyPanel" class="p-2.5 rounded-xl bg-[#141414] border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-all relative">
+                        <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ff4500]"></span>
+                        <span aria-hidden="true">🔔</span>
+                    </button>
+
+                    <!-- Hangs off the bell's right edge and opens towards the left, the way
+                         the bell's own panel does on YouTube. -->
+                    <div id="notifyPanel" data-header-panel role="dialog" aria-label="Notifications" class="hidden absolute right-0 top-full mt-6 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
+                        <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
+                            <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Notifications</span>
+                            <span class="font-mono text-[10px] text-neutral-600">00</span>
+                        </div>
+                        <div class="p-4">
+                            <div class="h-32 rounded-xl bg-neutral-800/50 border border-neutral-800 flex items-center justify-center">
+                                <span class="font-mono text-[10px] uppercase tracking-widest text-neutral-600">No notifications yet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="accountWrap" class="relative">
+                    <button type="button" id="accountButton" onclick="toggleHeaderPanel(this)" aria-haspopup="true" aria-expanded="false" aria-controls="accountPanel" class="flex items-center space-x-3 bg-[#141414] border border-neutral-800 rounded-full px-4 py-1.5 cursor-pointer hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700">
+                        <span id="userInitials" class="w-7 h-7 rounded-full bg-[#ff4500] flex items-center justify-center font-bold text-xs text-black font-mono">R</span>
+                        <span id="userName" class="text-xs font-mono text-neutral-300 hidden md:inline">SIGNED IN</span>
+                    </button>
+
+                    <!-- The account pill opens the same kind of panel as the bell, and it is
+                         left empty for the same reason: there is no account menu to list yet. -->
+                    <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-6 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
+                        <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
+                            <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Account</span>
+                            <span class="font-mono text-[10px] text-neutral-600">00</span>
+                        </div>
+                        <div class="p-4">
+                            <div class="h-32 rounded-xl bg-neutral-800/50 border border-neutral-800 flex items-center justify-center">
+                                <span class="font-mono text-[10px] uppercase tracking-widest text-neutral-600">No menu items yet</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+
         </div>
     </header>
 
@@ -157,10 +218,17 @@
                         <div class="mt-4 flex-1 rounded-xl bg-neutral-800/50"></div>
                     </div>
 
-                    <div class="notched-orange p-6 flex flex-col justify-between h-40 text-black">
-                        <span class="self-start block h-6 w-20 rounded-full bg-black/20"></span>
-                        <div class="mt-4 flex-1 rounded-xl bg-black/20"></div>
-                    </div>
+                    <!-- The delivery card is the one part of the skeleton that acts: it
+                         opens the map overlay where the pin is placed and fine-tuned. It
+                         rests dark on the same notched silhouette as its two neighbours
+                         and fills with the accent orange while hovered, the way the
+                         landing page's capability cards do. -->
+                    <button type="button" id="deliverCard" onclick="openDeliveryPicker()" class="notched-card deliver-card p-6 flex flex-col items-start justify-between h-40 w-full text-left text-[#f4f4f0] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40">
+                        <span aria-hidden="true" class="deliver-chip w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-300">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.686-7-11a7 7 0 1 1 14 0c0 5.314-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+                        </span>
+                        <span class="text-sm font-black uppercase tracking-widest leading-none">confirm delivery location</span>
+                    </button>
                 </div>
 
                 <!-- Map + intake request box, then the queue rail -->
@@ -222,6 +290,47 @@
     <footer class="max-w-7xl mx-auto px-6 pb-10 w-full">
         <div class="border-t border-neutral-800 pt-6 font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES — RECIPIENT</div>
     </footer>
+
+    <!-- Delivery location overlay: an almost full-screen map. It opens on the address
+         the account onboarded with, an address from the bar drops the pin, and moving
+         the pin names the address under it. Leaflet is loaded from a CDN on first open
+         so the dashboards stay light. -->
+    <div id="deliverOverlay" class="hidden fixed inset-0 z-[90] bg-[#0c0c0c]/85 backdrop-blur-sm p-3 sm:p-6" onclick="closeDeliveryBackdrop(event)">
+        <div class="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-3xl border border-neutral-800 bg-[#141414]" role="dialog" aria-modal="true" aria-labelledby="deliverTitle">
+
+            <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-neutral-800">
+                <span id="deliverTitle" class="text-xs font-mono uppercase tracking-widest text-[#ff4500]">// CONFIRM DELIVERY LOCATION</span>
+                <button type="button" onclick="closeDeliveryPicker()" aria-label="Close the map" class="w-9 h-9 rounded-full border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600 transition-all">&#10005;</button>
+            </div>
+
+            <div class="px-5 py-4 border-b border-neutral-800">
+                <label for="deliverSearch" class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Delivery address</label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input id="deliverSearch" type="text" autocomplete="off" placeholder="Type an address, then press Find" class="flex-1 bg-[#0c0c0c] border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                    <button type="button" onclick="findDeliveryAddress()" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all">Find</button>
+                </div>
+                <p class="text-[10px] font-mono text-neutral-600 mt-2">Pick a match to drop the pin, then drag it &#8212; the address follows the pin.</p>
+                <div id="deliverResults" class="hidden space-y-2 mt-3 max-h-40 overflow-y-auto"></div>
+            </div>
+
+            <div class="relative flex-1 min-h-[280px] bg-[#0c0c0c]">
+                <div id="deliverMap" class="absolute inset-0"></div>
+                <div id="deliverNotice" class="hidden absolute inset-x-0 bottom-0 m-4 rounded-2xl border border-orange-900/50 bg-[#141414]/95 px-4 py-3">
+                    <span class="block text-[10px] font-mono uppercase tracking-widest text-[#ff9b73] mb-1">// MAP UNAVAILABLE</span>
+                    <span id="deliverNoticeText" class="block text-xs text-neutral-400 leading-relaxed"></span>
+                </div>
+            </div>
+
+            <div class="px-5 py-4 border-t border-neutral-800 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+                <div id="deliverReadout" class="font-mono text-[11px] text-neutral-400 leading-relaxed whitespace-pre-line">No pin yet &#8212; search an address or tap the map.</div>
+                <div class="flex items-center gap-4 shrink-0">
+                    <span id="deliverSaveState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500"></span>
+                    <button type="button" id="deliverConfirm" onclick="confirmDeliveryLocation()" disabled class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Confirm location</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
 
     <script>
         // ---------------------------------------------------------------------------
@@ -308,6 +417,11 @@
                     writeStore(ROLE_KEY, role);
                     setHome(dashboardFor(role) || 'index.html');
                     renderUser(user);
+                    // The map overlay opens on the location this account confirmed, or on
+                    // the address it onboarded with when it has not confirmed one yet.
+                    resqProfile = user;
+                    profileAddress = joinProfileAddress(user);
+                    savedLocation = deliveryLocationFrom(user);
                     if (role && role !== THIS_PAGE) {
                         window.location.replace(dashboardFor(role));
                     }
@@ -329,9 +443,520 @@
             element.classList.remove('bg-neutral-800/30', 'border-neutral-800/60');
         }
 
-        function triggerNotification() {
-            alert('Res-Q System: All nodes operating at peak efficiency. 2 donors matched to your requests.');
+        // ---------------------------------------------------------------------------
+        // Header panels: the bell opens the notifications panel and the account pill
+        // opens the account menu. Neither list has anything behind it yet, so both stay
+        // empty by design — each panel is the frame its list will later fill. Only one
+        // is open at a time; clicking away, or pressing Escape, closes it.
+        // ---------------------------------------------------------------------------
+        function headerPanels() {
+            return document.querySelectorAll('[data-header-panel]');
         }
+
+        function panelButton(panel) {
+            return panel.parentElement ? panel.parentElement.querySelector('button') : null;
+        }
+
+        function closeHeaderPanel(panel) {
+            if (!panel || panel.classList.contains('hidden')) { return; }
+            panel.classList.add('hidden');
+            var button = panelButton(panel);
+            if (button) { button.setAttribute('aria-expanded', 'false'); }
+        }
+
+        function closeHeaderPanels() {
+            headerPanels().forEach(function (panel) { closeHeaderPanel(panel); });
+        }
+
+        // A panel hangs off its own button's right edge and opens towards the left. A
+        // narrow header leaves too little room on that side, so the panel is nudged back
+        // inside the page instead of running off it.
+        function positionHeaderPanel(panel) {
+            var wrap = panel.parentElement;
+            if (!wrap) { return; }
+            panel.style.right = '';
+            panel.style.left = '';
+            if (panel.getBoundingClientRect().left < 8) {
+                panel.style.right = 'auto';
+                panel.style.left = Math.round(8 - wrap.getBoundingClientRect().left) + 'px';
+            }
+        }
+
+        function toggleHeaderPanel(button) {
+            var panel = document.getElementById(button.getAttribute('aria-controls'));
+            if (!panel) { return; }
+            var opening = panel.classList.contains('hidden');
+            closeHeaderPanels();
+            panel.classList.toggle('hidden', !opening);
+            button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+            if (opening) { positionHeaderPanel(panel); }
+        }
+
+        // Rotating a phone, or resizing the window, re-checks whichever panel is open.
+        window.addEventListener('resize', function () {
+            headerPanels().forEach(function (panel) {
+                if (!panel.classList.contains('hidden')) { positionHeaderPanel(panel); }
+            });
+        });
+
+        // A click anywhere outside a panel's own button closes it. The click that opens
+        // one lands inside that wrapper, so it never closes what it just opened.
+        document.addEventListener('click', function (event) {
+            headerPanels().forEach(function (panel) {
+                if (panel.parentElement && panel.parentElement.contains(event.target)) { return; }
+                closeHeaderPanel(panel);
+            });
+        });
+
+        // Escape closes whichever panel is open and hands focus back to its button.
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') { return; }
+            headerPanels().forEach(function (panel) {
+                if (panel.classList.contains('hidden')) { return; }
+                closeHeaderPanel(panel);
+                var button = panelButton(panel);
+                if (button) { button.focus(); }
+            });
+        });
+        // ---------------------------------------------------------------------------
+        // Delivery location: the orange card opens an almost full-screen map. It opens
+        // on the address this account gave at onboarding, with the pin already on it;
+        // an address from the bar moves the pin; and moving the pin resolves whatever
+        // sits underneath it back into the search bar, so the field always names the
+        // spot the pin is on rather than the last place that was searched for.
+        //
+        // Leaflet with OpenStreetMap's own tiles, and Nominatim for the address lookup
+        // both ways: free and keyless, so nothing here needs an account, a key or a
+        // card. Both are shared public services, so lookups run per search and per
+        // settled pin movement rather than per keystroke, and the tiles keep the
+        // attribution Leaflet draws for them.
+        // ---------------------------------------------------------------------------
+        var LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        var LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        var TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+        var TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+        var LOOKUP_URL = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=';
+        var REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2';
+        var START_VIEW = [43.6532, -79.3832];
+        var ADDRESS_LOOKUP_DELAY = 500;
+        var SAVE_URL = '/api/delivery-location';
+
+        var deliverMap = null;
+        var deliverMarker = null;
+        var deliverPinAt = null;
+        var deliverAddress = '';
+        var deliverHint = 'No pin yet — search an address or tap the map.';
+        var addressLookupTimer = null;
+        var leafletRequested = false;
+        var leafletOnPage = false;
+        var startPinDone = false;
+        var savingLocation = false;
+        var savedLocation = null;
+        var resqProfile = {};
+        var profileAddress = '';
+
+        function deliverEl(id) { return document.getElementById(id); }
+
+        // The onboarding address, in the order the form asks for it.
+        function joinProfileAddress(user) {
+            if (!user) { return ''; }
+            return [user.street, user.sub_locality, user.locality, user.city, user.province, user.postal]
+                .filter(function (part) { return part && String(part).trim(); })
+                .map(function (part) { return String(part).trim(); })
+                .join(', ');
+        }
+
+        function setSearchValue(value) {
+            var input = deliverEl('deliverSearch');
+            if (input) { input.value = value; }
+        }
+
+        function showDeliverNotice(message) {
+            var notice = deliverEl('deliverNotice');
+            var text = deliverEl('deliverNoticeText');
+            if (text) { text.textContent = message; }
+            if (notice) { notice.classList.remove('hidden'); }
+        }
+
+        function hideDeliverNotice() {
+            var notice = deliverEl('deliverNotice');
+            if (notice) { notice.classList.add('hidden'); }
+        }
+
+        // The readout names the address the pin is on, and the pin's own coordinates
+        // beside it, so a pin that has been moved never reads as the searched place.
+        function renderDeliveryReadout() {
+            var out = deliverEl('deliverReadout');
+            if (out) {
+                if (!deliverPinAt) {
+                    out.textContent = deliverHint;
+                } else {
+                    out.textContent = 'ADDRESS  ' + (deliverAddress || '(unknown)')
+                        + '\nPIN      LAT ' + deliverPinAt.lat.toFixed(5)
+                        + '   LNG ' + deliverPinAt.lng.toFixed(5);
+                }
+            }
+            // Confirming is only possible once the pin has a real address, and the badge
+            // has to keep up with all of that, so both follow the readout.
+            updateConfirmButton();
+            syncSaveState();
+        }
+
+        // The account's confirmed location, when it has one. Nothing is assumed from a
+        // missing value: no coordinates means no saved location.
+        function deliveryLocationFrom(user) {
+            if (!user || user.delivery_lat === null || user.delivery_lat === undefined
+                || user.delivery_lng === null || user.delivery_lng === undefined) {
+                return null;
+            }
+            var lat = Number(user.delivery_lat);
+            var lng = Number(user.delivery_lng);
+            if (!isFinite(lat) || !isFinite(lng)) { return null; }
+            return { lat: lat, lng: lng, address: user.delivery_address || '' };
+        }
+
+        // An address is worth saving only once the map has named the spot: neither the
+        // "resolving" placeholder nor a "(no address found)" note is a location.
+        function deliverAddressUsable() {
+            return !!deliverAddress
+                && deliverAddress !== 'Resolving the address…'
+                && deliverAddress.charAt(0) !== '(';
+        }
+
+        function setSaveState(message, tone) {
+            var badge = deliverEl('deliverSaveState');
+            if (!badge) { return; }
+            badge.textContent = message;
+            badge.className = 'font-mono text-[10px] uppercase tracking-widest '
+                + (tone || 'text-neutral-500');
+        }
+
+        // Whether the pin in front of the person is already the location on their
+        // account is easy to lose track of after a drag, so the badge says so.
+        function syncSaveState() {
+            if (savingLocation) { return; }
+            if (!deliverPinAt) { setSaveState(''); return; }
+            var confirmed = savedLocation
+                && Math.abs(savedLocation.lat - deliverPinAt.lat) < 0.000001
+                && Math.abs(savedLocation.lng - deliverPinAt.lng) < 0.000001;
+            if (confirmed) {
+                setSaveState('Saved to your account', 'text-[#ff9b73]');
+            } else {
+                setSaveState('Not saved yet');
+            }
+        }
+
+        function updateConfirmButton() {
+            var button = deliverEl('deliverConfirm');
+            if (!button) { return; }
+            button.disabled = savingLocation || !deliverPinAt || !deliverAddressUsable();
+        }
+
+        // Confirming writes the pin's address and coordinates to the account, which is
+        // what it opens on next time and what routing will read.
+        function confirmDeliveryLocation() {
+            if (savingLocation) { return; }
+            if (!deliverPinAt || !deliverAddressUsable()) {
+                showDeliverNotice('Place the pin first, then confirm the location.');
+                return;
+            }
+            var token = readStore(TOKEN_KEY);
+            if (!token) {
+                showDeliverNotice('Your session has expired. Please sign in again.');
+                return;
+            }
+            savingLocation = true;
+            setSaveState('Saving…');
+            updateConfirmButton();
+            fetch(SAVE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify({
+                    address: deliverAddress,
+                    lat: deliverPinAt.lat,
+                    lng: deliverPinAt.lng
+                })
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (body) {
+                        return { status: response.status, body: body };
+                    });
+                })
+                .then(function (res) {
+                    savingLocation = false;
+                    if (res.status !== 200) {
+                        showDeliverNotice(res.body.error || 'The location could not be saved.');
+                        syncSaveState();
+                        updateConfirmButton();
+                        return;
+                    }
+                    var stored = deliveryLocationFrom(res.body.user || {});
+                    savedLocation = stored || {
+                        lat: deliverPinAt.lat, lng: deliverPinAt.lng, address: deliverAddress
+                    };
+                    resqProfile = res.body.user || resqProfile;
+                    if (savedLocation.address) { deliverAddress = savedLocation.address; }
+                    setSearchValue(deliverAddress);
+                    hideDeliverNotice();
+                    renderDeliveryReadout();
+                })
+                .catch(function () {
+                    savingLocation = false;
+                    showDeliverNotice('The location could not be saved. Check the connection and try again.');
+                    syncSaveState();
+                    updateConfirmButton();
+                });
+        }
+
+        function clearDeliveryResults() {
+            var list = deliverEl('deliverResults');
+            if (!list) { return; }
+            list.textContent = '';
+            list.classList.add('hidden');
+        }
+
+        // Up to five matches for the search, each one dropping the pin where it is.
+        function renderDeliveryResults(results, query) {
+            var list = deliverEl('deliverResults');
+            if (!list) { return; }
+            list.textContent = '';
+            results.forEach(function (result) {
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'block w-full text-left px-4 py-3 rounded-xl border border-neutral-800 bg-[#0c0c0c] hover:border-[#ff4500] text-xs text-neutral-300 transition-all';
+                button.textContent = result.display_name || query;
+                button.onclick = function () {
+                    clearDeliveryResults();
+                    setSearchValue(result.display_name || query);
+                    placeDeliveryPin({ lat: parseFloat(result.lat), lng: parseFloat(result.lon) },
+                        result.display_name || query);
+                };
+                list.appendChild(button);
+            });
+            list.classList.remove('hidden');
+        }
+
+        // Nominatim's reverse lookup names whatever the pin was left on; the answer goes
+        // into the bar and the readout. Debounced, so nudging the pin around settles into
+        // one request instead of a burst against a shared public service.
+        function resolvePinAddress() {
+            if (!deliverPinAt) { return; }
+            window.clearTimeout(addressLookupTimer);
+            deliverAddress = 'Resolving the address…';
+            renderDeliveryReadout();
+            var at = { lat: deliverPinAt.lat, lng: deliverPinAt.lng };
+            addressLookupTimer = window.setTimeout(function () {
+                fetch(REVERSE_URL + '&lat=' + at.lat.toFixed(6) + '&lon=' + at.lng.toFixed(6),
+                    { headers: { Accept: 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (place) {
+                        // The pin may have moved again while this was in flight.
+                        if (!deliverPinAt || deliverPinAt.lat !== at.lat || deliverPinAt.lng !== at.lng) {
+                            return;
+                        }
+                        deliverAddress = (place && place.display_name)
+                            ? place.display_name
+                            : '(no address found for that spot)';
+                        if (place && place.display_name) { setSearchValue(deliverAddress); }
+                        renderDeliveryReadout();
+                    })
+                    .catch(function () {
+                        deliverAddress = '(address lookup failed)';
+                        renderDeliveryReadout();
+                    });
+            }, ADDRESS_LOOKUP_DELAY);
+        }
+
+        function placeDeliveryPin(at, label) {
+            if (!deliverMap || !window.L) { return; }
+            // An unnamed pin has no address yet: keeping the previous one would let a
+            // moved pin be confirmed against the address it used to sit on.
+            deliverAddress = label || '';
+            var point = [at.lat, at.lng];
+            if (deliverMarker) {
+                deliverMarker.setLatLng(point);
+            } else {
+                // Draggable, so the pin can be nudged onto the exact door; wherever it is
+                // left, the address is re-resolved from the spot it landed on.
+                deliverMarker = window.L.marker(point, { draggable: true, title: 'Delivery location' })
+                    .addTo(deliverMap);
+                deliverMarker.on('dragend', function () {
+                    var moved = deliverMarker.getLatLng();
+                    deliverPinAt = { lat: moved.lat, lng: moved.lng };
+                    resolvePinAddress();
+                });
+            }
+            deliverPinAt = { lat: at.lat, lng: at.lng };
+            deliverMap.setView(point, Math.max(deliverMap.getZoom(), 16), { animate: false });
+            hideDeliverNotice();
+            renderDeliveryReadout();
+        }
+
+        // Where the map starts: the location the account already confirmed, or failing
+        // that the address it onboarded with — the confirmed spot is the better answer,
+        // and it needs no lookup because the coordinates came back with the profile.
+        function placeStartingPin() {
+            if (!deliverMap || startPinDone) { return; }
+            if (savedLocation) {
+                startPinDone = true;
+                setSearchValue(savedLocation.address || profileAddress);
+                placeDeliveryPin({ lat: savedLocation.lat, lng: savedLocation.lng },
+                    savedLocation.address || 'Confirmed delivery location');
+                return;
+            }
+            locateProfileAddress();
+        }
+
+        function locateProfileAddress() {
+            if (!deliverMap || !profileAddress || startPinDone) { return; }
+            startPinDone = true;
+            deliverHint = 'Locating your saved address…';
+            renderDeliveryReadout();
+            fetch(LOOKUP_URL + encodeURIComponent(profileAddress), { headers: { Accept: 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (results) {
+                    if (!results || !results.length) {
+                        deliverHint = 'No pin yet — your saved address was not found, so search for it.';
+                        renderDeliveryReadout();
+                        return;
+                    }
+                    var match = results[0];
+                    var address = match.display_name || profileAddress;
+                    deliverHint = 'No pin yet — search an address or tap the map.';
+                    setSearchValue(address);
+                    placeDeliveryPin({ lat: parseFloat(match.lat), lng: parseFloat(match.lon) }, address);
+                })
+                .catch(function () {
+                    deliverHint = 'No pin yet — your saved address could not be looked up, so search for it.';
+                    renderDeliveryReadout();
+                });
+        }
+
+        // Nominatim answers one search at a time; their usage policy asks for no
+        // keystroke-by-keystroke querying, which is why there is no live autocomplete.
+        function findDeliveryAddress() {
+            var input = deliverEl('deliverSearch');
+            var query = input ? input.value.trim() : '';
+            if (!query) {
+                showDeliverNotice('Type an address to search for.');
+                return;
+            }
+            clearDeliveryResults();
+            showDeliverNotice('Searching for that address…');
+            fetch(LOOKUP_URL + encodeURIComponent(query), { headers: { Accept: 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (results) {
+                    if (!results || !results.length) {
+                        showDeliverNotice('No match for "' + query + '". Try a more specific address.');
+                        return;
+                    }
+                    hideDeliverNotice();
+                    renderDeliveryResults(results, query);
+                })
+                .catch(function () {
+                    showDeliverNotice('The address lookup could not be reached. Check the connection and try again.');
+                });
+        }
+
+        function initDeliveryMap() {
+            if (deliverMap || !window.L || !deliverEl('deliverMap')) { return; }
+            try {
+                deliverMap = window.L.map(deliverEl('deliverMap'), {
+                    center: START_VIEW,
+                    zoom: 12,
+                    // A transition that cannot run leaves the view stuck halfway, which
+                    // is what happens in renderers that never composite a frame. Snapping
+                    // is what a location picker wants anyway.
+                    zoomAnimation: false
+                });
+            } catch (err) {
+                deliverMap = null;
+                showDeliverNotice('The map could not start in this page: '
+                    + (err && err.message ? err.message : err));
+                return;
+            }
+            var tiles = window.L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_CREDIT });
+            tiles.on('tileerror', function () {
+                showDeliverNotice('The map tiles could not be loaded. The pin still works, or try again once the connection is back.');
+            });
+            tiles.addTo(deliverMap);
+            deliverMap.on('click', function (event) {
+                placeDeliveryPin({ lat: event.latlng.lat, lng: event.latlng.lng }, '');
+                resolvePinAddress();
+            });
+            deliverMap.invalidateSize();
+            placeStartingPin();
+        }
+
+        // Leaflet comes from a CDN the first time the map opens. No key, no account.
+        function loadLeaflet() {
+            if (leafletOnPage) { initDeliveryMap(); return; }
+            if (leafletRequested) { return; }
+            leafletRequested = true;
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = LEAFLET_CSS;
+            document.head.appendChild(css);
+            var script = document.createElement('script');
+            script.src = LEAFLET_JS;
+            script.async = true;
+            script.onload = function () {
+                leafletOnPage = true;
+                hideDeliverNotice();
+                initDeliveryMap();
+            };
+            script.onerror = function () {
+                leafletRequested = false;
+                showDeliverNotice('The map library could not be loaded. Check the connection and try again.');
+            };
+            document.head.appendChild(script);
+        }
+
+        function openDeliveryPicker() {
+            var overlay = deliverEl('deliverOverlay');
+            if (!overlay) { return; }
+            var wasOpen = !overlay.classList.contains('hidden');
+            overlay.classList.remove('hidden');
+            document.documentElement.style.overflow = 'hidden';
+            if (!wasOpen) { loadLeaflet(); }
+            var input = deliverEl('deliverSearch');
+            if (input && !wasOpen) { input.focus(); }
+            // The map is sized from its container, so it has to be told the overlay moved.
+            if (deliverMap) { window.setTimeout(function () { deliverMap.invalidateSize(); }, 0); }
+            // In case the profile arrived after the map was first built.
+            placeStartingPin();
+        }
+
+        function closeDeliveryPicker() {
+            var overlay = deliverEl('deliverOverlay');
+            if (!overlay || overlay.classList.contains('hidden')) { return; }
+            overlay.classList.add('hidden');
+            document.documentElement.style.overflow = '';
+            clearDeliveryResults();
+            var card = deliverEl('deliverCard');
+            if (card) { card.focus(); }
+        }
+
+        function closeDeliveryBackdrop(event) {
+            if (event.target && event.target.id === 'deliverOverlay') { closeDeliveryPicker(); }
+        }
+
+        // Escape closes the map from anywhere on the page.
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') { closeDeliveryPicker(); }
+        });
+
+        // Enter searches, so the bar works without reaching for the button.
+        var deliverInput = deliverEl('deliverSearch');
+        if (deliverInput) {
+            deliverInput.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    findDeliveryAddress();
+                }
+            });
+        }
+
     </script>
 </body>
 </html>
