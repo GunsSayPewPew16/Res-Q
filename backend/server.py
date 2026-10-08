@@ -2,14 +2,14 @@
 """
 Res-Q backend.
 
-Serves the static site from this folder together with a small JSON API. By
-default it runs in DEMO mode: onboarding answers are accepted and a session is
-returned, but nothing is written to a database and duplicate details are not
-rejected, so the site can be walked through without creating a new credential
-each time.
+Serves the static site from the sibling frontend/ folder together with a small
+JSON API. By default it runs in DEMO mode: onboarding answers are accepted and a
+session is returned, but nothing is written to a database and duplicate details
+are not rejected, so the site can be walked through without creating a new
+credential each time.
 
-    python3 server.py                    # demo mode, port 8080
-    RESQ_PERSIST=on python3 server.py     # store accounts in SQLite (frontend/resq.db)
+    python3 backend/server.py                   # demo mode, port 8080
+    RESQ_PERSIST=on python3 backend/server.py   # store accounts in SQLite (backend/resq.db)
 
 Endpoints
     GET  /api/health                liveness probe
@@ -28,6 +28,7 @@ import hashlib
 import hmac
 import json
 import os
+import random
 import re
 import secrets
 import sqlite3
@@ -35,8 +36,12 @@ import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("RESQ_DB", os.path.join(ROOT, "resq.db"))
+# This folder is the backend: its code and its database file live here. The pages it
+# serves live beside it in frontend/, so the two are resolved separately — the site's
+# document root is the pages' folder, never this one.
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(os.path.dirname(BACKEND_DIR), "frontend")
+DB_PATH = os.environ.get("RESQ_DB", os.path.join(BACKEND_DIR, "resq.db"))
 
 # Demo mode (the default for now): onboarding answers are accepted and a session is
 # handed back, but nothing is written to SQLite and duplicate details are never
@@ -71,6 +76,9 @@ CREATE TABLE IF NOT EXISTS users (
     delivery_lat  REAL,
     delivery_lng  REAL,
     delivery_confirmed_at TEXT,
+    surplus_saved REAL,
+    meals_served  INTEGER,
+    orders_completed INTEGER,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -88,6 +96,7 @@ PUBLIC_FIELDS = (
     "dial_code", "street", "sub_locality", "locality", "province", "city",
     "postal", "firm_type", "delivery_days", "surplus_types",
     "delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at",
+    "surplus_saved", "meals_served", "orders_completed",
     "created_at",
 )
 
@@ -95,6 +104,21 @@ PUBLIC_FIELDS = (
 # for routing; the address is what the map showed at that point when it was confirmed.
 DELIVERY_FIELDS = ("delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at")
 MAX_ADDRESS_CHARS = 400
+
+# The three impact figures the donor dashboard shows. They belong to the donor's own
+# profile and to no other role: they are that donor's record of what their surplus
+# became. Surplus saved is a weight in kilograms, kept to two decimals — fractions of a
+# kilo matter when food is weighed — while meals served and orders completed are whole
+# counts.
+DONOR_METRIC_FIELDS = ("surplus_saved", "meals_served", "orders_completed")
+METRIC_DECIMALS = 2
+
+# Nothing has come out of the pipeline yet, so a new donor profile starts from the
+# plausible range the dashboard's placeholders used. A routing pass that completes an
+# order would overwrite these with what actually moved.
+NEW_DONOR_SURPLUS_KG = (1200.0, 4800.0)
+NEW_DONOR_MEALS = (2400, 9600)
+NEW_DONOR_ORDERS = (40, 260)
 
 # These two arrive as lists and are stored as JSON text, so a row has to be decoded
 # before it goes out.
@@ -174,6 +198,34 @@ def decode_list(value):
     return [item for item in parsed if isinstance(item, str)]
 
 
+def seed_donor_metrics():
+    """The impact figures a new donor profile starts with."""
+    return {
+        "surplus_saved": round(random.uniform(*NEW_DONOR_SURPLUS_KG), METRIC_DECIMALS),
+        "meals_served": random.randint(*NEW_DONOR_MEALS),
+        "orders_completed": random.randint(*NEW_DONOR_ORDERS),
+    }
+
+
+def fill_donor_metrics(user):
+    """Give a donor profile the impact figures it is missing, in place.
+
+    Returns True when anything was filled. A profile created before the figures existed
+    gets them the first time it is read, so a donor never has to wait for a fresh
+    sign-in to see their own numbers. A recipient is left alone: the figures are the
+    donor's, and a recipient profile carries none of them.
+    """
+    if user.get("role") != "donor":
+        return False
+    missing = [field for field in DONOR_METRIC_FIELDS if user.get(field) is None]
+    if not missing:
+        return False
+    fresh = seed_donor_metrics()
+    for field in missing:
+        user[field] = fresh[field]
+    return True
+
+
 def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
@@ -191,6 +243,16 @@ def init_db():
             ("delivery_lat", "REAL"),
             ("delivery_lng", "REAL"),
             ("delivery_confirmed_at", "TEXT"),
+        ):
+            if column not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
+        # The donor's impact figures live on the donor's profile too. A profile created
+        # before them gets the columns here and its first figures the first time it is
+        # read; a recipient's columns simply stay NULL.
+        for column, kind in (
+            ("surplus_saved", "REAL"),
+            ("meals_served", "INTEGER"),
+            ("orders_completed", "INTEGER"),
         ):
             if column not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
@@ -265,7 +327,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
     server_version = "ResQ/1.0"
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=ROOT, **kwargs)
+        super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
 
     # ------------------------------------------------------------------ helpers
     def send_json(self, status, payload):
@@ -302,10 +364,43 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
     def public_user(self, row):
         keys = row.keys()
-        user = {field: row[field] for field in PUBLIC_FIELDS if field in keys}
+        user = {field: row[field] for field in PUBLIC_FIELDS
+                if field in keys and field not in DONOR_METRIC_FIELDS}
         for field in LIST_FIELDS:
             if field in user:
                 user[field] = decode_list(user[field])
+        # The impact figures ride along only on a profile that has them — a donor's do from
+        # the moment it is created, a recipient's never do — and in their own shapes: a
+        # weight with its two decimals, whole counts for the other two. A recipient's
+        # answer therefore carries no sign of them at all rather than a row of nulls.
+        for field in DONOR_METRIC_FIELDS:
+            if field not in keys or row[field] is None:
+                continue
+            user[field] = (round(float(row[field]), METRIC_DECIMALS)
+                           if field == "surplus_saved" else int(row[field]))
+        return user
+
+    def donor_user_with_metrics(self, row):
+        """A donor's profile as the dashboard sees it, with its figures filled in.
+
+        The figures are written once, the first time a profile that predates them is
+        read, so an account from before this change shows its own numbers straight away
+        instead of blanks. A profile that already has them is returned untouched.
+        """
+        user = self.public_user(row)
+        if fill_donor_metrics(user):
+            with connect() as conn:
+                conn.execute(
+                    "UPDATE users SET surplus_saved = ?, meals_served = ?,"
+                    " orders_completed = ? WHERE id = ?",
+                    (
+                        user["surplus_saved"],
+                        user["meals_served"],
+                        user["orders_completed"],
+                        user["id"],
+                    ),
+                )
+                conn.commit()
         return user
 
     def start_session(self, conn, user_id):
@@ -344,6 +439,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_profile()
         if path == "/api/delivery-location":
             return self.api_delivery_location()
+        if path == "/api/dev/switch-role":
+            return self.api_switch_role()
         return self.send_json(404, {"error": "Unknown endpoint."})
 
     # ------------------------------------------------------------------ handlers
@@ -409,6 +506,12 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if not isinstance(address, dict):
             address = {}
 
+        # The impact figures are the donor's own from the moment the profile exists, so a
+        # donor starts with a plausible set of them; a recipient's stay empty, because
+        # the figures are not theirs.
+        metrics = (seed_donor_metrics() if role == "donor"
+                   else {field: None for field in DONOR_METRIC_FIELDS})
+
         # Demo mode: take the answers, keep them in memory for this run, store nothing.
         if not PERSIST:
             user = {
@@ -438,6 +541,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "delivery_confirmed_at": None,
                 "demo": True,
             }
+            # A recipient's profile carries no impact figures at all, so the keys are not
+            # invented for one; a donor gets all three here and now.
+            for field in DONOR_METRIC_FIELDS:
+                if metrics[field] is not None:
+                    user[field] = metrics[field]
             token = "demo-" + secrets.token_urlsafe(12)
             DEMO_SESSIONS[token] = user
             return self.send_json(201, {"ok": True, "demo": True, "token": token, "user": user})
@@ -478,8 +586,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 """INSERT INTO users (
                        role, first_name, last_name, business_name, email, phone, dial_code,
                        street, sub_locality, locality, province, city, postal,
-                       password_hash, password_salt
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       password_hash, password_salt,
+                       surplus_saved, meals_served, orders_completed
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     role,
                     first_name,
@@ -496,6 +605,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     (address.get("postal") or "").strip() or None,
                     digest,
                     salt,
+                    metrics["surplus_saved"],
+                    metrics["meals_served"],
+                    metrics["orders_completed"],
                 ),
             )
             user_id = cursor.lastrowid
@@ -535,6 +647,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "phone": phone,
                 "demo": True,
             }
+            # Signing in always lands on a donor profile that has its figures: the demo
+            # holds nothing else to read them from, so they are given here.
+            fill_donor_metrics(user)
             token = "demo-" + secrets.token_urlsafe(12)
             DEMO_SESSIONS[token] = user
             return self.send_json(200, {"ok": True, "demo": True, "token": token, "user": user})
@@ -573,7 +688,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
             token = self.start_session(conn, row["id"])
             conn.commit()
-            user = self.public_user(row)
+            user = self.donor_user_with_metrics(row)
 
         return self.send_json(200, {"ok": True, "token": token, "user": user})
 
@@ -585,6 +700,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 return self.send_json(
                     401, {"error": "Your session has expired. Please sign in again."}
                 )
+            # The session's profile is the object the dashboard reads, so a donor whose
+            # figures are missing gets them here too and keeps them for the session's life.
+            fill_donor_metrics(user)
             return self.send_json(200, {"ok": True, "demo": True, "user": user})
         with connect() as conn:
             row = self.user_for_token(conn, token)
@@ -592,7 +710,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.send_json(
                 401, {"error": "Your session has expired. Please sign in again."}
             )
-        return self.send_json(200, {"ok": True, "user": self.public_user(row)})
+        return self.send_json(200, {"ok": True, "user": self.donor_user_with_metrics(row)})
 
     def api_logout(self):
         token = self.bearer_token() or (self.read_json() or {}).get("token", "")
@@ -604,6 +722,48 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
                 conn.commit()
         return self.send_json(200, {"ok": True})
+
+    # ------------------------------------------------------------------ dev helper
+    def api_switch_role(self):
+        """TEMPORARY, demo mode only: hand back a session for the other dashboard.
+
+        This exists so the two dashboards can be previewed without signing out and back
+        in, which is exactly why it mints a session without a password. With persistence
+        on it answers 404 like any unknown endpoint, so it can never be pointed at a real
+        account, and the button that calls it is marked as temporary in both pages.
+        """
+        if PERSIST:
+            return self.send_json(404, {"error": "Unknown endpoint."})
+        current = DEMO_SESSIONS.get(self.bearer_token())
+        if current is None:
+            return self.send_json(
+                401, {"error": "Your session has expired. Please sign in again."}
+            )
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+        role = (data.get("role") or "").strip().lower()
+        if role not in ("donor", "recipient"):
+            return self.send_json(
+                400,
+                {"error": "Ask for the donor or the recipient dashboard.", "field": "role"},
+            )
+        # The switched session is the same person wearing the other role, so the two
+        # dashboards can be compared side by side. The answers the role it is leaving owns
+        # are dropped, and a recipient never carries a donor's figures.
+        switched = dict(current)
+        switched["role"] = role
+        switched["firm_type"] = None
+        switched["delivery_days"] = []
+        switched["surplus_types"] = []
+        for field in DONOR_METRIC_FIELDS:
+            switched.pop(field, None)
+        fill_donor_metrics(switched)
+        token = "demo-" + secrets.token_urlsafe(12)
+        DEMO_SESSIONS[token] = switched
+        return self.send_json(
+            200, {"ok": True, "demo": True, "token": token, "user": switched}
+        )
 
     def api_profile(self):
         data = self.read_json()

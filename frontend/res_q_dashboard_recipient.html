@@ -121,8 +121,10 @@
 </head>
 <body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white min-h-screen flex flex-col">
 
-    <!-- RECIPIENT DASHBOARD: the layout skeleton. Every box is kept as a box; none of
-         them carry copy, so this is the arrangement alone. -->
+    <!-- RECIPIENT DASHBOARD: the layout skeleton. Every box is kept as a box; the only
+         copy is the navigation rail's own labels, so this is the arrangement alone.
+         Dashboard is the default screen and the rest of the rail swaps it for a
+         blank section screen until those sections have content. -->
 
     <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -161,17 +163,20 @@
                         <span id="userName" class="text-xs font-mono text-neutral-300 hidden md:inline">SIGNED IN</span>
                     </button>
 
-                    <!-- The account pill opens the same kind of panel as the bell, and it is
-                         left empty for the same reason: there is no account menu to list yet. -->
+                    <!-- The account pill opens the account menu: the one action an account
+                         really has, signing out, plus a temporary switch to the other
+                         dashboard so both roles can be previewed from one sign-in. -->
                     <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-6 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
                         <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
                             <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Account</span>
-                            <span class="font-mono text-[10px] text-neutral-600">00</span>
+                            <span class="font-mono text-[10px] text-neutral-600">02</span>
                         </div>
-                        <div class="p-4">
-                            <div class="h-32 rounded-xl bg-neutral-800/50 border border-neutral-800 flex items-center justify-center">
-                                <span class="font-mono text-[10px] uppercase tracking-widest text-neutral-600">No menu items yet</span>
-                            </div>
+                        <div class="p-4 space-y-3">
+                            <button type="button" onclick="logOut()" class="w-full px-4 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all">Log out</button>
+                            <!-- TEMPORARY: a preview convenience, not part of the product.
+                                 Demo mode only, and the backend says so if asked otherwise. -->
+                            <button type="button" onclick="switchDashboard()" class="w-full px-4 py-3 rounded-xl border border-neutral-800 text-neutral-400 text-xs font-black uppercase tracking-widest hover:border-neutral-600 hover:text-neutral-200 transition-all">Switch to donor dashboard <span class="text-neutral-600">(temp)</span></button>
+                            <span id="accountNote" class="block font-mono text-[10px] text-neutral-600"></span>
                         </div>
                     </div>
                 </div>
@@ -185,26 +190,30 @@
         <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-            <!-- Left rail: navigation slots, a registration slot and the pipeline status;
-                 the rows and panels stay, their contents are gone. -->
+            <!-- Left rail: the four section rows carry their labels, then the finished
+                 orders slot; the pipeline status stays a bare pulse. Every item but
+                 Dashboard swaps the working area for that section's blank screen. -->
             <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
                 <nav class="space-y-2" aria-label="Dashboard sections">
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/50 border border-neutral-700 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
+                    <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-[#ff4500] border border-[#ff4500] text-[11px] font-mono uppercase text-black transition-all">Dashboard</a>
+                    <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Feed</a>
+                    <a href="#" data-view="surplus-analyzer" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Analyzer</a>
+                    <a href="#" data-view="current-orders" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Current Orders</a>
                 </nav>
 
                 <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 min-h-[58px]"></div>
+                    <button type="button" id="finishedOrders" data-view="finished-orders" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
+                        <span class="text-[11px] font-mono uppercase text-neutral-400">Finished Orders</span>
+                    </button>
                     <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
                         <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     </div>
                 </div>
             </aside>
 
-            <!-- Working area -->
-            <div class="lg:col-span-10 space-y-6">
+            <!-- Working area: the dashboard itself. Dashboard is the default rail item,
+                 so this is what shows on load. -->
+            <div id="viewDashboard" class="lg:col-span-10 space-y-6">
 
                 <!-- Metric row -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -281,6 +290,15 @@
 
                 </div>
 
+            </div>
+
+            <!-- The section screens: picking any rail item other than Dashboard wipes
+                 the dashboard and opens this blank frame, which carries the tone and
+                 nothing else until that section has content of its own. -->
+            <div id="viewBlank" class="hidden lg:col-span-10">
+                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
+                    <div class="w-full min-h-[520px] rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
+                </div>
             </div>
 
         </div>
@@ -430,24 +448,57 @@
         })();
 
         // ---------------------------------------------------------------------------
-        // Navigation rail: the rows are kept, so the active-row highlight still works.
-        // Every row carries the placeholder tone; the active one is the brighter fill
-        // with the lighter hairline, so the click is still visible without any copy.
+        // Navigation rail: Dashboard is the default and the only lit item on load.
+        // The selected item fills with the site's accent orange and its label turns
+        // black, the way the cards on the landing page invert when they are hovered;
+        // every other item keeps the dark tone with a neutral label. Picking any item
+        // other than Dashboard wipes the dashboard and opens that section's own screen,
+        // which is a blank frame for now; picking Dashboard brings it back.
         // ---------------------------------------------------------------------------
         function setActiveNav(element) {
             document.querySelectorAll('.nav-item').forEach(function (item) {
-                item.classList.remove('bg-neutral-800/50', 'border-neutral-700');
-                item.classList.add('bg-neutral-800/30', 'border-neutral-800/60');
+                var on = item === element;
+                item.classList.toggle('bg-[#ff4500]', on);
+                item.classList.toggle('border-[#ff4500]', on);
+                item.classList.toggle('bg-neutral-800/30', !on);
+                item.classList.toggle('border-neutral-800/60', !on);
+                item.classList.toggle('hover:border-neutral-700', !on);
+                item.classList.toggle('text-black', on);
+                item.classList.toggle('text-neutral-400', !on);
             });
-            element.classList.add('bg-neutral-800/50', 'border-neutral-700');
-            element.classList.remove('bg-neutral-800/30', 'border-neutral-800/60');
+            var finished = document.getElementById('finishedOrders');
+            var label = finished ? finished.querySelector('span') : null;
+            var picked = element === finished;
+            if (finished) {
+                finished.classList.toggle('bg-[#ff4500]', picked);
+                finished.classList.toggle('border-[#ff4500]', picked);
+                finished.classList.toggle('bg-neutral-800/50', !picked);
+                finished.classList.toggle('border-neutral-800', !picked);
+                finished.classList.toggle('hover:border-neutral-700', !picked);
+            }
+            if (label) {
+                label.classList.toggle('text-black', picked);
+                label.classList.toggle('text-neutral-400', !picked);
+            }
+        }
+
+        function openSection(element) {
+            setActiveNav(element);
+            showView(element.getAttribute('data-view'));
+        }
+
+        function showView(name) {
+            var onDashboard = name === 'dashboard';
+            document.getElementById('viewDashboard').classList.toggle('hidden', !onDashboard);
+            document.getElementById('viewBlank').classList.toggle('hidden', onDashboard);
         }
 
         // ---------------------------------------------------------------------------
-        // Header panels: the bell opens the notifications panel and the account pill
-        // opens the account menu. Neither list has anything behind it yet, so both stay
-        // empty by design — each panel is the frame its list will later fill. Only one
-        // is open at a time; clicking away, or pressing Escape, closes it.
+        // Header panels: the bell opens the notifications panel, which is still an empty
+        // frame waiting for its list, and the account pill opens the account menu holding
+        // the two actions an account has — signing out, and the temporary dashboard
+        // switch below. Only one panel is open at a time; clicking away, or pressing
+        // Escape, closes it.
         // ---------------------------------------------------------------------------
         function headerPanels() {
             return document.querySelectorAll('[data-header-panel]');
@@ -499,6 +550,78 @@
             });
         });
 
+        // ---------------------------------------------------------------------------
+        // Account actions. Signing out drops the session on the backend — so the token is
+        // dead rather than merely forgotten here — and clears it locally, which is what
+        // lands the visitor back on onboarding.
+        //
+        // The role switch beside it is TEMPORARY and exists only to make previewing both
+        // dashboards quick: it asks the backend for a session for the other role, so both
+        // can be walked through from one sign-in. That endpoint is demo mode only, and the
+        // note under the buttons says so rather than the button appearing to do nothing.
+        // ---------------------------------------------------------------------------
+        var SWITCH_URL = '/api/dev/switch-role';
+        var OTHER_ROLE = 'donor';
+
+        function setAccountNote(message, tone) {
+            var note = document.getElementById('accountNote');
+            if (!note) { return; }
+            note.textContent = message;
+            note.className = 'block font-mono text-[10px] ' + (tone || 'text-neutral-600');
+        }
+
+        function logOut() {
+            var token = readStore(TOKEN_KEY);
+            dropStore(TOKEN_KEY);
+            dropStore(ROLE_KEY);
+            var leave = function () { window.location.replace('res_q_homepage.html'); };
+            if (!token) { leave(); return; }
+            // The session is dropped at the backend too, but nobody waits on that: someone
+            // who asked to sign out is signed out here either way.
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + token
+                }
+            }).then(leave).catch(leave);
+        }
+
+        function switchDashboard() {
+            var token = readStore(TOKEN_KEY);
+            if (!token) { return; }
+            setAccountNote('Switching…');
+            fetch(SWITCH_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + token
+                },
+                body: JSON.stringify({ role: OTHER_ROLE })
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (body) {
+                        return { status: response.status, body: body };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200 || !res.body.token) {
+                        // A backend running with persistence has no such endpoint, which is
+                        // the one answer a preview button has to explain.
+                        setAccountNote(res.status === 404
+                            ? 'The dashboard switch only works in demo mode.'
+                            : ((res.body && res.body.error) || 'Could not switch dashboards.'));
+                        return;
+                    }
+                    writeStore(TOKEN_KEY, res.body.token);
+                    writeStore(ROLE_KEY, (res.body.user && res.body.user.role) || OTHER_ROLE);
+                    window.location.href = dashboardFor(OTHER_ROLE) || 'index.html';
+                })
+                .catch(function () {
+                    setAccountNote('Could not reach the backend to switch.');
+                });
+        }
+
         // A click anywhere outside a panel's own button closes it. The click that opens
         // one lands inside that wrapper, so it never closes what it just opened.
         document.addEventListener('click', function (event) {
@@ -536,15 +659,22 @@
         var TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
         var TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
         var LOOKUP_URL = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=';
-        var REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2';
+        // addressdetails asks for the place's own parts back as well as its one-line
+        // name, and accept-language pins the answer to the language this page is in.
+        var REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=en';
         var START_VIEW = [43.6532, -79.3832];
         var ADDRESS_LOOKUP_DELAY = 500;
+        var ADDRESS_RETRY_DELAY = 900;
         var SAVE_URL = '/api/delivery-location';
 
         var deliverMap = null;
         var deliverMarker = null;
         var deliverPinAt = null;
         var deliverAddress = '';
+        // What the pin is to the map: 'none' until anything is placed, 'resolving' while a
+        // lookup is in flight, 'named' for a real address, 'coords' where nothing is
+        // mapped to name the spot, and 'failed' when the lookup could not be reached.
+        var deliverAddressState = 'none';
         var deliverHint = 'No pin yet — search an address or tap the map.';
         var addressLookupTimer = null;
         var leafletRequested = false;
@@ -584,16 +714,28 @@
         }
 
         // The readout names the address the pin is on, and the pin's own coordinates
-        // beside it, so a pin that has been moved never reads as the searched place.
+        // beside it, so a pin that has been moved never reads as the searched place. A
+        // spot the map could not name is called by those coordinates and says why, so the
+        // pin never reads as a place it is not.
         function renderDeliveryReadout() {
             var out = deliverEl('deliverReadout');
             if (out) {
                 if (!deliverPinAt) {
                     out.textContent = deliverHint;
                 } else {
-                    out.textContent = 'ADDRESS  ' + (deliverAddress || '(unknown)')
-                        + '\nPIN      LAT ' + deliverPinAt.lat.toFixed(5)
-                        + '   LNG ' + deliverPinAt.lng.toFixed(5);
+                    var lines = ['ADDRESS  ' + (deliverAddressState === 'resolving'
+                        ? 'Resolving the address…'
+                        : (deliverAddress || '(unknown)'))];
+                    var note = '';
+                    if (deliverAddressState === 'coords') {
+                        note = 'no street address is mapped here, so the coordinates are the location';
+                    } else if (deliverAddressState === 'failed') {
+                        note = 'the address lookup could not be reached, so the coordinates are the location';
+                    }
+                    if (note) { lines.push('NOTE     ' + note); }
+                    lines.push('PIN      LAT ' + deliverPinAt.lat.toFixed(5)
+                        + '   LNG ' + deliverPinAt.lng.toFixed(5));
+                    out.textContent = lines.join('\n');
                 }
             }
             // Confirming is only possible once the pin has a real address, and the badge
@@ -615,12 +757,65 @@
             return { lat: lat, lng: lng, address: user.delivery_address || '' };
         }
 
-        // An address is worth saving only once the map has named the spot: neither the
-        // "resolving" placeholder nor a "(no address found)" note is a location.
+        // A pin is a location as soon as the map has settled what it is: a real address,
+        // or the spot's own coordinates where nothing is mapped to name it. Only a lookup
+        // that is still running has nothing to save yet, which used to make an unaddressable
+        // spot unconfirmable and so invisible to everything that reads locations.
         function deliverAddressUsable() {
             return !!deliverAddress
-                && deliverAddress !== 'Resolving the address…'
-                && deliverAddress.charAt(0) !== '(';
+                && (deliverAddressState === 'named'
+                    || deliverAddressState === 'coords'
+                    || deliverAddressState === 'failed');
+        }
+
+        // What the pin is called when the map has no address for it: its own coordinates,
+        // printed the way the readout prints them. A delivery routes on coordinates, and
+        // they travel to the account beside this label, so the spot is still a location.
+        function coordinateLabel(at) {
+            return at.lat.toFixed(5) + ', ' + at.lng.toFixed(5);
+        }
+
+        // Nominatim's answer is usually its one-line display_name. Where that is missing
+        // but the place still came back with its own parts, they are stitched into one
+        // line rather than dropping a spot that does have an address.
+        function composeAddress(place) {
+            if (!place) { return ''; }
+            if (place.display_name) { return place.display_name; }
+            var where = place.address || {};
+            var parts = [
+                place.name,
+                where.house_number,
+                where.road || where.pedestrian || where.footway || where.neighbourhood,
+                where.suburb || where.village || where.town || where.city || where.county,
+                where.state,
+                where.country
+            ];
+            var seen = {};
+            var named = [];
+            parts.forEach(function (part) {
+                part = part && String(part).trim();
+                if (!part || seen[part]) { return; }
+                seen[part] = true;
+                named.push(part);
+            });
+            return named.join(', ');
+        }
+
+        // One reverse lookup for one spot. A throttled or broken answer is worth a second
+        // try rather than a spot reported as unnamed.
+        function reverseLookup(at) {
+            return fetch(REVERSE_URL + '&lat=' + at.lat.toFixed(6) + '&lon=' + at.lng.toFixed(6),
+                { headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('reverse lookup answered ' + response.status);
+                    }
+                    return response.json();
+                });
+        }
+
+        function pauseBeforeRetry(ms) {
+            return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
         }
 
         function setSaveState(message, tone) {
@@ -737,32 +932,48 @@
         }
 
         // Nominatim's reverse lookup names whatever the pin was left on; the answer goes
-        // into the bar and the readout. Debounced, so nudging the pin around settles into
-        // one request instead of a burst against a shared public service.
+        // into the bar and the readout. It walks its own hierarchy, so a spot with no
+        // street still comes back as its region, and only a spot that is not mapped at all
+        // — open water, blank farmland — has no name to give: that pin is called by its
+        // own coordinates instead. Debounced, so nudging the pin around settles into one
+        // request instead of a burst against a shared public service.
         function resolvePinAddress() {
             if (!deliverPinAt) { return; }
             window.clearTimeout(addressLookupTimer);
-            deliverAddress = 'Resolving the address…';
+            deliverAddressState = 'resolving';
             renderDeliveryReadout();
             var at = { lat: deliverPinAt.lat, lng: deliverPinAt.lng };
+            // The pin may have moved again while a lookup was in flight, in which case
+            // whatever it answers is about the spot the pin has left.
+            function stillPinned() {
+                return !!deliverPinAt && deliverPinAt.lat === at.lat && deliverPinAt.lng === at.lng;
+            }
+            function nameSpot(state, label) {
+                deliverAddressState = state;
+                deliverAddress = label;
+                setSearchValue(label);
+                renderDeliveryReadout();
+            }
             addressLookupTimer = window.setTimeout(function () {
-                fetch(REVERSE_URL + '&lat=' + at.lat.toFixed(6) + '&lon=' + at.lng.toFixed(6),
-                    { headers: { Accept: 'application/json' } })
-                    .then(function (response) { return response.json(); })
+                reverseLookup(at)
+                    .catch(function () {
+                        // Throttled or unreachable: one more try, then the pin stands
+                        // on where it is rather than on a name that never came.
+                        return pauseBeforeRetry(ADDRESS_RETRY_DELAY)
+                            .then(function () { return reverseLookup(at); });
+                    })
                     .then(function (place) {
-                        // The pin may have moved again while this was in flight.
-                        if (!deliverPinAt || deliverPinAt.lat !== at.lat || deliverPinAt.lng !== at.lng) {
-                            return;
+                        if (!stillPinned()) { return; }
+                        var named = composeAddress(place);
+                        if (named) {
+                            nameSpot('named', named);
+                        } else {
+                            nameSpot('coords', coordinateLabel(at));
                         }
-                        deliverAddress = (place && place.display_name)
-                            ? place.display_name
-                            : '(no address found for that spot)';
-                        if (place && place.display_name) { setSearchValue(deliverAddress); }
-                        renderDeliveryReadout();
                     })
                     .catch(function () {
-                        deliverAddress = '(address lookup failed)';
-                        renderDeliveryReadout();
+                        if (!stillPinned()) { return; }
+                        nameSpot('failed', coordinateLabel(at));
                     });
             }, ADDRESS_LOOKUP_DELAY);
         }
@@ -772,6 +983,7 @@
             // An unnamed pin has no address yet: keeping the previous one would let a
             // moved pin be confirmed against the address it used to sit on.
             deliverAddress = label || '';
+            deliverAddressState = label ? 'named' : 'none';
             var point = [at.lat, at.lng];
             if (deliverMarker) {
                 deliverMarker.setLatLng(point);

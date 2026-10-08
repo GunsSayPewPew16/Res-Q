@@ -1,4 +1,4 @@
-# Local database created and written by frontend/server.py — never commit user data.
+# Local database created and written by backend/server.py — never commit user data.
 resq.db
 *.db
 *.db-journal

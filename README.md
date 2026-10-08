@@ -54,13 +54,18 @@ role chosen at the start.
    skeletons for now — the boxes, the metric row, the queue rail and the map panel
    are in place but hold no data — except for the delivery card, which opens the
    map overlay described under [The delivery map](#the-delivery-map), and the
-   donor's slim navigation rail, whose four rows are now labelled Dashboard, Feed,
-   Surplus Analyzer and Current Orders, with Finished Orders in the first slot
-   below the rail's divider; the slot under it stays a bare pipeline pulse.
-   Dashboard is the default selection; picking any of the other four items — Feed,
-   Surplus Analyzer, Current Orders or the Finished Orders slot — wipes the working
-   area and opens a blank screen for that section, and picking Dashboard brings the
-   dashboard back. The selected item fills with the site's accent orange and its label
+   slim navigation rail both pages now share, whose four rows are labelled Dashboard,
+   Feed, Surplus Received and Incoming Deliveries, with Received Deliveries in the
+   first slot below the rail's divider; the slot under it stays a bare pipeline
+   pulse. Dashboard is the default selection; picking any of the other four items —
+   Feed, Surplus Received, Incoming Deliveries or the Received Deliveries slot —
+   wipes the working area and opens a blank screen for that section, and picking
+   Dashboard brings the dashboard back. The donor names its own sections; the
+   recipient page still carries the donor's earlier set until its own names arrive.
+   The right-hand panel of the donor's lower grid carries the impact figures under
+   a *Donor Metrics* heading — surplus saved in kilos, meals served and orders
+   completed — seeded with plausible random values on every load until the backend
+   reports real ones. The selected item fills with the site's accent orange and its label
    turns black, the way the landing cards invert when they are hovered, while every
    other item keeps the dark tone with a neutral label. The bell in the header
    opens a small notifications panel under it rather than a browser alert, and the
@@ -82,11 +87,11 @@ the matching logic, and invites visitors into the flow above.
 | File | Purpose |
 | --- | --- |
 | `frontend/index.html` | Landing page — the site's entry point and default document |
-| `frontend/server.py` | Backend: serves the pages and the onboarding API (demo mode by default, SQLite when persistence is on) |
+| `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a layout skeleton with a labelled navigation rail that swaps the dashboard for blank section screens, and one working part, the delivery-location card |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a layout skeleton with a labelled navigation rail that swaps the dashboard for blank section screens, an impact panel showing the donor's own stored figures, and one wired-up part, the delivery-location card |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail and blank section screens |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
 visitor's role when signed in, and to the landing page otherwise. Each page works
@@ -118,14 +123,23 @@ landing page's capability cards do.
   map, looks that spot up and puts its address in the search bar and in the readout, so
   the field always describes where the pin is rather than where it last was.
 - The readout keeps the pin's address and its own coordinates on separate lines.
+- **A spot with no street address is still a place.** Nominatim answers a reverse
+  lookup with the place it has there and walks up its own hierarchy, so a pin that has
+  no street still comes back as its region and a place that arrived without a one-line
+  name has its parts stitched into one. Only a spot nothing is mapped at — open water,
+  blank farmland — has no name to give; that pin is called by its **own coordinates**,
+  and the readout adds a `NOTE` line saying why. A lookup that is merely throttled or
+  unreachable is retried once before the coordinates stand in for it, under a note of
+  its own.
 - **Confirming saves the pin to the account.** The *Confirm location* button posts the
   pin's address together with its latitude and longitude to `/api/delivery-location`,
   and the badge beside it switches from *Not saved yet* to *Saved to your account*. The
-  button stays disabled until a pin exists and its address has finished resolving, so a
-  stale address can never be confirmed — and confirming again after a move overwrites
-  the saved location rather than adding a second one. A failed save says so in the
-  overlay instead of pretending it worked, and the badge falls back to *Not saved yet*
-  whenever the pin no longer matches what was saved.
+  button stays disabled only while a lookup is still in flight, so a stale address can
+  never be confirmed and no spot is a dead end — the coordinates are what a routing
+  pass reads anyway. Confirming again after a move overwrites the saved location rather
+  than adding a second one. A failed save says so in the overlay instead of pretending
+  it worked, and the badge falls back to *Not saved yet* whenever the pin no longer
+  matches what was saved.
 - Escape, the close button, or a click on the backdrop closes the overlay.
 
 The confirmed location is what the dashboard reopens on, and the one place on the
@@ -142,21 +156,24 @@ the overlay opens, so the dashboards themselves stay light.
 Both OSM services are shared public infrastructure, so the overlay stays a good
 citizen: lookups run once per search and once per settled pin movement rather than on
 every keystroke (Nominatim's policy forbids type-ahead against their public instance,
-and the reverse lookup is debounced behind the drag), the map keeps the attribution
+and the reverse lookup is debounced behind the drag and asked for no more than two
+attempts at one spot), the map keeps the attribution
 Leaflet draws for the tiles, and heavy or automated use would need a self-hosted tile
 server or a commercial provider rather than these endpoints.
 
 If the library, the tiles or a lookup cannot be reached, the overlay says which one
-failed instead of showing an empty panel or a stale address.
+failed instead of showing an empty panel or a stale address: a lookup that never
+answers names the pin by its coordinates and says so, so even an offline overlay can
+still hand a location to the account.
 
 ## Running it locally
 
-Start the backend, which serves the pages and the API on one origin:
+Start the backend from the repository root; it serves the pages and the API on one
+origin:
 
 ```bash
-cd frontend
-python3 server.py                    # demo mode: nothing is stored
-RESQ_PERSIST=on python3 server.py    # persistent: accounts go to frontend/resq.db
+python3 backend/server.py                   # demo mode: nothing is stored
+RESQ_PERSIST=on python3 backend/server.py   # persistent: accounts go to backend/resq.db
 ```
 
 Then visit <http://localhost:8080/>. The server returns the landing page as the
@@ -179,19 +196,20 @@ so the whole site can be walked through repeatedly without inventing a fresh
 email address each time. Sessions and the details you type live in memory for
 the life of the process; any email or phone plus any password signs you in, and
 restarting the server forgets everything. A session keeps the whole onboarding
-answer set, address included, and holds the delivery location a person confirms the
-same way, so `/api/me` answers with the same shape it does in persistent mode — which
+answer set, address included, and holds the delivery location a person confirms, and a
+donor's three impact figures, the same way, so `/api/me` answers with the same shape it
+does in persistent mode — which
 is what lets the dashboard map open on the address that was typed and, once someone
 has confirmed a spot, on that spot instead.
 
 ### Persistent mode
 
-Started with `RESQ_PERSIST=on`, accounts are stored in `frontend/resq.db`
+Started with `RESQ_PERSIST=on`, accounts are stored in `backend/resq.db`
 (override the path with the `RESQ_DB` environment variable). Two tables: `users`
 and `sessions`. Restart the server for a mode change to take effect. A database
 created by an earlier version is migrated in place on startup: `init_db` adds any
-missing `users` column — the delivery location's four among them — with
-`ALTER TABLE` rather than asking for a new file.
+missing `users` column — the delivery location's four and the donor figures' three
+among them — with `ALTER TABLE` rather than asking for a new file.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
@@ -201,8 +219,17 @@ missing `users` column — the delivery location's four among them — with
 | `POST` | `/api/logout` | Drop the session |
 | `POST` | `/api/profile` | Save the goods profile — establishment type and up to 2 surplus categories for donors, up to 2 delivery days and up to 2 required goods for recipients. Answers beyond the limit are rejected with `400`. The page sends the visitor to the dashboard for their role once this returns 200 |
 | `POST` | `/api/delivery-location` | Save the delivery location the dashboard pin points at, from an `address` plus `lat`/`lng`. Needs a bearer token (`401`), and answers `400` for an empty address, coordinates that are not numbers or are off the globe, or a malformed body. Overwrites any earlier confirmation and only ever writes the caller's own row; the refreshed user comes back in the response |
+| `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 
 How the pieces connect:
+
+- **Signing out.** The account menu in the dashboard header holds the two actions an
+  account has. *Log out* posts to `/api/logout`, drops the stored token and role, and
+  returns the visitor to onboarding; it clears them locally first, so nobody is left
+  signed in on the page while the request is in flight. Beside it sits a temporary
+  *Switch dashboard* button calling `/api/dev/switch-role`, which exists to make
+  previewing both roles quick and works in demo mode alone — the note under the button
+  says so when the backend refuses.
 
 - **Saving.** The About You form posts its answers to `/api/register`; the goods
   profile posts to `/api/profile`. In persistent mode both update `users`; in demo
@@ -216,6 +243,14 @@ How the pieces connect:
   token, which the browser keeps in `localStorage` as `resqToken`. On load the page
   calls `/api/me` with it; if the token is still valid the role gate greets the
   visitor by name with a *Continue* shortcut, otherwise the token is discarded.
+- **The donor's impact figures.** Three columns on the donor's own row:
+  `surplus_saved`, a weight in kilograms kept to two decimals, and `meals_served` and
+  `orders_completed` as whole counts. They belong to that profile and to no other role —
+  a recipient's columns stay `NULL`, and the panel that shows them is on the donor
+  dashboard only. A new donor profile starts from a plausible set, because nothing has
+  come out of the pipeline yet, and a profile created before the columns existed is
+  given its figures the first time it is read. That is what keeps the three figures the
+  same on every load instead of changing under whoever is reading them.
 - **The confirmed delivery location.** `/api/delivery-location` writes four fields on
   the signed-in account: `delivery_address`, `delivery_lat`, `delivery_lng` and
   `delivery_confirmed_at`. The dashboard map reads them back from `/api/me` when it
@@ -255,8 +290,9 @@ moving to a managed database and giving the auth a real review. The matching
 pipeline shown on the marketing page remains illustrative.
 
 The dashboards are still skeletons: the boxes and the layout are in place, and the
-donor's rail names its sections and switches between them, but every section screen
-except Dashboard is blank and only the delivery card does anything. Its map needs
+rails name their sections and switch between them, but every section screen except
+Dashboard is blank, the impact figures are random placeholders, and the delivery
+card is the only part wired to the backend. Its map needs
 no key, so it works as soon as the server is running. That one card is wired all the
 way through, though — pick a spot, confirm it, and the address and its coordinates
 are stored on the account and waiting there the next time the map opens.

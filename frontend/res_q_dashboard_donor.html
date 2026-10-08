@@ -163,17 +163,20 @@
                         <span id="userName" class="text-xs font-mono text-neutral-300 hidden md:inline">SIGNED IN</span>
                     </button>
 
-                    <!-- The account pill opens the same kind of panel as the bell, and it is
-                         left empty for the same reason: there is no account menu to list yet. -->
+                    <!-- The account pill opens the account menu: the one action an account
+                         really has, signing out, plus a temporary switch to the other
+                         dashboard so both roles can be previewed from one sign-in. -->
                     <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-6 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
                         <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
                             <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Account</span>
-                            <span class="font-mono text-[10px] text-neutral-600">00</span>
+                            <span class="font-mono text-[10px] text-neutral-600">02</span>
                         </div>
-                        <div class="p-4">
-                            <div class="h-32 rounded-xl bg-neutral-800/50 border border-neutral-800 flex items-center justify-center">
-                                <span class="font-mono text-[10px] uppercase tracking-widest text-neutral-600">No menu items yet</span>
-                            </div>
+                        <div class="p-4 space-y-3">
+                            <button type="button" onclick="logOut()" class="w-full px-4 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all">Log out</button>
+                            <!-- TEMPORARY: a preview convenience, not part of the product.
+                                 Demo mode only, and the backend says so if asked otherwise. -->
+                            <button type="button" onclick="switchDashboard()" class="w-full px-4 py-3 rounded-xl border border-neutral-800 text-neutral-400 text-xs font-black uppercase tracking-widest hover:border-neutral-600 hover:text-neutral-200 transition-all">Switch to recipient dashboard <span class="text-neutral-600">(temp)</span></button>
+                            <span id="accountNote" class="block font-mono text-[10px] text-neutral-600"></span>
                         </div>
                     </div>
                 </div>
@@ -187,20 +190,20 @@
         <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-            <!-- Left rail: the four section rows carry their labels, then the finished
-                 orders slot; the pipeline status stays a bare pulse. Every item but
+            <!-- Left rail: the four section rows carry their labels, then the received
+                 deliveries slot; the pipeline status stays a bare pulse. Every item but
                  Dashboard swaps the working area for that section's blank screen. -->
             <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
                 <nav class="space-y-2" aria-label="Dashboard sections">
                     <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-[#ff4500] border border-[#ff4500] text-[11px] font-mono uppercase text-black transition-all">Dashboard</a>
                     <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Feed</a>
-                    <a href="#" data-view="surplus-analyzer" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Analyzer</a>
-                    <a href="#" data-view="current-orders" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Current Orders</a>
+                    <a href="#" data-view="surplus-received" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Received</a>
+                    <a href="#" data-view="incoming-deliveries" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Incoming Deliveries</a>
                 </nav>
 
                 <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <button type="button" id="finishedOrders" data-view="finished-orders" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
-                        <span class="text-[11px] font-mono uppercase text-neutral-400">Finished Orders</span>
+                    <button type="button" id="receivedDeliveries" data-view="received-deliveries" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
+                        <span class="text-[11px] font-mono uppercase text-neutral-400">Received Deliveries</span>
                     </button>
                     <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
                         <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -260,18 +263,26 @@
 
                         <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
                             <div class="flex items-center justify-between pb-4 mb-6 border-b border-neutral-800">
-                                <span class="w-3 h-3 rounded-full bg-[#ff4500]"></span>
+                                <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Donor Metrics</span>
                             </div>
 
+                            <!-- The impact figures are the panel's whole point: a label on
+                                 the left, a value on the right, and no dots left to
+                                 carry the old colour coding. The labels wear the same type
+                                 the delivery card uses, and the values are the donor's
+                                 own, read from the profile the backend stores them on. -->
                             <div class="space-y-4">
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-emerald-900/50 bg-emerald-950/60"></span>
+                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px] flex items-center justify-between gap-4">
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-neutral-500 truncate">Surplus saved</span>
+                                    <span class="font-mono text-xl font-bold text-[#f4f4f0] shrink-0"><span id="metricSurplusSaved">0.00</span> <span class="text-xs text-neutral-500">kg</span></span>
                                 </div>
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-orange-900/50 bg-orange-950/60"></span>
+                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px] flex items-center justify-between gap-4">
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-neutral-500 truncate">Meals served</span>
+                                    <span class="font-mono text-xl font-bold text-[#f4f4f0] shrink-0"><span id="metricMealsServed">0</span></span>
                                 </div>
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-emerald-900/50 bg-emerald-950/60"></span>
+                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px] flex items-center justify-between gap-4">
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-neutral-500 truncate">Orders completed</span>
+                                    <span class="font-mono text-xl font-bold text-[#f4f4f0] shrink-0"><span id="metricOrdersCompleted">0</span></span>
                                 </div>
                             </div>
                         </div>
@@ -432,6 +443,8 @@
                     writeStore(ROLE_KEY, role);
                     setHome(dashboardFor(role) || 'index.html');
                     renderUser(user);
+                    // The impact panel is this donor's own figures, straight from the profile.
+                    renderDonorMetrics(user);
                     // The map overlay opens on the location this account confirmed, or on
                     // the address it onboarded with when it has not confirmed one yet.
                     resqProfile = user;
@@ -463,15 +476,15 @@
                 item.classList.toggle('text-black', on);
                 item.classList.toggle('text-neutral-400', !on);
             });
-            var finished = document.getElementById('finishedOrders');
-            var label = finished ? finished.querySelector('span') : null;
-            var picked = element === finished;
-            if (finished) {
-                finished.classList.toggle('bg-[#ff4500]', picked);
-                finished.classList.toggle('border-[#ff4500]', picked);
-                finished.classList.toggle('bg-neutral-800/50', !picked);
-                finished.classList.toggle('border-neutral-800', !picked);
-                finished.classList.toggle('hover:border-neutral-700', !picked);
+            var received = document.getElementById('receivedDeliveries');
+            var label = received ? received.querySelector('span') : null;
+            var picked = element === received;
+            if (received) {
+                received.classList.toggle('bg-[#ff4500]', picked);
+                received.classList.toggle('border-[#ff4500]', picked);
+                received.classList.toggle('bg-neutral-800/50', !picked);
+                received.classList.toggle('border-neutral-800', !picked);
+                received.classList.toggle('hover:border-neutral-700', !picked);
             }
             if (label) {
                 label.classList.toggle('text-black', picked);
@@ -491,10 +504,40 @@
         }
 
         // ---------------------------------------------------------------------------
-        // Header panels: the bell opens the notifications panel and the account pill
-        // opens the account menu. Neither list has anything behind it yet, so both stay
-        // empty by design — each panel is the frame its list will later fill. Only one
-        // is open at a time; clicking away, or pressing Escape, closes it.
+        // Impact metrics: the three figures in the right-hand panel are the donor's own
+        // record of what their surplus became, so they are read from the donor profile
+        // the backend keeps them on rather than invented for each load. Kilos carry two
+        // decimals — fractions of a kilo matter when food is weighed — and the other two
+        // are whole counts. A recipient profile holds none of them, which is why this
+        // panel lives on this dashboard and not on the other one.
+        // ---------------------------------------------------------------------------
+        function fillMetric(id, value) {
+            var node = document.getElementById(id);
+            if (node) { node.textContent = value; }
+        }
+
+        function renderDonorMetrics(user) {
+            var profile = user || {};
+            var kilos = Number(profile.surplus_saved);
+            var meals = Number(profile.meals_served);
+            var orders = Number(profile.orders_completed);
+            // The weight keeps its two decimals, counts of things are whole numbers.
+            fillMetric('metricSurplusSaved', isFinite(kilos)
+                ? kilos.toLocaleString('en-US',
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : '0.00');
+            fillMetric('metricMealsServed',
+                isFinite(meals) ? meals.toLocaleString('en-US') : '0');
+            fillMetric('metricOrdersCompleted',
+                isFinite(orders) ? orders.toLocaleString('en-US') : '0');
+        }
+
+        // ---------------------------------------------------------------------------
+        // Header panels: the bell opens the notifications panel, which is still an empty
+        // frame waiting for its list, and the account pill opens the account menu holding
+        // the two actions an account has — signing out, and the temporary dashboard
+        // switch below. Only one panel is open at a time; clicking away, or pressing
+        // Escape, closes it.
         // ---------------------------------------------------------------------------
         function headerPanels() {
             return document.querySelectorAll('[data-header-panel]');
@@ -546,6 +589,78 @@
             });
         });
 
+        // ---------------------------------------------------------------------------
+        // Account actions. Signing out drops the session on the backend — so the token is
+        // dead rather than merely forgotten here — and clears it locally, which is what
+        // lands the visitor back on onboarding.
+        //
+        // The role switch beside it is TEMPORARY and exists only to make previewing both
+        // dashboards quick: it asks the backend for a session for the other role, so both
+        // can be walked through from one sign-in. That endpoint is demo mode only, and the
+        // note under the buttons says so rather than the button appearing to do nothing.
+        // ---------------------------------------------------------------------------
+        var SWITCH_URL = '/api/dev/switch-role';
+        var OTHER_ROLE = 'recipient';
+
+        function setAccountNote(message, tone) {
+            var note = document.getElementById('accountNote');
+            if (!note) { return; }
+            note.textContent = message;
+            note.className = 'block font-mono text-[10px] ' + (tone || 'text-neutral-600');
+        }
+
+        function logOut() {
+            var token = readStore(TOKEN_KEY);
+            dropStore(TOKEN_KEY);
+            dropStore(ROLE_KEY);
+            var leave = function () { window.location.replace('res_q_homepage.html'); };
+            if (!token) { leave(); return; }
+            // The session is dropped at the backend too, but nobody waits on that: someone
+            // who asked to sign out is signed out here either way.
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + token
+                }
+            }).then(leave).catch(leave);
+        }
+
+        function switchDashboard() {
+            var token = readStore(TOKEN_KEY);
+            if (!token) { return; }
+            setAccountNote('Switching…');
+            fetch(SWITCH_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + token
+                },
+                body: JSON.stringify({ role: OTHER_ROLE })
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (body) {
+                        return { status: response.status, body: body };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200 || !res.body.token) {
+                        // A backend running with persistence has no such endpoint, which is
+                        // the one answer a preview button has to explain.
+                        setAccountNote(res.status === 404
+                            ? 'The dashboard switch only works in demo mode.'
+                            : ((res.body && res.body.error) || 'Could not switch dashboards.'));
+                        return;
+                    }
+                    writeStore(TOKEN_KEY, res.body.token);
+                    writeStore(ROLE_KEY, (res.body.user && res.body.user.role) || OTHER_ROLE);
+                    window.location.href = dashboardFor(OTHER_ROLE) || 'index.html';
+                })
+                .catch(function () {
+                    setAccountNote('Could not reach the backend to switch.');
+                });
+        }
+
         // A click anywhere outside a panel's own button closes it. The click that opens
         // one lands inside that wrapper, so it never closes what it just opened.
         document.addEventListener('click', function (event) {
@@ -583,15 +698,22 @@
         var TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
         var TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
         var LOOKUP_URL = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=';
-        var REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2';
+        // addressdetails asks for the place's own parts back as well as its one-line
+        // name, and accept-language pins the answer to the language this page is in.
+        var REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=en';
         var START_VIEW = [43.6532, -79.3832];
         var ADDRESS_LOOKUP_DELAY = 500;
+        var ADDRESS_RETRY_DELAY = 900;
         var SAVE_URL = '/api/delivery-location';
 
         var deliverMap = null;
         var deliverMarker = null;
         var deliverPinAt = null;
         var deliverAddress = '';
+        // What the pin is to the map: 'none' until anything is placed, 'resolving' while a
+        // lookup is in flight, 'named' for a real address, 'coords' where nothing is
+        // mapped to name the spot, and 'failed' when the lookup could not be reached.
+        var deliverAddressState = 'none';
         var deliverHint = 'No pin yet — search an address or tap the map.';
         var addressLookupTimer = null;
         var leafletRequested = false;
@@ -631,16 +753,28 @@
         }
 
         // The readout names the address the pin is on, and the pin's own coordinates
-        // beside it, so a pin that has been moved never reads as the searched place.
+        // beside it, so a pin that has been moved never reads as the searched place. A
+        // spot the map could not name is called by those coordinates and says why, so the
+        // pin never reads as a place it is not.
         function renderDeliveryReadout() {
             var out = deliverEl('deliverReadout');
             if (out) {
                 if (!deliverPinAt) {
                     out.textContent = deliverHint;
                 } else {
-                    out.textContent = 'ADDRESS  ' + (deliverAddress || '(unknown)')
-                        + '\nPIN      LAT ' + deliverPinAt.lat.toFixed(5)
-                        + '   LNG ' + deliverPinAt.lng.toFixed(5);
+                    var lines = ['ADDRESS  ' + (deliverAddressState === 'resolving'
+                        ? 'Resolving the address…'
+                        : (deliverAddress || '(unknown)'))];
+                    var note = '';
+                    if (deliverAddressState === 'coords') {
+                        note = 'no street address is mapped here, so the coordinates are the location';
+                    } else if (deliverAddressState === 'failed') {
+                        note = 'the address lookup could not be reached, so the coordinates are the location';
+                    }
+                    if (note) { lines.push('NOTE     ' + note); }
+                    lines.push('PIN      LAT ' + deliverPinAt.lat.toFixed(5)
+                        + '   LNG ' + deliverPinAt.lng.toFixed(5));
+                    out.textContent = lines.join('\n');
                 }
             }
             // Confirming is only possible once the pin has a real address, and the badge
@@ -662,12 +796,65 @@
             return { lat: lat, lng: lng, address: user.delivery_address || '' };
         }
 
-        // An address is worth saving only once the map has named the spot: neither the
-        // "resolving" placeholder nor a "(no address found)" note is a location.
+        // A pin is a location as soon as the map has settled what it is: a real address,
+        // or the spot's own coordinates where nothing is mapped to name it. Only a lookup
+        // that is still running has nothing to save yet, which used to make an unaddressable
+        // spot unconfirmable and so invisible to everything that reads locations.
         function deliverAddressUsable() {
             return !!deliverAddress
-                && deliverAddress !== 'Resolving the address…'
-                && deliverAddress.charAt(0) !== '(';
+                && (deliverAddressState === 'named'
+                    || deliverAddressState === 'coords'
+                    || deliverAddressState === 'failed');
+        }
+
+        // What the pin is called when the map has no address for it: its own coordinates,
+        // printed the way the readout prints them. A delivery routes on coordinates, and
+        // they travel to the account beside this label, so the spot is still a location.
+        function coordinateLabel(at) {
+            return at.lat.toFixed(5) + ', ' + at.lng.toFixed(5);
+        }
+
+        // Nominatim's answer is usually its one-line display_name. Where that is missing
+        // but the place still came back with its own parts, they are stitched into one
+        // line rather than dropping a spot that does have an address.
+        function composeAddress(place) {
+            if (!place) { return ''; }
+            if (place.display_name) { return place.display_name; }
+            var where = place.address || {};
+            var parts = [
+                place.name,
+                where.house_number,
+                where.road || where.pedestrian || where.footway || where.neighbourhood,
+                where.suburb || where.village || where.town || where.city || where.county,
+                where.state,
+                where.country
+            ];
+            var seen = {};
+            var named = [];
+            parts.forEach(function (part) {
+                part = part && String(part).trim();
+                if (!part || seen[part]) { return; }
+                seen[part] = true;
+                named.push(part);
+            });
+            return named.join(', ');
+        }
+
+        // One reverse lookup for one spot. A throttled or broken answer is worth a second
+        // try rather than a spot reported as unnamed.
+        function reverseLookup(at) {
+            return fetch(REVERSE_URL + '&lat=' + at.lat.toFixed(6) + '&lon=' + at.lng.toFixed(6),
+                { headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('reverse lookup answered ' + response.status);
+                    }
+                    return response.json();
+                });
+        }
+
+        function pauseBeforeRetry(ms) {
+            return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
         }
 
         function setSaveState(message, tone) {
@@ -784,32 +971,48 @@
         }
 
         // Nominatim's reverse lookup names whatever the pin was left on; the answer goes
-        // into the bar and the readout. Debounced, so nudging the pin around settles into
-        // one request instead of a burst against a shared public service.
+        // into the bar and the readout. It walks its own hierarchy, so a spot with no
+        // street still comes back as its region, and only a spot that is not mapped at all
+        // — open water, blank farmland — has no name to give: that pin is called by its
+        // own coordinates instead. Debounced, so nudging the pin around settles into one
+        // request instead of a burst against a shared public service.
         function resolvePinAddress() {
             if (!deliverPinAt) { return; }
             window.clearTimeout(addressLookupTimer);
-            deliverAddress = 'Resolving the address…';
+            deliverAddressState = 'resolving';
             renderDeliveryReadout();
             var at = { lat: deliverPinAt.lat, lng: deliverPinAt.lng };
+            // The pin may have moved again while a lookup was in flight, in which case
+            // whatever it answers is about the spot the pin has left.
+            function stillPinned() {
+                return !!deliverPinAt && deliverPinAt.lat === at.lat && deliverPinAt.lng === at.lng;
+            }
+            function nameSpot(state, label) {
+                deliverAddressState = state;
+                deliverAddress = label;
+                setSearchValue(label);
+                renderDeliveryReadout();
+            }
             addressLookupTimer = window.setTimeout(function () {
-                fetch(REVERSE_URL + '&lat=' + at.lat.toFixed(6) + '&lon=' + at.lng.toFixed(6),
-                    { headers: { Accept: 'application/json' } })
-                    .then(function (response) { return response.json(); })
+                reverseLookup(at)
+                    .catch(function () {
+                        // Throttled or unreachable: one more try, then the pin stands
+                        // on where it is rather than on a name that never came.
+                        return pauseBeforeRetry(ADDRESS_RETRY_DELAY)
+                            .then(function () { return reverseLookup(at); });
+                    })
                     .then(function (place) {
-                        // The pin may have moved again while this was in flight.
-                        if (!deliverPinAt || deliverPinAt.lat !== at.lat || deliverPinAt.lng !== at.lng) {
-                            return;
+                        if (!stillPinned()) { return; }
+                        var named = composeAddress(place);
+                        if (named) {
+                            nameSpot('named', named);
+                        } else {
+                            nameSpot('coords', coordinateLabel(at));
                         }
-                        deliverAddress = (place && place.display_name)
-                            ? place.display_name
-                            : '(no address found for that spot)';
-                        if (place && place.display_name) { setSearchValue(deliverAddress); }
-                        renderDeliveryReadout();
                     })
                     .catch(function () {
-                        deliverAddress = '(address lookup failed)';
-                        renderDeliveryReadout();
+                        if (!stillPinned()) { return; }
+                        nameSpot('failed', coordinateLabel(at));
                     });
             }, ADDRESS_LOOKUP_DELAY);
         }
@@ -819,6 +1022,7 @@
             // An unnamed pin has no address yet: keeping the previous one would let a
             // moved pin be confirmed against the address it used to sit on.
             deliverAddress = label || '';
+            deliverAddressState = label ? 'named' : 'none';
             var point = [at.lat, at.lng];
             if (deliverMarker) {
                 deliverMarker.setLatLng(point);
