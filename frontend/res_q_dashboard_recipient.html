@@ -128,15 +128,15 @@
                  the rows and panels stay, their contents are gone. -->
             <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
                 <nav class="space-y-2" aria-label="Dashboard sections">
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-900 border border-neutral-800 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl border border-transparent hover:bg-neutral-900/50 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl border border-transparent hover:bg-neutral-900/50 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl border border-transparent hover:bg-neutral-900/50 transition-all"></a>
+                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/50 border border-neutral-700 transition-all"></a>
+                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
+                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
+                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
                 </nav>
 
                 <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <div class="p-3 bg-neutral-900 rounded-2xl border border-neutral-800 min-h-[58px]"></div>
-                    <div class="p-3 bg-neutral-900 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
+                    <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 min-h-[58px]"></div>
+                    <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
                         <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     </div>
                 </div>
@@ -149,14 +149,17 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="notched-card p-6 flex flex-col justify-between h-40">
                         <span class="self-start block h-6 w-20 rounded-full bg-orange-950/50 border border-orange-900/50"></span>
+                        <div class="mt-4 flex-1 rounded-xl bg-neutral-800/50"></div>
                     </div>
 
                     <div class="notched-card p-6 flex flex-col justify-between h-40">
                         <span class="self-start block h-6 w-20 rounded-full bg-emerald-950/50 border border-emerald-900/50"></span>
+                        <div class="mt-4 flex-1 rounded-xl bg-neutral-800/50"></div>
                     </div>
 
                     <div class="notched-orange p-6 flex flex-col justify-between h-40 text-black">
                         <span class="self-start block h-6 w-20 rounded-full bg-black/20"></span>
+                        <div class="mt-4 flex-1 rounded-xl bg-black/20"></div>
                     </div>
                 </div>
 
@@ -167,13 +170,13 @@
 
                         <!-- Routing map panel -->
                         <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
-                            <div class="w-full h-72 rounded-2xl border border-neutral-800 bg-[#0c0c0c]"></div>
+                            <div class="w-full h-72 rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
                         </div>
 
                         <!-- Quick intake request panel -->
                         <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative">
                             <div class="border-b border-neutral-800 pb-4 mb-6"></div>
-                            <div class="min-h-[240px]"></div>
+                            <div class="min-h-[240px] rounded-xl bg-neutral-800/50"></div>
                         </div>
 
                     </div>
@@ -187,13 +190,13 @@
                             </div>
 
                             <div class="space-y-4">
-                                <div class="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
+                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
                                     <span class="block h-4 w-20 rounded-full border border-emerald-900/50 bg-emerald-950/60"></span>
                                 </div>
-                                <div class="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
+                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
                                     <span class="block h-4 w-20 rounded-full border border-orange-900/50 bg-orange-950/60"></span>
                                 </div>
-                                <div class="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
+                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
                                     <span class="block h-4 w-20 rounded-full border border-neutral-700 bg-neutral-800"></span>
                                 </div>
                             </div>
@@ -201,8 +204,8 @@
 
                         <div class="notched-card-alt p-6 border border-neutral-800">
                             <div class="space-y-3">
-                                <div class="bg-neutral-900 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
-                                <div class="bg-neutral-900 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
+                                <div class="bg-neutral-800/50 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
+                                <div class="bg-neutral-800/50 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
                             </div>
                         </div>
 
@@ -314,14 +317,16 @@
 
         // ---------------------------------------------------------------------------
         // Navigation rail: the rows are kept, so the active-row highlight still works.
+        // Every row carries the placeholder tone; the active one is the brighter fill
+        // with the lighter hairline, so the click is still visible without any copy.
         // ---------------------------------------------------------------------------
         function setActiveNav(element) {
             document.querySelectorAll('.nav-item').forEach(function (item) {
-                item.classList.remove('bg-neutral-900', 'border-neutral-800');
-                item.classList.add('border-transparent');
+                item.classList.remove('bg-neutral-800/50', 'border-neutral-700');
+                item.classList.add('bg-neutral-800/30', 'border-neutral-800/60');
             });
-            element.classList.add('bg-neutral-900', 'border-neutral-800');
-            element.classList.remove('border-transparent');
+            element.classList.add('bg-neutral-800/50', 'border-neutral-700');
+            element.classList.remove('bg-neutral-800/30', 'border-neutral-800/60');
         }
 
         function triggerNotification() {
