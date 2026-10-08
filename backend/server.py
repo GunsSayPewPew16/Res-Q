@@ -8,6 +8,10 @@ session is returned, but nothing is written to a database and duplicate details
 are not rejected, so the site can be walked through without creating a new
 credential each time.
 
+Matching is the second half of the API: once an account has confirmed its delivery
+location, GET /api/matches ranks the counterparts near it that share a category, and
+POST /api/orders turns a chosen pair into a delivery order.
+
     python3 backend/server.py                   # demo mode, port 8080
     RESQ_PERSIST=on python3 backend/server.py   # store accounts in SQLite (backend/resq.db)
 
@@ -19,6 +23,9 @@ Endpoints
     POST /api/logout                drop the session
     POST /api/profile               save the goods profile (establishment + surplus category)
     POST /api/delivery-location     save the location confirmed on the dashboard map
+    GET  /api/matches               rank the counterparts near the account, nearest first
+    GET  /api/orders                list the delivery orders the account is part of
+    POST /api/orders                bind the account and one counterpart into an order
 
 Only the standard library is used, so there is nothing to install.
 """
@@ -27,6 +34,7 @@ import datetime
 import hashlib
 import hmac
 import json
+import math
 import os
 import random
 import re
@@ -34,7 +42,8 @@ import secrets
 import sqlite3
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from itertools import count
+from urllib.parse import parse_qs, urlparse
 
 # This folder is the backend: its code and its database file live here. The pages it
 # serves live beside it in frontend/, so the two are resolved separately — the site's
@@ -50,6 +59,10 @@ DB_PATH = os.environ.get("RESQ_DB", os.path.join(BACKEND_DIR, "resq.db"))
 # Start the server with RESQ_PERSIST=on to store accounts in the database again.
 PERSIST = os.environ.get("RESQ_PERSIST", "off").strip().lower() in ("on", "1", "true", "yes")
 DEMO_SESSIONS = {}
+# Demo orders belong to a session token the way the sessions themselves do, and go when
+# the process does. The counter hands out ids that look like the persistent ones.
+DEMO_ORDERS = {}
+DEMO_ORDER_SEQ = count(1)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -87,6 +100,25 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id    INTEGER NOT NULL,
     created_at TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    donor_id        INTEGER NOT NULL,
+    recipient_id    INTEGER NOT NULL,
+    category        TEXT    NOT NULL,
+    status          TEXT    NOT NULL DEFAULT 'proposed',
+    scheduled_for   TEXT,
+    pickup_address  TEXT,
+    pickup_lat      REAL,
+    pickup_lng      REAL,
+    dropoff_address TEXT,
+    dropoff_lat     REAL,
+    dropoff_lng     REAL,
+    distance_km     REAL,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (donor_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE
 );
 """
 
@@ -150,6 +182,71 @@ FIRM_SURPLUS = {
 
 # Every profile question takes at most two answers.
 MAX_PICKS = 2
+
+# A delivery is worth proposing only when both sides have a point on the map: the donor's
+# pickup and the recipient's drop-off. Candidates are therefore filtered by distance from
+# the caller's own confirmed pin, must share at least one category, and are ranked
+# nearest first, because distance is what a delivery costs.
+DEFAULT_RADIUS_KM = 25.0
+MAX_RADIUS_KM = 250.0
+DEFAULT_MATCH_LIMIT = 10
+MAX_MATCH_LIMIT = 50
+KM_PER_DEGREE = 111.32
+EARTH_RADIUS_KM = 6371.0088
+
+# An order starts life proposed. Until the status transitions land that is the only
+# status one can be in, and these are the two that stop a second order for the same pair
+# and category being proposed on top of the first.
+LIVE_ORDER_STATUSES = ("proposed", "accepted")
+
+# Demo mode has no second account to match against, so the pipeline is walked through
+# against fabricated counterparts. Each one sits a fixed distance from the caller's own
+# confirmed pin, on a fixed bearing, so the numbers stay plausible wherever the pin was
+# dropped and a counterpart is always in the same place for a given caller. Every donor
+# category is covered by a recipient here and every recipient need by a donor, so
+# whichever role is signed in has something to match. They exist in demo mode only.
+DEMO_PEERS = (
+    {"id": 9001, "role": "recipient", "contact": "Dana Whitfield",
+     "business_name": "Harbour Lights Shelter", "street": "12 Harbour Lane",
+     "distance_km": 1.2, "bearing": 20,
+     "surplus_types": ("prepared_meals", "fresh_produce"),
+     "delivery_days": ("sat", "tue")},
+    {"id": 9002, "role": "recipient", "contact": "Marcus Ilori",
+     "business_name": "Riverside Community Pantry", "street": "88 Riverside Walk",
+     "distance_km": 2.8, "bearing": 115,
+     "surplus_types": ("packaged_goods", "household_essentials"),
+     "delivery_days": ("mon", "thu")},
+    {"id": 9003, "role": "recipient", "contact": "Priya Raghunathan",
+     "business_name": "Maple Court Seniors Centre", "street": "4 Maple Court",
+     "distance_km": 4.6, "bearing": 200,
+     "surplus_types": ("dairy_beverages", "prepared_meals"),
+     "delivery_days": ("sat", "wed")},
+    {"id": 9004, "role": "recipient", "contact": "Ruth Okonjo",
+     "business_name": "Westbrook Family Kitchen", "street": "301 Westbrook Road",
+     "distance_km": 7.9, "bearing": 285,
+     "surplus_types": ("fresh_produce", "dairy_beverages"),
+     "delivery_days": ("sun", "fri")},
+    {"id": 9005, "role": "donor", "contact": "Elena Marchetti", "firm_type": "retail",
+     "business_name": "Greenway Grocers", "street": "50 Greenway Parade",
+     "distance_km": 2.1, "bearing": 35,
+     "surplus_types": ("fresh_produce", "packaged_goods"),
+     "delivery_days": ()},
+    {"id": 9006, "role": "donor", "contact": "Tom Bexley", "firm_type": "eatery",
+     "business_name": "Corner Bakehouse", "street": "9 Corner Street",
+     "distance_km": 3.4, "bearing": 150,
+     "surplus_types": ("bakery_items", "prepared_meals"),
+     "delivery_days": ()},
+    {"id": 9007, "role": "donor", "contact": "Aisha Karim", "firm_type": "retail",
+     "business_name": "Lakeshore Market", "street": "220 Lakeshore Drive",
+     "distance_km": 5.7, "bearing": 240,
+     "surplus_types": ("dairy_beverages", "household_essentials"),
+     "delivery_days": ()},
+    {"id": 9008, "role": "donor", "contact": "Owen Trask", "firm_type": "eatery",
+     "business_name": "Sunlit Deli", "street": "77 Sunlit Avenue",
+     "distance_km": 9.3, "bearing": 320,
+     "surplus_types": ("dairy_beverages", "bakery_items"),
+     "delivery_days": ()},
+)
 
 
 def connect():
@@ -323,6 +420,185 @@ def clean_phone(value):
     return re.sub(r"[^\d]", "", value or "")
 
 
+def display_name(user):
+    """What to call an account in a match or an order: the business, if there is one."""
+    if not user:
+        return "Res-Q user"
+    business = (user.get("business_name") or "").strip()
+    if business:
+        return business
+    person = ("%s %s" % (user.get("first_name") or "", user.get("last_name") or "")).strip()
+    return person or "Res-Q user"
+
+
+def clean_id(value):
+    """A user id as it arrives over JSON: a whole number, a numeric string, or None."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        text = value.strip()
+        if text.lstrip("+-").isdigit():
+            return int(text)
+    return None
+
+
+def query_number(query, name, default, minimum, maximum):
+    """Read a bounded numeric query parameter; None when it is not a number at all.
+
+    A value outside the range is pulled to the nearest end rather than refused, so a
+    request that asks for everything simply gets the largest answer allowed.
+    """
+    raw = (query.get(name) or [""])[0].strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    if value != value:
+        return None
+    return max(minimum, min(maximum, value))
+
+
+def haversine_km(lat1, lng1, lat2, lng2):
+    """Great-circle distance between two points on the map, in kilometres."""
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = phi2 - phi1
+    d_lambda = math.radians(lng2 - lng1)
+    a = (math.sin(d_phi / 2) ** 2
+         + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2)
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
+def bounding_box(lat, lng, radius_km):
+    """A coarse box around a point, so the database discards the far away first.
+
+    Every candidate still gets measured properly; the box only keeps the rows the query
+    has to look at to those that could possibly be inside the radius. A degree of
+    longitude shrinks towards the poles, hence the cosine.
+    """
+    lat_delta = radius_km / KM_PER_DEGREE
+    width = KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01)
+    lng_delta = min(radius_km / width, 180.0)
+    return lat - lat_delta, lat + lat_delta, lng - lng_delta, lng + lng_delta
+
+
+def offset_point(lat, lng, distance_km, bearing_deg):
+    """A point at a bearing, distance_km from another: flat enough for demo data."""
+    angle = math.radians(bearing_deg)
+    width = KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01)
+    north = distance_km * math.cos(angle) / KM_PER_DEGREE
+    east = distance_km * math.sin(angle) / width
+    return lat + north, lng + east
+
+
+def shared_categories(mine, theirs):
+    """The categories both sides have, in the caller's own order, without repeats."""
+    return [name for name in mine if name in theirs]
+
+
+def routing_problem(user):
+    """Why this account cannot be matched or ordered with yet, as a 400 body, or None.
+
+    Matching measures between two confirmed pins. The address typed at onboarding is not
+    one — it was never turned into coordinates — so the dashboard map is the only place a
+    location with a point behind it comes from.
+    """
+    if user.get("delivery_lat") is None or user.get("delivery_lng") is None:
+        return {
+            "error": "Confirm your delivery location before matching: a match is a"
+                     " distance between two pins.",
+            "field": "delivery_lat",
+            "code": "no_location",
+        }
+    if not decode_list(user.get("surplus_types")):
+        return {
+            "error": "Save your goods profile first: matching pairs the categories you"
+                     " have or need.",
+            "field": "surplus_types",
+            "code": "no_categories",
+        }
+    return None
+
+
+def demo_peer_users(caller, lat, lng):
+    """The fabricated counterparts for this caller, keyed by id, other role only.
+
+    Each peer is placed relative to the caller's own confirmed pin, so the ranks and
+    distances move with the pin instead of being tied to one city, and the same peer id
+    resolves to the same place every time it is asked for.
+    """
+    peers = {}
+    for peer in DEMO_PEERS:
+        if peer["role"] == caller.get("role"):
+            continue
+        peer_lat, peer_lng = offset_point(lat, lng, peer["distance_km"], peer["bearing"])
+        first, _, last = peer["contact"].partition(" ")
+        place = [part for part in
+                 (peer["street"], caller.get("city"), caller.get("province")) if part]
+        peers[peer["id"]] = {
+            "id": peer["id"],
+            "role": peer["role"],
+            "first_name": first,
+            "last_name": last,
+            "business_name": peer["business_name"],
+            "email": None,
+            "phone": None,
+            "dial_code": None,
+            "street": peer["street"],
+            "sub_locality": None,
+            "locality": None,
+            "province": caller.get("province"),
+            "city": caller.get("city"),
+            "postal": None,
+            "firm_type": peer.get("firm_type"),
+            "delivery_days": list(peer["delivery_days"]),
+            "surplus_types": list(peer["surplus_types"]),
+            "delivery_address": ", ".join(place) or None,
+            "delivery_lat": peer_lat,
+            "delivery_lng": peer_lng,
+            "delivery_confirmed_at": None,
+            "demo": True,
+        }
+    return peers
+
+
+def users_by_ids(conn, ids):
+    """Load several accounts in one query, keyed by id."""
+    unique = [user_id for user_id in dict.fromkeys(ids) if user_id is not None]
+    if not unique:
+        return {}
+    rows = conn.execute(
+        "SELECT * FROM users WHERE id IN (%s)" % ", ".join("?" * len(unique)), unique
+    ).fetchall()
+    return {row["id"]: dict(row) for row in rows}
+
+
+def order_row(order_id, donor, recipient, category, scheduled_for, distance_km, created_at):
+    """One order in the shape it is stored in, so both modes hand back the same thing."""
+    return {
+        "id": order_id,
+        "donor_id": donor["id"],
+        "recipient_id": recipient["id"],
+        "category": category,
+        "status": "proposed",
+        "scheduled_for": scheduled_for,
+        "pickup_address": donor.get("delivery_address"),
+        "pickup_lat": donor.get("delivery_lat"),
+        "pickup_lng": donor.get("delivery_lng"),
+        "dropoff_address": recipient.get("delivery_address"),
+        "dropoff_lat": recipient.get("delivery_lat"),
+        "dropoff_lng": recipient.get("delivery_lng"),
+        "distance_km": distance_km,
+        "created_at": created_at,
+    }
+
+
 class ResQHandler(SimpleHTTPRequestHandler):
     server_version = "ResQ/1.0"
 
@@ -423,6 +699,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
             )
         if path == "/api/me":
             return self.api_me()
+        if path == "/api/matches":
+            return self.api_matches()
+        if path == "/api/orders":
+            return self.api_orders()
         if path.startswith("/api/"):
             return self.send_json(404, {"error": "Unknown endpoint."})
         return super().do_GET()
@@ -439,6 +719,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_profile()
         if path == "/api/delivery-location":
             return self.api_delivery_location()
+        if path == "/api/orders":
+            return self.api_order_create()
         if path == "/api/dev/switch-role":
             return self.api_switch_role()
         return self.send_json(404, {"error": "Unknown endpoint."})
@@ -722,6 +1004,407 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
                 conn.commit()
         return self.send_json(200, {"ok": True})
+
+    # ------------------------------------------------------------------ matching
+    def api_matches(self):
+        """Rank the counterparts near the signed-in account, nearest first.
+
+        A counterpart is a candidate only when the two sides share at least one category
+        — what the donor has spare against what the recipient needs — and both have a
+        confirmed pin, because a match without two points on the map is not a delivery
+        anyone can run. Everything else is ranking: the nearest first, since distance is
+        what a delivery costs.
+        """
+        query = parse_qs(urlparse(self.path).query)
+        radius = query_number(query, "radius_km", DEFAULT_RADIUS_KM, 1.0, MAX_RADIUS_KM)
+        if radius is None:
+            return self.send_json(
+                400,
+                {"error": "radius_km has to be a number of kilometres.", "field": "radius_km"},
+            )
+        limit = query_number(query, "limit", DEFAULT_MATCH_LIMIT, 1, MAX_MATCH_LIMIT)
+        if limit is None:
+            return self.send_json(
+                400,
+                {"error": "limit has to be a whole number of matches.", "field": "limit"},
+            )
+        limit = int(limit)
+
+        token = self.bearer_token()
+        if not PERSIST:
+            session_user = DEMO_SESSIONS.get(token)
+            if session_user is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            me = dict(session_user)
+        else:
+            with connect() as conn:
+                row = self.user_for_token(conn, token)
+            if row is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            me = dict(row)
+
+        problem = routing_problem(me)
+        if problem:
+            return self.send_json(400, problem)
+
+        lat = float(me["delivery_lat"])
+        lng = float(me["delivery_lng"])
+        mine = decode_list(me.get("surplus_types"))
+        other_role = "recipient" if me.get("role") == "donor" else "donor"
+
+        if not PERSIST:
+            candidates = list(demo_peer_users(me, lat, lng).values())
+        else:
+            # The box is only a pre-filter; the radius is settled by measuring.
+            min_lat, max_lat, min_lng, max_lng = bounding_box(lat, lng, radius)
+            with connect() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM users WHERE role = ? AND id != ?"
+                    " AND delivery_lat IS NOT NULL AND delivery_lng IS NOT NULL"
+                    " AND delivery_lat BETWEEN ? AND ? AND delivery_lng BETWEEN ? AND ?",
+                    (other_role, me["id"], min_lat, max_lat, min_lng, max_lng),
+                ).fetchall()
+            candidates = [dict(row) for row in rows]
+
+        matches = []
+        for candidate in candidates:
+            shared = shared_categories(mine, decode_list(candidate.get("surplus_types")))
+            if not shared:
+                continue
+            distance = haversine_km(
+                lat, lng, float(candidate["delivery_lat"]), float(candidate["delivery_lng"])
+            )
+            if distance > radius:
+                continue
+            matches.append(self.match_payload(candidate, shared, distance))
+
+        matches.sort(key=lambda match: (match["distance_km"], match["user_id"]))
+        payload = {
+            "ok": True,
+            "role": me.get("role"),
+            "radius_km": radius,
+            "count": len(matches[:limit]),
+            "matches": matches[:limit],
+        }
+        if not PERSIST:
+            payload["demo"] = True
+        return self.send_json(200, payload)
+
+    def match_payload(self, user, shared, distance_km):
+        """One candidate counterpart as a dashboard reads it."""
+        entry = {
+            "user_id": user["id"],
+            "role": user.get("role"),
+            "name": display_name(user),
+            "business_name": user.get("business_name"),
+            "city": user.get("city"),
+            "province": user.get("province"),
+            "distance_km": round(distance_km, METRIC_DECIMALS),
+            "shared_categories": shared,
+            "delivery_days": decode_list(user.get("delivery_days")),
+            "delivery_confirmed_at": user.get("delivery_confirmed_at"),
+        }
+        if user.get("demo"):
+            entry["demo"] = True
+        return entry
+
+    # -------------------------------------------------------------------- orders
+    def api_orders(self):
+        """Every delivery order the signed-in account is part of, newest first."""
+        token = self.bearer_token()
+        if not PERSIST:
+            if token not in DEMO_SESSIONS:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            orders = list(reversed(DEMO_ORDERS.get(token, [])))
+            return self.send_json(
+                200, {"ok": True, "demo": True, "count": len(orders), "orders": orders}
+            )
+
+        with connect() as conn:
+            row = self.user_for_token(conn, token)
+            if row is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            me = dict(row)
+            rows = conn.execute(
+                "SELECT * FROM orders WHERE donor_id = ? OR recipient_id = ?"
+                " ORDER BY id DESC",
+                (me["id"], me["id"]),
+            ).fetchall()
+            account_ids = ([order["donor_id"] for order in rows]
+                           + [order["recipient_id"] for order in rows])
+            people = users_by_ids(conn, account_ids)
+            orders = [
+                self.order_payload(dict(order), people.get(order["donor_id"]),
+                                   people.get(order["recipient_id"]))
+                for order in rows
+            ]
+
+        return self.send_json(200, {"ok": True, "count": len(orders), "orders": orders})
+
+    def api_order_create(self):
+        """Bind the signed-in account and one counterpart into a delivery order.
+
+        The order snapshots both pins and the address each side confirmed, because what
+        routing reads is the donor's pickup against the recipient's drop-off, and keeping
+        the addresses beside the coordinates leaves the pair readable later. Only the
+        caller's own account can be one side of it; the other side is named, never
+        written to.
+        """
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        token = self.bearer_token()
+        counterpart_id = clean_id(data.get("counterpartId"))
+        if counterpart_id is None:
+            return self.send_json(
+                400,
+                {
+                    "error": "Send counterpartId: the account on the other side of"
+                             " the delivery.",
+                    "field": "counterpartId",
+                },
+            )
+
+        if not PERSIST:
+            session_user = DEMO_SESSIONS.get(token)
+            if session_user is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            me = dict(session_user)
+        else:
+            with connect() as conn:
+                row = self.user_for_token(conn, token)
+            if row is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            me = dict(row)
+
+        problem = routing_problem(me)
+        if problem:
+            return self.send_json(400, problem)
+
+        # The counterpart is named by the request, so it is looked up the same way the
+        # caller was: in the directory when there is one, among the demo peers otherwise.
+        if not PERSIST:
+            peers = demo_peer_users(me, float(me["delivery_lat"]), float(me["delivery_lng"]))
+            peer = peers.get(counterpart_id)
+        else:
+            with connect() as conn:
+                found = conn.execute(
+                    "SELECT * FROM users WHERE id = ?", (counterpart_id,)
+                ).fetchone()
+            peer = dict(found) if found else None
+
+        if peer is None:
+            return self.send_json(
+                404,
+                {
+                    "error": "No account matches counterpartId.",
+                    "field": "counterpartId",
+                    "code": "no_counterpart",
+                },
+            )
+        if peer.get("role") == me.get("role"):
+            return self.send_json(
+                400,
+                {
+                    "error": "A delivery runs between a donor and a recipient, not two"
+                             " of the same.",
+                    "field": "counterpartId",
+                    "code": "role_mismatch",
+                },
+            )
+        if peer.get("delivery_lat") is None or peer.get("delivery_lng") is None:
+            return self.send_json(
+                400,
+                {
+                    "error": display_name(peer) + " has not confirmed a delivery location"
+                             " yet, so there is no second pin to deliver between.",
+                    "field": "counterpartId",
+                    "code": "no_counterpart_location",
+                },
+            )
+
+        category = (data.get("category") or "").strip().lower()
+        if not category:
+            return self.send_json(
+                400,
+                {"error": "Name the category the delivery carries.", "field": "category"},
+            )
+        if (category not in decode_list(me.get("surplus_types"))
+                or category not in decode_list(peer.get("surplus_types"))):
+            return self.send_json(
+                400,
+                {
+                    "error": "The two sides do not have that category in common.",
+                    "field": "category",
+                    "code": "not_shared",
+                },
+            )
+
+        if me.get("role") == "donor":
+            donor, recipient = me, peer
+        else:
+            donor, recipient = peer, me
+
+        # A scheduled day is the recipient's to prefer, so a day they did not ask for is
+        # refused rather than quietly booked.
+        scheduled_for = (data.get("scheduledFor") or "").strip().lower() or None
+        if scheduled_for is not None:
+            if scheduled_for not in DELIVERY_DAYS:
+                return self.send_json(
+                    400,
+                    {
+                        "error": "Schedule the delivery on Saturday through Friday.",
+                        "field": "scheduledFor",
+                        "code": "bad_day",
+                    },
+                )
+            preferred = decode_list(recipient.get("delivery_days"))
+            if preferred and scheduled_for not in preferred:
+                return self.send_json(
+                    400,
+                    {
+                        "error": display_name(recipient) + " asked for deliveries on "
+                                 + ", ".join(preferred) + ".",
+                        "field": "scheduledFor",
+                        "code": "not_preferred",
+                    },
+                )
+
+        distance = round(haversine_km(
+            float(donor["delivery_lat"]), float(donor["delivery_lng"]),
+            float(recipient["delivery_lat"]), float(recipient["delivery_lng"]),
+        ), METRIC_DECIMALS)
+
+        # One live order per pair and category: proposing the same delivery twice would
+        # put the same goods on the road twice.
+        if PERSIST:
+            with connect() as conn:
+                open_row = conn.execute(
+                    "SELECT id FROM orders WHERE donor_id = ? AND recipient_id = ?"
+                    " AND category = ? AND status IN (%s)"
+                    % ", ".join("?" * len(LIVE_ORDER_STATUSES)),
+                    (donor["id"], recipient["id"], category) + LIVE_ORDER_STATUSES,
+                ).fetchone()
+            open_order = open_row["id"] if open_row else None
+        else:
+            open_order = next(
+                (order["id"] for order in DEMO_ORDERS.get(token, [])
+                 if order["category"] == category
+                 and order["status"] in LIVE_ORDER_STATUSES
+                 and {order["donor"]["user_id"], order["recipient"]["user_id"]}
+                 == {me["id"], peer["id"]}),
+                None,
+            )
+        if open_order is not None:
+            return self.send_json(
+                409,
+                {
+                    "error": "That delivery is already on the books: order "
+                             + str(open_order) + " covers the same pair and category.",
+                    "code": "duplicate_order",
+                },
+            )
+
+        if not PERSIST:
+            stored = order_row(
+                next(DEMO_ORDER_SEQ), donor, recipient, category, scheduled_for, distance,
+                datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            )
+            order = self.order_payload(stored, donor, recipient)
+            DEMO_ORDERS.setdefault(token, []).append(order)
+            return self.send_json(201, {"ok": True, "demo": True, "order": order})
+
+        with connect() as conn:
+            cursor = conn.execute(
+                """INSERT INTO orders (
+                       donor_id, recipient_id, category, scheduled_for,
+                       pickup_address, pickup_lat, pickup_lng,
+                       dropoff_address, dropoff_lat, dropoff_lng, distance_km
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    donor["id"],
+                    recipient["id"],
+                    category,
+                    scheduled_for,
+                    donor.get("delivery_address"),
+                    donor["delivery_lat"],
+                    donor["delivery_lng"],
+                    recipient.get("delivery_address"),
+                    recipient["delivery_lat"],
+                    recipient["delivery_lng"],
+                    distance,
+                ),
+            )
+            order_id = cursor.lastrowid
+            conn.commit()
+            stored = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+        return self.send_json(
+            201, {"ok": True, "order": self.order_payload(dict(stored), donor, recipient)}
+        )
+
+    def order_payload(self, order, donor, recipient):
+        """One order as a dashboard reads it: who is on each side, and where."""
+        distance = order.get("distance_km")
+        return {
+            "id": order["id"],
+            "status": order["status"],
+            "category": order["category"],
+            "scheduled_for": order["scheduled_for"],
+            "distance_km": (round(float(distance), METRIC_DECIMALS)
+                            if distance is not None else None),
+            "created_at": order["created_at"],
+            "donor": {
+                "user_id": order["donor_id"],
+                "name": display_name(donor),
+                "address": order["pickup_address"],
+                "lat": order["pickup_lat"],
+                "lng": order["pickup_lng"],
+            },
+            "recipient": {
+                "user_id": order["recipient_id"],
+                "name": display_name(recipient),
+                "address": order["dropoff_address"],
+                "lat": order["dropoff_lat"],
+                "lng": order["dropoff_lng"],
+            },
+        }
 
     # ------------------------------------------------------------------ dev helper
     def api_switch_role(self):
