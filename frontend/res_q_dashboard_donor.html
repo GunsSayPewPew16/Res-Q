@@ -121,8 +121,10 @@
 </head>
 <body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white min-h-screen flex flex-col">
 
-    <!-- DONOR DASHBOARD: the layout skeleton. Every box is kept as a box; none of
-         them carry copy, so this is the arrangement alone. -->
+    <!-- DONOR DASHBOARD: the layout skeleton. Every box is kept as a box; the only
+         copy is the navigation rail's own labels, so this is the arrangement alone.
+         Dashboard is the default screen and the rest of the rail swaps it for a
+         blank section screen until those sections have content. -->
 
     <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -185,26 +187,30 @@
         <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-            <!-- Left rail: navigation slots, a registration slot and the pipeline status;
-                 the rows and panels stay, their contents are gone. -->
+            <!-- Left rail: the four section rows carry their labels, then the finished
+                 orders slot; the pipeline status stays a bare pulse. Every item but
+                 Dashboard swaps the working area for that section's blank screen. -->
             <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
                 <nav class="space-y-2" aria-label="Dashboard sections">
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/50 border border-neutral-700 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
-                    <a href="#" onclick="setActiveNav(this); return false;" class="nav-item block h-11 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 transition-all"></a>
+                    <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-[#ff4500] border border-[#ff4500] text-[11px] font-mono uppercase text-black transition-all">Dashboard</a>
+                    <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Feed</a>
+                    <a href="#" data-view="surplus-analyzer" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Analyzer</a>
+                    <a href="#" data-view="current-orders" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Current Orders</a>
                 </nav>
 
                 <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 min-h-[58px]"></div>
+                    <button type="button" id="finishedOrders" data-view="finished-orders" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
+                        <span class="text-[11px] font-mono uppercase text-neutral-400">Finished Orders</span>
+                    </button>
                     <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
                         <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     </div>
                 </div>
             </aside>
 
-            <!-- Working area -->
-            <div class="lg:col-span-10 space-y-6">
+            <!-- Working area: the dashboard itself. Dashboard is the default rail item,
+                 so this is what shows on load. -->
+            <div id="viewDashboard" class="lg:col-span-10 space-y-6">
 
                 <!-- Metric row -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -281,6 +287,15 @@
 
                 </div>
 
+            </div>
+
+            <!-- The section screens: picking any rail item other than Dashboard wipes
+                 the dashboard and opens this blank frame, which carries the tone and
+                 nothing else until that section has content of its own. -->
+            <div id="viewBlank" class="hidden lg:col-span-10">
+                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
+                    <div class="w-full min-h-[520px] rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
+                </div>
             </div>
 
         </div>
@@ -430,17 +445,49 @@
         })();
 
         // ---------------------------------------------------------------------------
-        // Navigation rail: the rows are kept, so the active-row highlight still works.
-        // Every row carries the placeholder tone; the active one is the brighter fill
-        // with the lighter hairline, so the click is still visible without any copy.
+        // Navigation rail: Dashboard is the default and the only lit item on load.
+        // The selected item fills with the site's accent orange and its label turns
+        // black, the way the cards on the landing page invert when they are hovered;
+        // every other item keeps the dark tone with a neutral label. Picking any item
+        // other than Dashboard wipes the dashboard and opens that section's own screen,
+        // which is a blank frame for now; picking Dashboard brings it back.
         // ---------------------------------------------------------------------------
         function setActiveNav(element) {
             document.querySelectorAll('.nav-item').forEach(function (item) {
-                item.classList.remove('bg-neutral-800/50', 'border-neutral-700');
-                item.classList.add('bg-neutral-800/30', 'border-neutral-800/60');
+                var on = item === element;
+                item.classList.toggle('bg-[#ff4500]', on);
+                item.classList.toggle('border-[#ff4500]', on);
+                item.classList.toggle('bg-neutral-800/30', !on);
+                item.classList.toggle('border-neutral-800/60', !on);
+                item.classList.toggle('hover:border-neutral-700', !on);
+                item.classList.toggle('text-black', on);
+                item.classList.toggle('text-neutral-400', !on);
             });
-            element.classList.add('bg-neutral-800/50', 'border-neutral-700');
-            element.classList.remove('bg-neutral-800/30', 'border-neutral-800/60');
+            var finished = document.getElementById('finishedOrders');
+            var label = finished ? finished.querySelector('span') : null;
+            var picked = element === finished;
+            if (finished) {
+                finished.classList.toggle('bg-[#ff4500]', picked);
+                finished.classList.toggle('border-[#ff4500]', picked);
+                finished.classList.toggle('bg-neutral-800/50', !picked);
+                finished.classList.toggle('border-neutral-800', !picked);
+                finished.classList.toggle('hover:border-neutral-700', !picked);
+            }
+            if (label) {
+                label.classList.toggle('text-black', picked);
+                label.classList.toggle('text-neutral-400', !picked);
+            }
+        }
+
+        function openSection(element) {
+            setActiveNav(element);
+            showView(element.getAttribute('data-view'));
+        }
+
+        function showView(name) {
+            var onDashboard = name === 'dashboard';
+            document.getElementById('viewDashboard').classList.toggle('hidden', !onDashboard);
+            document.getElementById('viewBlank').classList.toggle('hidden', onDashboard);
         }
 
         // ---------------------------------------------------------------------------

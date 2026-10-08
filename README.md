@@ -53,10 +53,19 @@ role chosen at the start.
    a donor, `res_q_dashboard_recipient.html` for a recipient. Both are layout
    skeletons for now — the boxes, the metric row, the queue rail and the map panel
    are in place but hold no data — except for the delivery card, which opens the
-   map overlay described under [The delivery map](#the-delivery-map). The bell in
-   the header opens a small notifications panel under it rather than a browser
-   alert, and the account pill beside it opens the same kind of panel; nothing
-   feeds either list yet, so both are left empty on purpose.
+   map overlay described under [The delivery map](#the-delivery-map), and the
+   donor's slim navigation rail, whose four rows are now labelled Dashboard, Feed,
+   Surplus Analyzer and Current Orders, with Finished Orders in the first slot
+   below the rail's divider; the slot under it stays a bare pipeline pulse.
+   Dashboard is the default selection; picking any of the other four items — Feed,
+   Surplus Analyzer, Current Orders or the Finished Orders slot — wipes the working
+   area and opens a blank screen for that section, and picking Dashboard brings the
+   dashboard back. The selected item fills with the site's accent orange and its label
+   turns black, the way the landing cards invert when they are hovered, while every
+   other item keeps the dark tone with a neutral label. The bell in the header
+   opens a small notifications panel under it rather than a browser alert, and the
+   account pill beside it opens the same kind of panel; nothing feeds either list
+   yet, so both are left empty on purpose.
 
 The category list follows the donor's firm classification: a retail store can
 hand over all six categories, while an eatery is limited to the three it
@@ -76,7 +85,7 @@ the matching logic, and invites visitors into the flow above.
 | `frontend/server.py` | Backend: serves the pages and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a layout skeleton whose one working part is the delivery-location card |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a layout skeleton with a labelled navigation rail that swaps the dashboard for blank section screens, and one working part, the delivery-location card |
 | `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
@@ -245,11 +254,12 @@ account recovery. The database is a local file, so taking this live would mean
 moving to a managed database and giving the auth a real review. The matching
 pipeline shown on the marketing page remains illustrative.
 
-The dashboards are still skeletons: the boxes and the layout are in place, but
-only the delivery card does anything. Its map needs no key, so it works as soon as
-the server is running. That one card is wired all the way through, though — pick a
-spot, confirm it, and the address and its coordinates are stored on the account and
-waiting there the next time the map opens.
+The dashboards are still skeletons: the boxes and the layout are in place, and the
+donor's rail names its sections and switches between them, but every section screen
+except Dashboard is blank and only the delivery card does anything. Its map needs
+no key, so it works as soon as the server is running. That one card is wired all the
+way through, though — pick a spot, confirm it, and the address and its coordinates
+are stored on the account and waiting there the next time the map opens.
 
 The layout of the site is still settling: the landing page keeps only teaser
 content (the hero details, the capability cards and the footer) and hands off to
