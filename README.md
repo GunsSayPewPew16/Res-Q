@@ -12,6 +12,10 @@ uses only the standard library: it serves the pages and handles the onboarding
 API, either storing accounts in SQLite or, by default, running in a demo mode
 that stores nothing. See [Backend and API](#backend-and-api).
 
+The surplus board — what donors have spare and who has claimed it — is the one
+part that lives outside that backend, in a Supabase Postgres table the dashboards
+read and write directly: see [The surplus board](#the-surplus-board-supabase).
+
 ## What the site does
 
 The site serves two audiences through one flow:
@@ -51,21 +55,25 @@ role chosen at the start.
 4. **Dashboard** — saving the goods profile posts it to the backend and sends
    the visitor to the dashboard for their role: `res_q_dashboard_donor.html` for
    a donor, `res_q_dashboard_recipient.html` for a recipient. Both are layout
-   skeletons for now — the boxes, the metric row, the queue rail and the map panel
-   are in place but hold no data — except for the delivery card, which opens the
-   map overlay described under [The delivery map](#the-delivery-map), and the
-   slim navigation rail both pages now share, whose four rows are labelled Dashboard,
-   Feed, Surplus Received and Incoming Deliveries, with Received Deliveries in the
-   first slot below the rail's divider; the slot under it stays a bare pipeline
-   pulse. Dashboard is the default selection; picking any of the other four items —
-   Feed, Surplus Received, Incoming Deliveries or the Received Deliveries slot —
-   wipes the working area and opens a blank screen for that section, and picking
+   skeletons around the parts that are wired: the delivery card, which opens the
+   map overlay described under [The delivery map](#the-delivery-map), the donor's
+   *Log surplus* panel, which writes a row into Supabase, and the two screens that
+   read that table back — the donor's *Surplus Received* and the recipient's
+   *Feed*, both described under [The surplus board](#the-surplus-board-supabase) —
+   while the boxes, the metric row and the queue rail around them still hold no data
+   of their own. The slim navigation rail both pages share has four rows, labelled
+   Dashboard, Feed, Surplus Received and Incoming Deliveries, with Received
+   Deliveries in the first slot below the rail's divider; the slot under it stays a
+   bare pipeline pulse. Dashboard is the default selection; Surplus Received opens
+   the donor's own logged surplus and the recipient's Feed opens the live board,
+   while the remaining items — Incoming Deliveries, or the Received Deliveries
+   slot — still wipe the working area for a blank screen of their own. Picking
    Dashboard brings the dashboard back. The donor names its own sections; the
    recipient page still carries the donor's earlier set until its own names arrive.
    The right-hand panel of the donor's lower grid carries the impact figures under
    a *Donor Metrics* heading — surplus saved in kilos, meals served and orders
-   completed — seeded with plausible random values on every load until the backend
-   reports real ones. The selected item fills with the site's accent orange and its label
+   completed — read from that donor's own stored figures, so the same numbers are
+   there on every load. The selected item fills with the site's accent orange and its label
    turns black, the way the landing cards invert when they are hovered, while every
    other item keeps the dark tone with a neutral label. The bell in the header
    opens a small notifications panel under it rather than a browser alert, and the
@@ -90,8 +98,10 @@ the matching logic, and invites visitors into the flow above.
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a layout skeleton with a labelled navigation rail that swaps the dashboard for blank section screens, an impact panel showing the donor's own stored figures, and one wired-up part, the delivery-location card |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail and blank section screens |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, the *Log surplus* form that posts to the surplus board, the *Surplus Received* section that reads the donor's own rows back, and the delivery-location card |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail; its *Feed* section is the live surplus board with a claim button on every open post |
+| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, and formats a post in the site's tone |
+| `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
 visitor's role when signed in, and to the landing page otherwise. Each page works
@@ -166,6 +176,64 @@ failed instead of showing an empty panel or a stale address: a lookup that never
 answers names the pin by its coordinates and says so, so even an offline overlay can
 still hand a location to the account.
 
+## The surplus board (Supabase)
+
+The one thing the site keeps outside its own backend is the surplus board: the
+items a donor has spare, and who has claimed them. It lives in a Supabase Postgres
+table, `public.surplus_posts`, so an item is on every open dashboard the moment it
+is logged rather than waiting for a page to be reloaded.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key, defaulting to `gen_random_uuid()` |
+| `donor_name` | `text` | Who is offering it, named the way the header names them |
+| `item_name` | `text` | What the item is |
+| `quantity` | `text` | How much of it, said the way a shop says it — "24 kg across 6 crates" |
+| `location` | `text` | Where it can be collected from |
+| `status` | `text` | `pending` or `claimed`, defaulting to `pending` |
+| `created_at` | `timestamptz` | Defaulting to `now()`; the board reads newest-first |
+
+Apply it once against the project: paste
+`supabase/migrations/20261008000000_create_surplus_posts.sql` into **SQL Editor →
+New query → Run** in the Supabase dashboard, or point the Supabase CLI at the project
+and run `supabase db push`. The file is written to be safe to run more than once.
+
+Two screens use it, and both are on a dashboard rather than behind the API:
+
+- **Log surplus** — the donor's panel on the dashboard. Item, quantity and pickup
+  location, with the pickup address prefilled from the account's own confirmed
+  location, and *Submit to feed* inserts the row. Nothing is optimistic: the chip
+  beside the heading reads *logged* only once the database has answered with the row
+  it wrote, and a refusal is shown with its reason instead of a success message.
+- **The board itself** — the recipient's *Feed*, and the donor's *Surplus Received*,
+  which is the same table read back through that donor's own name. Each post carries
+  its item, quantity, donor, pickup location, age and status. An open post has one
+  action, **Claim**, which writes `status = 'claimed'`; the card then keeps its place
+  with a claimed chip and no button, so the board reads as a record of what was
+  offered rather than quietly emptying. A claim only ever matches a post that is still
+  `pending`, so the second visitor to click the same item is told *already claimed* and
+  the card is re-read instead of the claim being overwritten.
+
+Both screens are live. While one of them is on screen it subscribes to Postgres
+changes on the table over Supabase Realtime, so a post logged anywhere appears in an
+open feed on its own and a claim flips the card in every other open feed. A timer
+re-reads the table every 20 seconds as well, which is what covers a project where the
+realtime publication was not set up — the board is then still live, just a little
+later. The subscription and the timer both stop when the section is left.
+
+The pages hold the project's **publishable** key, which is the key meant to sit in a
+page: it can only ever act as the anonymous role, and what that role may do is decided
+by the table's row level security policies. Those policies are exactly the three the
+dashboard needs — anybody may read the board, add a post, and set a status — and
+nothing else: no deletes, and no access to anything but this table. Because Res-Q runs
+its own sign-in rather than Supabase Auth, a post is attributed to the name on the
+donor's own profile rather than to a Supabase user, and the table's update trigger
+refuses any change other than a status, so a claimed row cannot be rewritten into a
+different one. The publishable key is safe to be seen; the secret key is never used by
+the pages and is not in this repository. This is still a public board, though — a
+deployment that has to know *who* posted would move the writes behind the backend,
+where the secret key can be held and a rate limit put in front of it.
+
 ## Running it locally
 
 Start the backend from the repository root; it serves the pages and the API on one
@@ -183,6 +251,14 @@ on to `res_q_surplus_profile.html`.
 
 Opening the pages straight from disk works for the layouts, but the forms cannot
 save anything, because there is no server to talk to.
+
+The surplus board needs one step of its own, done once against your Supabase project:
+apply `supabase/migrations/20261008000000_create_surplus_posts.sql`, as described
+under [The surplus board](#the-surplus-board-supabase). Until it is applied, the donor's
+form and both boards say so plainly — *surplus_posts is not in the project* — rather
+than failing quietly. That board is read and written from the browser, so nothing about
+it lives in the backend's database and it behaves the same in demo mode as it does with
+persistence on.
 
 ## Backend and API
 
@@ -269,6 +345,13 @@ How the pieces connect:
 - **Saving.** The About You form posts its answers to `/api/register`; the goods
   profile posts to `/api/profile`. In persistent mode both update `users`; in demo
   mode they update the in-memory session only.
+- **The surplus board.** What a donor logs is the one thing that does not go through
+  this backend: the dashboards write to and read `public.surplus_posts` in Supabase
+  directly, which is what lets an item appear in another signed-in visitor's feed
+  without either page being reloaded. Sign-in, the profile and the confirmed delivery
+  location stay where they are. The project URL and the publishable key sit in
+  `frontend/resq_supabase.js`; that key is the anonymous one, so the table's row level
+  security policies are what actually decide what it may do.
 - **Duplicate details.** In persistent mode email addresses are compared
   case-insensitively and both the email and phone columns are unique, so
   re-entering details that already belong to an account answers `409` and the page
@@ -320,19 +403,25 @@ shipped default is demo mode, so out of the box nothing is saved and no credenti
 is needed twice; flip `RESQ_PERSIST=on` for the real thing.
 
 What it deliberately lacks: email verification, password reset, rate limiting and
-account recovery. The database is a local file, so taking this live would mean
-moving to a managed database and giving the auth a real review. The matching
+account recovery. The accounts' database is a local file, so taking this live would
+mean moving to a managed database and giving the auth a real review. The matching
 pipeline is real on the backend now — `/api/matches` and `/api/orders` — but no page
 calls it yet, so what the marketing page shows remains illustrative, and the donor's
 impact figures are still placeholders rather than a count of the deliveries that ran.
 
-The dashboards are still skeletons: the boxes and the layout are in place, and the
-rails name their sections and switch between them, but every section screen except
-Dashboard is blank, the impact figures are random placeholders, and the delivery
-card is the only part wired to the backend. Its map needs
-no key, so it works as soon as the server is running. That one card is wired all the
-way through, though — pick a spot, confirm it, and the address and its coordinates
-are stored on the account and waiting there the next time the map opens.
+The surplus board is further along than the rest: its table is a real Postgres one in
+a managed project, and it is the part of the site two visitors can already see at the
+same time. It writes with the anonymous role and trusts the name on the profile, so
+anything that had to belong to a particular account would need those writes moved
+behind the backend first.
+
+The dashboards are part wired, part skeleton: the rails name their sections and switch
+between them, four parts are wired end to end — the delivery card, the donor's *Log
+surplus* panel, and the two screens that read the surplus board — and the boxes, metric
+row and queue rail around them still hold no data of their own. The map needs no key,
+so it works as soon as the server is running: pick a spot, confirm it, and the address
+and its coordinates are stored on the account and waiting there the next time the map
+opens. The surplus board needs its migration applied once before it will take a row.
 
 The layout of the site is still settling: the landing page keeps only teaser
 content (the hero details, the capability cards and the footer) and hands off to

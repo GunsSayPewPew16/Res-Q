@@ -118,6 +118,9 @@
             background: #ff4500;
         }
     </style>
+    <!-- The shared Supabase client and the surplus_posts calls both dashboards make.
+         It only defines window.ResQDB; the library itself is fetched on first use. -->
+    <script src="resq_supabase.js"></script>
 </head>
 <body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white min-h-screen flex flex-col">
 
@@ -292,7 +295,25 @@
 
             </div>
 
-            <!-- The section screens: picking any rail item other than Dashboard wipes
+            <!-- Feed: the live board. Every surplus post in the shared Supabase table,
+                 newest first, each one carrying the single action a recipient has on
+                 it — claiming it. A post a donor logs anywhere arrives here over
+                 Supabase Realtime while this screen is open, and a claim made by
+                 another recipient flips the card in place rather than leaving a
+                 button that no longer works. -->
+            <div id="viewFeed" class="hidden lg:col-span-10">
+                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
+                        <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Live surplus feed</span>
+                        <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                    </div>
+                    <div id="feedList" class="bg-black/20 rounded-2xl border border-neutral-800 p-4 space-y-3 min-h-[240px]">
+                        <span class="block font-mono text-[11px] text-neutral-500">Waiting for the first post.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- The remaining section screens: picking any other rail item wipes
                  the dashboard and opens this blank frame, which carries the tone and
                  nothing else until that section has content of its own. -->
             <div id="viewBlank" class="hidden lg:col-span-10">
@@ -487,10 +508,23 @@
             showView(element.getAttribute('data-view'));
         }
 
+        // Each labelled section owns a screen. Dashboard and the surplus feed have
+        // one; every section that has no content of its own yet still opens the blank
+        // frame. Opening a screen that reads the database hands it to that screen's
+        // loader, which is what makes the feed live only while it is on screen.
+        var SECTION_VIEWS = {
+            dashboard: 'viewDashboard',
+            feed: 'viewFeed'
+        };
+        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewBlank'];
+
         function showView(name) {
-            var onDashboard = name === 'dashboard';
-            document.getElementById('viewDashboard').classList.toggle('hidden', !onDashboard);
-            document.getElementById('viewBlank').classList.toggle('hidden', onDashboard);
+            var wanted = SECTION_VIEWS[name] || 'viewBlank';
+            ALL_VIEWS.forEach(function (id) {
+                var view = document.getElementById(id);
+                if (view) { view.classList.toggle('hidden', id !== wanted); }
+            });
+            if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
         }
 
         // ---------------------------------------------------------------------------
@@ -1167,6 +1201,196 @@
                     findDeliveryAddress();
                 }
             });
+        }
+
+        // ---------------------------------------------------------------------------
+        // The live feed. This is the one place a dashboard talks to Supabase rather
+        // than to the local backend: every surplus post a donor has logged is read
+        // from the shared surplus_posts table, and the button on each card claims one
+        // by writing its status. Both go through window.ResQDB, which fetches the
+        // Supabase library on first use and says plainly when the table is not there.
+        //
+        // A claim is only believed once the database has answered with the row it
+        // changed. When that answer is empty the post was claimed by somebody else in
+        // the meantime — the update matched nothing — so the card is re-read rather
+        // than flopped to a state that was never written.
+        // ---------------------------------------------------------------------------
+        var feedClaiming = {};
+        var feedPoll = null;
+        var feedUnwatch = null;
+
+        var CHIP_IDLE = 'text-neutral-500 bg-black/20';
+        var CHIP_BUSY = 'text-[#ff9b73] bg-orange-950/60';
+        var CHIP_DONE = 'text-emerald-400 bg-emerald-950/60';
+
+        function resqDb() {
+            return window.ResQDB || null;
+        }
+
+        function setChip(id, message, tone) {
+            var chip = document.getElementById(id);
+            if (!chip) { return; }
+            chip.textContent = message;
+            chip.className = 'font-mono text-[10px] uppercase tracking-widest rounded-full px-2 py-1 '
+                + (tone || CHIP_IDLE);
+        }
+
+        // Anything a donor typed is escaped on the way into the markup, and the
+        // message path works even when the client never loaded and there is no db.
+        function feedText(value) {
+            var db = resqDb();
+            return db ? db.escapeHtml(value)
+                : String(value === null || value === undefined ? '' : value);
+        }
+
+        // The same sentence for both failures worth explaining: the table is missing,
+        // or Supabase refused the request for another reason.
+        function feedFailure(error) {
+            if (error && error.missingTable) {
+                return 'Supabase answered, but surplus_posts is not in the project: run '
+                    + 'supabase/migrations/20261008000000_create_surplus_posts.sql first.';
+            }
+            return 'Supabase could not be reached: '
+                + ((error && error.message) || 'the request did not go through') + '.';
+        }
+
+        function loadFeed() {
+            var db = resqDb();
+            if (!db) { return; }
+            return db.listPosts({}).then(function (res) {
+                if (!res.ok) {
+                    setChip('feedState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    renderFeed(null, feedFailure(res.error));
+                    return;
+                }
+                var rows = res.data || [];
+                var open = rows.filter(function (row) { return row.status !== 'claimed'; }).length;
+                setChip('feedState', rows.length
+                    ? open + ' open / ' + rows.length + ' posted'
+                    : 'no posts', rows.length ? CHIP_DONE : CHIP_IDLE);
+                renderFeed(rows, '');
+            });
+        }
+
+        function renderFeed(rows, message) {
+            var list = document.getElementById('feedList');
+            if (!list) { return; }
+            if (!rows) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
+                    + feedText(message) + '</span>';
+                return;
+            }
+            if (!rows.length) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                    + 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.'
+                    + '</span>';
+                return;
+            }
+            list.innerHTML = rows.map(feedCard).join('');
+        }
+
+        // One card per post: what it is and how much, who is offering it and where
+        // from, the status, and — while it is still open — the claim button. A
+        // claimed post keeps its card and loses its button, so the board reads as a
+        // record rather than quietly shrinking.
+        function feedCard(row) {
+            var db = resqDb();
+            var claimed = row.status === 'claimed';
+            return '<div class="p-4 rounded-2xl border transition-all ' +
+                    (claimed ? 'bg-black/20 border-neutral-800'
+                        : 'bg-neutral-800/50 border-neutral-800 hover:border-neutral-700') + '">' +
+                '<div class="flex flex-wrap items-start justify-between gap-3">' +
+                    '<div class="min-w-0">' +
+                        '<span class="block text-sm font-black uppercase tracking-widest ' +
+                            (claimed ? 'text-neutral-500' : 'text-[#f4f4f0]') + '">' +
+                            feedText(row.item_name) + '</span>' +
+                        '<span class="block mt-1 font-mono text-[11px] text-neutral-400">' +
+                            feedText(db.postNeeds(row)) + '</span>' +
+                    '</div>' +
+                    '<span class="' + db.statusChip(row.status) + '">' +
+                        db.statusLabel(row.status) + '</span>' +
+                '</div>' +
+                '<div class="mt-3 flex flex-wrap items-end justify-between gap-3">' +
+                    '<div class="font-mono text-[10px] text-neutral-600">' +
+                        '<span class="block">FROM ' + feedText(row.donor_name) + '</span>' +
+                        '<span class="block mt-1">AT ' + feedText(row.location) + '</span>' +
+                        '<span class="block mt-1">LOGGED ' + feedText(db.formatWhen(row.created_at)) +
+                        '</span>' +
+                    '</div>' +
+                    (claimed ? ''
+                        : '<button type="button" data-claim="' + feedText(row.id) + '" ' +
+                            'onclick="claimSurplus(this)" class="px-5 py-3 rounded-xl bg-[#ff4500] ' +
+                            'text-black text-xs font-black uppercase tracking-widest ' +
+                            'hover:bg-[#ff5a1f] transition-all disabled:opacity-40 ' +
+                            'disabled:cursor-not-allowed">Claim</button>') +
+                '</div>' +
+            '</div>';
+        }
+
+        function claimSurplus(button) {
+            var db = resqDb();
+            var id = button ? button.getAttribute('data-claim') : '';
+            if (!db || !id || feedClaiming[id]) { return; }
+            feedClaiming[id] = true;
+            button.disabled = true;
+            button.textContent = 'Claiming';
+            setChip('feedState', 'claiming\u2026', CHIP_BUSY);
+
+            db.claimPost(id).then(function (res) {
+                delete feedClaiming[id];
+                if (!res.ok) {
+                    button.disabled = false;
+                    button.textContent = 'Claim';
+                    setChip('feedState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    return;
+                }
+                if (!res.data) {
+                    // The update matched no open row, so somebody else got there first.
+                    setChip('feedState', 'already claimed', CHIP_BUSY);
+                    loadFeed();
+                    return;
+                }
+                setChip('feedState', 'claimed', CHIP_DONE);
+                loadFeed();
+            }).catch(function () {
+                delete feedClaiming[id];
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = 'Claim';
+                }
+                setChip('feedState', 'unreachable', CHIP_BUSY);
+            });
+        }
+
+        // The feed is live while it is open: the subscription covers posts and claims
+        // as they happen, and the timer re-reads the table for a project where the
+        // realtime publication was not set up. Both stop when the section is left.
+        function openFeed() {
+            setChip('feedState', 'reading\u2026', CHIP_BUSY);
+            var db = resqDb();
+            if (!db) {
+                setChip('feedState', 'no client', CHIP_BUSY);
+                renderFeed(null, 'The Supabase client is not on this page. Check the connection and reload.');
+                return;
+            }
+            loadFeed();
+            if (!feedUnwatch) {
+                feedUnwatch = db.watchPosts(function () { loadFeed(); });
+            }
+            if (!feedPoll) {
+                feedPoll = window.setInterval(loadFeed, db.pollMs);
+            }
+        }
+
+        function closeFeed() {
+            if (feedPoll) {
+                window.clearInterval(feedPoll);
+                feedPoll = null;
+            }
+            if (feedUnwatch) {
+                feedUnwatch();
+                feedUnwatch = null;
+            }
         }
 
     </script>
