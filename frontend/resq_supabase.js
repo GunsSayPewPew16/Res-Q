@@ -243,6 +243,59 @@
         return post.quantity ? String(post.quantity) : 'quantity not given';
     }
 
+    // A feed is read at a glance, so the board's own age reads as a glyph-height
+    // string — "9h" — the way the reference feed writes it. formatWhen still
+    // serves the tables, where there is room to spell the age out.
+    function feedWhen(iso) {
+        var when = new Date(iso);
+        if (isNaN(when.getTime())) { return 'now'; }
+        var seconds = Math.floor((Date.now() - when.getTime()) / 1000);
+        if (seconds < 60) { return 'now'; }
+        var minutes = Math.floor(seconds / 60);
+        if (minutes < 60) { return minutes + 'm'; }
+        var hours = Math.floor(minutes / 60);
+        if (hours < 24) { return hours + 'h'; }
+        var days = Math.floor(hours / 24);
+        if (days < 7) { return days + 'd'; }
+        return when.toISOString().slice(0, 10);
+    }
+
+    // A post is signed with a donor's name, and the feed reads the signature the
+    // way a handle is read: one machine-shaped word. Nothing is invented here —
+    // the handle is the name folded down to lowercase and dashes.
+    function feedHandle(name) {
+        var slug = String(name || '').trim().toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        return slug ? '@' + slug : '@donor';
+    }
+
+    // Whether a post belongs to the person reading the board. The names are
+    // compared trimmed, because a trailing space is not a different donor.
+    function isOwnPost(post, name) {
+        return !!name
+            && String(post.donor_name || '').trim() === String(name).trim();
+    }
+
+    // The avatar the feed draws in place of a photograph: the same silhouette for
+    // everybody, on a dark tint picked from the name so that two donors with two
+    // posts do not read as one. None of this is anybody's text, so it is not
+    // escaped — the name only picks a tint out of the list.
+    var AVATAR_TINTS = ['#222222', '#1f1f1f', '#211e26', '#1e2326', '#261f1e'];
+    function avatarMarkup(name) {
+        var text = String(name || '');
+        var seed = 0;
+        for (var i = 0; i < text.length; i += 1) { seed += text.charCodeAt(i); }
+        return '<span class="feed-avatar" style="background-color:' +
+                AVATAR_TINTS[seed % AVATAR_TINTS.length] + '">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+                '<circle cx="12" cy="8.2" r="4.2" fill="#6b6b6b"></circle>' +
+                '<path d="M3.2 24a8.8 8.8 0 0 1 17.6 0z" fill="#6b6b6b"></path>' +
+            '</svg>' +
+        '</span>';
+    }
+
+
     // One card per post, and the same card on both dashboards: the board is one
     // board, so a donor reading it and a recipient reading it see the same item
     // described the same way. What differs is the action. `canClaim` adds the one
@@ -250,46 +303,66 @@
     // the board leaves it off, because taking surplus is not the donor's side of the
     // exchange. `ownName` marks the caller's own posts, so a donor scanning for what
     // they logged finds it without reading every name.
+    // The card is laid out the way the reference feed lays a post out, in the
+    // site's own palette: the notched frame, an avatar and a signed name over a
+    // handle and an age, the item as the loud line, a second line with the pickup
+    // point picked out in the accent the way the reference picks out a tag, and a
+    // muted row along the bottom for the post's own facts and its one action.
     function feedCard(row, options) {
         var opts = options || {};
         var claimed = row.status === 'claimed';
-        var mine = !!opts.ownName
-            && String(row.donor_name || '').trim() === String(opts.ownName).trim();
-        return '<div class="p-4 rounded-2xl border transition-all ' +
-                (claimed ? 'bg-black/20 border-neutral-800'
-                    : 'bg-neutral-800/50 border-neutral-800 hover:border-neutral-700') + '">' +
-            '<div class="flex flex-wrap items-start justify-between gap-3">' +
-                '<div class="min-w-0">' +
-                    '<span class="block text-sm font-black uppercase tracking-widest ' +
-                        (claimed ? 'text-neutral-500' : 'text-[#f4f4f0]') + '">' +
-                        escapeHtml(row.item_name) + '</span>' +
-                    '<span class="block mt-1 font-mono text-[11px] text-neutral-400">' +
-                        escapeHtml(postNeeds(row)) + '</span>' +
+        var mine = isOwnPost(row, opts.ownName);
+        return '<article class="feed-card' + (claimed ? ' is-claimed' : '') + ' p-4 sm:p-5">' +
+            '<div class="flex items-start gap-3">' +
+                avatarMarkup(row.donor_name) +
+                '<div class="min-w-0 flex-1">' +
+                    '<div class="flex items-start justify-between gap-3">' +
+                        '<div class="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">' +
+                            '<span class="text-sm font-black text-[#f4f4f0] truncate">' +
+                                escapeHtml(row.donor_name) + '</span>' +
+                            '<span class="font-mono text-[11px] text-[#777] truncate">' +
+                                escapeHtml(feedHandle(row.donor_name)) + ' \u00b7 ' +
+                                escapeHtml(feedWhen(row.created_at)) + '</span>' +
+                        '</div>' +
+                        '<span class="flex items-center gap-2 shrink-0">' +
+                            (mine ? '<span class="inline-flex items-center h-6 px-3 ' +
+                                'rounded-full border border-neutral-800 bg-black/20 ' +
+                                'font-mono text-[10px] uppercase tracking-widest ' +
+                                'text-neutral-400">your post</span>' : '') +
+                            '<span class="font-mono text-[13px] text-[#777] select-none" ' +
+                                'aria-hidden="true">\u2298  \u22ef</span>' +
+                        '</span>' +
+                    '</div>' +
+                    '<p class="mt-3 text-[15px] font-black uppercase tracking-wide ' +
+                        (claimed ? 'text-neutral-400' : 'text-[#f4f4f0]') + '">' +
+                        escapeHtml(row.item_name) + '</p>' +
+                    '<p class="mt-2 text-[15px] leading-relaxed">' +
+                        '<span class="text-[#ff4500] font-bold">' +
+                            escapeHtml(postNeeds(row)) + '</span>' +
+                        '<span class="text-[#f4f4f0]"> \u2014 ready for pickup at </span>' +
+                        '<span class="text-[#888]">' + escapeHtml(row.location) +
+                        '</span>' +
+                    '</p>' +
+                    '<div class="mt-4 pt-3 border-t border-[#222] flex flex-wrap ' +
+                        'items-center gap-x-5 gap-y-3">' +
+                        '<span class="font-mono text-[11px] text-[#777]">\u23f1 ' +
+                            escapeHtml(formatWhen(row.created_at)) + '</span>' +
+                        '<span class="' + statusChip(row.status) + '">' +
+                            statusLabel(row.status) + '</span>' +
+                        // The one action, wearing the site's hero-card treatment: dark with
+                        // cream text at rest, filled with the accent and turned black while
+                        // hovered or keyboard-focused — see .claim-btn in the dashboards.
+                        (opts.canClaim && !claimed
+                            ? '<button type="button" data-claim="' + escapeHtml(row.id) + '" ' +
+                                'onclick="claimSurplus(this)" class="claim-btn ml-auto px-5 ' +
+                                'py-2.5 rounded-full text-xs font-black uppercase ' +
+                                'tracking-widest transition-all disabled:opacity-40 ' +
+                                'disabled:cursor-not-allowed">Claim</button>'
+                            : '') +
+                    '</div>' +
                 '</div>' +
-                '<span class="flex flex-wrap items-center gap-2 shrink-0">' +
-                    (mine ? '<span class="inline-flex items-center h-6 px-3 rounded-full border ' +
-                        'border-neutral-800 bg-black/20 font-mono text-[10px] uppercase ' +
-                        'tracking-widest text-neutral-400">your post</span>' : '') +
-                    '<span class="' + statusChip(row.status) + '">' +
-                        statusLabel(row.status) + '</span>' +
-                '</span>' +
             '</div>' +
-            '<div class="mt-3 flex flex-wrap items-end justify-between gap-3">' +
-                '<div class="font-mono text-[10px] text-neutral-600">' +
-                    '<span class="block">FROM ' + escapeHtml(row.donor_name) + '</span>' +
-                    '<span class="block mt-1">AT ' + escapeHtml(row.location) + '</span>' +
-                    '<span class="block mt-1">LOGGED ' + escapeHtml(formatWhen(row.created_at)) +
-                    '</span>' +
-                '</div>' +
-                (opts.canClaim && !claimed
-                    ? '<button type="button" data-claim="' + escapeHtml(row.id) + '" ' +
-                        'onclick="claimSurplus(this)" class="px-5 py-3 rounded-xl bg-[#ff4500] ' +
-                        'text-black text-xs font-black uppercase tracking-widest ' +
-                        'hover:bg-[#ff5a1f] transition-all disabled:opacity-40 ' +
-                        'disabled:cursor-not-allowed">Claim</button>'
-                    : '') +
-            '</div>' +
-        '</div>';
+        '</article>';
     }
 
     // The count that sits over the board: how much is still going, out of
@@ -313,6 +386,9 @@
         statusChip: statusChip,
         statusLabel: statusLabel,
         formatWhen: formatWhen,
+        feedWhen: feedWhen,
+        feedHandle: feedHandle,
+        isOwnPost: isOwnPost,
         postNeeds: postNeeds,
         feedCard: feedCard,
         feedSummary: feedSummary

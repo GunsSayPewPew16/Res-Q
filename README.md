@@ -57,21 +57,22 @@ role chosen at the start.
    a donor, `res_q_dashboard_recipient.html` for a recipient. Both are layout
    skeletons around the parts that are wired: the delivery card, which opens the
    map overlay described under [The delivery map](#the-delivery-map), the donor's
-   *Log surplus* form, which now sits at the top of the donor's *Feed* and writes a
-   row into Supabase, and the screens that read that table back — the *Feed* both
+   compose box, which now opens the donor's *Feed* and writes a row into Supabase,
+   and the screens that read that table back — the *Feed* both
    roles now share, and the donor's *Surplus Received*, all described under
    [The surplus board](#the-surplus-board-supabase) —
    while the boxes, the metric row and the queue rail around them still hold no data
-   of their own. The slim navigation rail both pages share has four rows, labelled
-   Dashboard, Feed, Surplus Received and Incoming Deliveries, with Received
-   Deliveries in the first slot below the rail's divider; the slot under it stays a
-   bare pipeline pulse. Dashboard is the default selection; Feed opens the shared
-   board on either dashboard — with the donor's posting form beside it, which is where
+   of their own. The slim navigation rail both pages share opens with the same two
+   rows, Dashboard and Feed, and then names each role's own work: the donor's rail
+   reads Surplus Received and Incoming Deliveries, and the recipient's reads Incoming
+   Deliveries and Delivery Status. Both take Received Deliveries in the first slot
+   below the rail's divider, and the slot under that stays a bare pipeline pulse.
+   Dashboard is the default selection; Feed opens the shared
+   board on either dashboard — with the donor's compose box above it, which is where
    a donor logs an item now — Surplus Received opens the donor's own logged surplus,
-   and the remaining items — Incoming Deliveries, or the Received Deliveries slot —
-   still wipe the working area for a blank screen of their own. Picking Dashboard
-   brings the dashboard back. The donor names its own sections; the
-   recipient page still carries the donor's earlier set until its own names arrive.
+   and the remaining items — the recipient's two section rows, the donor's Incoming
+   Deliveries, or either page's Received Deliveries slot — still wipe the working
+   area for a blank screen of their own. Picking Dashboard brings the dashboard back.
    The right-hand panel of the donor's lower grid carries the impact figures under
    a *Donor Metrics* heading — surplus saved in kilos, meals served and orders
    completed — read from that donor's own stored figures, so the same numbers are
@@ -100,9 +101,9 @@ the matching logic, and invites visitors into the flow above.
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section holding both the *Log surplus* form and the whole board read back (a donor's own posts marked), the *Surplus Received* section reading only their own rows, plus the delivery-location card |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail; its *Feed* section is that same live board, with a claim button on every open post |
-| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, and formats a post in the site's tone |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section that opens on the *Log surplus* compose box and runs into the whole board read back (a donor's own posts marked), the *Surplus Received* section reading only their own rows, plus the delivery-location card |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same rail skeleton under its own section names (*Incoming Deliveries*, *Delivery Status*); its *Feed* section is that same live board, with a claim button on every open post |
+| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, and draws every post as the one shared card both roles see |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
@@ -204,18 +205,30 @@ The board is the *Feed* on **both** dashboards — donors and recipients are loo
 the same list of everything published, newest first. The three screens that use it all
 sit on a dashboard rather than behind the API:
 
-- **Log surplus** — the donor's panel at the top of the donor's own *Feed*, beside
-  the board it posts to, so posting and watching the post land are one screen: item,
-  quantity and pickup location, the pickup address prefilled from the account's own
-  confirmed location, and *Submit to feed* inserts the row. Nothing is optimistic:
+- **Log surplus** — the compose box that opens the donor's own *Feed*, above the
+  board it posts to, so posting and watching the post land are one screen. It is laid
+  out as the reference's compose row: the silhouette avatar, the one line a post
+  starts on, then a row of controls with the one button at the far right. The controls
+  are the site's own — an item, a quantity and a pickup location, the pickup address
+  prefilled from the account's own confirmed location — and *Post* inserts the row.
+  Nothing is optimistic:
   the chip beside the heading reads *logged* only once the database has answered with
   the row it wrote, a refusal is shown with its reason instead of a success message,
   and the board beside it refreshes at that moment rather than waiting for the
   subscription to echo the row back.
-- **The board itself** — the *Feed* on either dashboard. Each post carries its item,
-  quantity, donor, pickup location, age and status; a donor's own posts are marked
-  *your post* so they are easy to pick out among everyone else's. The two copies
-  differ only in what they offer: a recipient's card has one action, **Claim**, which
+- **The board itself** — the *Feed* on either dashboard, drawn as a feed. Every post
+  is a notched card on the site's own palette: the logging donor's avatar, then their
+  name with a handle-and-age line beside it, the item as the card's heading, the
+  quantity picked out in the accent above the muted pickup address, and a bottom row
+  carrying the post's own facts — its age, its status — and the one action the reader
+  has on it, a *Claim* that rests dark with cream text and fills with the accent on
+  hover, the way the hero cards do. Above the cards sits the board's tab bar: two
+  views of the same list, the whole board and a narrowed one (*My posts* for a donor,
+  *Open* for a recipient), filtered from the rows already read so switching is
+  instant, while the chip at the right keeps counting the whole board either way. A
+  donor's own posts are marked *your post* so they are easy to pick out among everyone
+  else's. The two copies differ only in what they offer: a recipient's card has one
+  action, **Claim**, which
   writes `status = 'claimed'`, and a donor's has none, because taking surplus is the
   recipient's side of the exchange. A claimed card keeps its place with a claimed chip
   and no button, so the board reads as a record of what was offered rather than
@@ -442,7 +455,7 @@ behind the backend first.
 
 The dashboards are part wired, part skeleton: the rails name their sections and switch
 between them, four parts are wired end to end — the delivery card, the donor's *Log
-surplus* form on its feed screen, and the three screens that read the surplus board — and the boxes, metric
+surplus* compose box on its feed screen, and the three screens that read the surplus board — and the boxes, metric
 row and queue rail around them still hold no data of their own. The map needs no key,
 so it works as soon as the server is running: pick a spot, confirm it, and the address
 and its coordinates are stored on the account and waiting there the next time the map

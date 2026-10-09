@@ -64,6 +64,96 @@
             transform: translateY(-4px);
         }
 
+        /* A feed card: the same notched silhouette the rest of the site wears, held
+           still rather than lifting on hover — a board of cards should not move under
+           the cursor — with a claimed row settling back a shade instead. */
+        .feed-card {
+            background-color: #141414;
+            border: 1px solid #262626;
+            border-radius: 1.25rem;
+            position: relative;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
+            clip-path: polygon(
+                0 0,
+                calc(100% - 26px) 0,
+                100% 26px,
+                100% 100%,
+                0 100%
+            );
+        }
+        .feed-card:hover {
+            border-color: #3a3a3a;
+        }
+        .feed-card.is-claimed {
+            background-color: #101010;
+        }
+
+        /* The feed's avatar: a circle holding the head-and-shoulders silhouette the
+           reference draws, cropped by the circle the way it is there. */
+        .feed-avatar {
+            display: inline-flex;
+            align-items: flex-end;
+            justify-content: center;
+            flex: none;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 9999px;
+            border: 1px solid #262626;
+            overflow: hidden;
+        }
+        .feed-avatar svg {
+            width: 2rem;
+            height: 2rem;
+            display: block;
+        }
+
+        /* The board's tab bar, from the reference: the view being read in cream with
+           the accent rule under it, the others muted until they are pointed at. */
+        .feed-tab {
+            position: relative;
+            padding-bottom: 10px;
+            font-size: 0.875rem;
+            font-weight: 900;
+            color: #777777;
+            transition: color 0.3s ease;
+        }
+        .feed-tab:hover {
+            color: #f4f4f0;
+        }
+        .feed-tab.is-active {
+            color: #f4f4f0;
+        }
+        .feed-tab.is-active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 4px;
+            border-radius: 2px;
+            background-color: #ff4500;
+        }
+
+        /* The one action a post can carry wears the hero cards' own treatment: dark at
+           rest with the site's cream text, filled with the accent on hover or keyboard
+           focus, the text turning black with it. Declared the same way .deliver-card is,
+           so the two read as the same gesture. */
+        .claim-btn {
+            background-color: #141414;
+            border: 1px solid #262626;
+            color: #f4f4f0;
+        }
+        .claim-btn:hover,
+        .claim-btn:focus-visible {
+            background-color: #ff4500;
+            border-color: #ff4500;
+            color: #000000;
+        }
+        .claim-btn:hover *,
+        .claim-btn:focus-visible * {
+            color: #000000;
+        }
+
         /* Orange accent CTA card with notch */
         .notched-orange {
             background-color: #ff4500;
@@ -307,64 +397,76 @@
 
             </div>
 
-            <!-- Feed: the donor's posting desk and the shared board in one screen — the
-                 same board the recipient dashboard reads. The form on the left writes
-                 the next post and the board beside it shows every published post from
-                 every donor, newest first, live while this screen is open. A donor
-                 watches this side of the exchange rather than taking from it, so these
-                 cards carry no claim button, and the donor's own posts are marked so
+            <!-- Feed: the compose box and the shared board on one screen — the same board
+                 the recipient dashboard reads, in the order a feed is read in: the board's
+                 views first, then the box that writes the next post, then every published
+                 post from every donor, newest first, live while this screen is open. A
+                 donor watches this side of the exchange rather than taking from it, so
+                 these cards carry no claim button, and the donor's own posts are marked so
                  they are easy to pick out of the crowd. -->
             <div id="viewFeed" class="hidden lg:col-span-10">
-                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-
-                    <!-- Log surplus: the donor's one action. What is typed here becomes a
-                         row in Supabase's surplus_posts table — the same table the board
-                         beside it and the recipient dashboard read — so a logged item is
-                         on somebody else's screen the moment it is written. The row goes
-                         straight to the database rather than through the local backend,
-                         which keeps owning sign-in, the profile and the confirmed
-                         delivery location. -->
-                    <div class="xl:col-span-5 bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative">
-                        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
-                            <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Log surplus</span>
-                            <span id="surplusFormState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
+                    <!-- The board's tab bar, from the reference: the view being read in
+                         cream under an accent rule, the other muted. Both views are real
+                         filters over the rows already read — the whole board, or this
+                         donor's own posts on it — so switching is instant and the chip at
+                         the right keeps counting the whole board either way. The board's
+                         name moves to a screen-reader heading under the tabs. -->
+                    <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-5 border-b border-neutral-800">
+                        <div class="flex items-center gap-6" role="tablist" aria-label="Board views">
+                            <span class="sr-only">Live surplus feed</span>
+                            <button type="button" id="feedTabAll" role="tab" aria-selected="true" onclick="setFeedTab('all')" class="feed-tab is-active">Everyone</button>
+                            <button type="button" id="feedTabMine" role="tab" aria-selected="false" onclick="setFeedTab('mine')" class="feed-tab">My posts</button>
                         </div>
+                        <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                    </div>
 
-                        <form id="surplusForm" onsubmit="submitSurplus(event)" class="space-y-4">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <label class="block">
-                                    <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Item</span>
-                                    <input id="surplusItem" name="item" type="text" maxlength="120" autocomplete="off" placeholder="Crates of ripe tomatoes" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
-                                </label>
-                                <label class="block">
-                                    <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Quantity</span>
-                                    <input id="surplusQuantity" name="quantity" type="text" maxlength="80" autocomplete="off" placeholder="24 kg across 6 crates" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
-                                </label>
-                            </div>
-                            <label class="block">
-                                <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Pickup location</span>
-                                <input id="surplusLocation" name="location" type="text" maxlength="160" autocomplete="off" placeholder="100 Queen Street West, Toronto" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                    <!-- The compose box, from the reference: the silhouette avatar, the one
+                         line a post starts on, then the row of controls with the one button
+                         at the far right. The controls are the site's own — an item, a
+                         quantity and a pickup location — because those three are what the
+                         table needs, and the pickup address is prefilled from the account's
+                         own confirmed location. What is typed here becomes a row in
+                         Supabase's surplus_posts table, the same table the board under it and
+                         the recipient dashboard read, so a logged item is on somebody else's
+                         screen the moment it is written. The row goes straight to the
+                         database rather than through the local backend, which keeps owning
+                         sign-in, the profile and the confirmed delivery location. Nothing is
+                         optimistic: the chip reads *logged* only once the database has
+                         answered with the row it wrote. -->
+                    <form id="surplusForm" onsubmit="submitSurplus(event)" class="pb-5 mb-5 border-b border-neutral-800">
+                        <span class="sr-only">Log surplus</span>
+                        <div class="flex items-start gap-3">
+                            <span aria-hidden="true" class="feed-avatar bg-[#222222]"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="4.2" fill="#6b6b6b"></circle><path d="M3.2 24a8.8 8.8 0 0 1 17.6 0z" fill="#6b6b6b"></path></svg></span>
+                            <label class="block min-w-0 flex-1">
+                                <span class="sr-only">Item</span>
+                                <input id="surplusItem" name="item" type="text" maxlength="120" autocomplete="off" placeholder="What’s happening?" class="w-full bg-black/20 border border-neutral-800 rounded-2xl px-4 py-3 text-base text-[#f4f4f0] placeholder-[#777] focus:outline-none focus:border-[#ff4500] transition-all">
                             </label>
-                            <div class="flex flex-wrap items-center gap-4">
-                                <button type="submit" id="surplusSubmit" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Submit to feed</button>
-                                <span id="surplusNote" class="font-mono text-[10px] text-neutral-600">Every logged item lands on the shared board as it is written.</span>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- The board itself, newest first: every published post, whoever
-                         logged it. A claimed post keeps its card here too, so the board
-                         reads as a record rather than quietly emptying. -->
-                    <div class="xl:col-span-7 bg-[#141414] border border-neutral-800 rounded-3xl p-6">
-                        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
-                            <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Live surplus feed</span>
-                            <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
                         </div>
-                        <div id="feedList" class="bg-black/20 rounded-2xl border border-neutral-800 p-4 space-y-3 min-h-[240px]">
-                            <span class="block font-mono text-[11px] text-neutral-500">Waiting for the first post.</span>
-                        </div>
-                    </div>
 
+                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                            <label class="relative block flex-1 min-w-[190px]">
+                                <span class="sr-only">Quantity</span>
+                                <span aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#777]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"></path><path d="M3 8l9 5 9-5"></path><path d="M12 13v8"></path></svg></span>
+                                <input id="surplusQuantity" name="quantity" type="text" maxlength="80" autocomplete="off" placeholder="24 kg across 6 crates" class="w-full bg-black/20 border border-neutral-800 rounded-full pl-10 pr-4 py-2.5 text-sm text-[#f4f4f0] placeholder-[#777] focus:outline-none focus:border-[#ff4500] transition-all">
+                            </label>
+                            <label class="relative block flex-1 min-w-[220px]">
+                                <span class="sr-only">Pickup location</span>
+                                <span aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#777]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.686-7-11a7 7 0 1 1 14 0c0 5.314-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></span>
+                                <input id="surplusLocation" name="location" type="text" maxlength="160" autocomplete="off" placeholder="100 Queen Street West, Toronto" class="w-full bg-black/20 border border-neutral-800 rounded-full pl-10 pr-4 py-2.5 text-sm text-[#f4f4f0] placeholder-[#777] focus:outline-none focus:border-[#ff4500] transition-all">
+                            </label>
+                            <span id="surplusNote" class="hidden xl:inline font-mono text-[10px] text-neutral-600">Every logged item lands on the shared board as it is written.</span>
+                            <span id="surplusFormState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                            <button type="submit" id="surplusSubmit" class="px-6 py-2.5 rounded-full bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Post</button>
+                        </div>
+                    </form>
+
+                    <!-- The board itself, newest first: every published post, whoever logged
+                         it. A claimed post keeps its card here too, so the board reads as a
+                         record rather than quietly emptying. -->
+                    <div id="feedList" class="space-y-3 min-h-[240px]">
+                        <span class="block font-mono text-[11px] text-neutral-500">Waiting for the first post.</span>
+                    </div>
                 </div>
             </div>
 
@@ -1622,6 +1724,26 @@
         // ---------------------------------------------------------------------------
         var feedPoll = null;
         var feedUnwatch = null;
+        // The board as it was last read, and which of its two views is on screen. The
+        // tab filters those rows rather than reading the table again, so switching is
+        // instant and the chip above still counts the whole board.
+        var feedRows = [];
+        var feedTab = 'all';
+
+        function setFeedTab(name) {
+            feedTab = name === 'mine' ? 'mine' : 'all';
+            var all = document.getElementById('feedTabAll');
+            var mine = document.getElementById('feedTabMine');
+            if (all) {
+                all.classList.toggle('is-active', feedTab === 'all');
+                all.setAttribute('aria-selected', feedTab === 'all' ? 'true' : 'false');
+            }
+            if (mine) {
+                mine.classList.toggle('is-active', feedTab === 'mine');
+                mine.setAttribute('aria-selected', feedTab === 'mine' ? 'true' : 'false');
+            }
+            paintFeed();
+        }
 
         function loadFeed() {
             var db = resqDb();
@@ -1642,19 +1764,42 @@
         function renderFeed(rows, message) {
             var list = document.getElementById('feedList');
             if (!list) { return; }
-            var db = resqDb();
             if (!rows) {
+                feedRows = [];
                 list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
                     + surplusText(message) + '</span>';
                 return;
             }
+            feedRows = rows;
             if (!rows.length) {
                 list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
                     + 'No surplus has been posted yet. Every logged item appears here on its own.'
                     + '</span>';
                 return;
             }
+            paintFeed();
+        }
+
+        // Draw the view the tab bar is on out of the rows last read: the whole board,
+        // or the posts this donor signed. Either way the cards come from the shared
+        // renderer — without its claim action, because taking surplus is the
+        // recipient's side of the exchange, and with this donor's own posts marked.
+        function paintFeed() {
+            var list = document.getElementById('feedList');
+            var db = resqDb();
+            if (!list || !db) { return; }
             var mine = donorName();
+            var rows = feedTab === 'mine'
+                ? feedRows.filter(function (row) { return db.isOwnPost(row, mine); })
+                : feedRows;
+            if (!rows.length) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                    + (feedTab === 'mine'
+                        ? 'Nothing of yours is on the board yet. Every item you log appears here as you log it.'
+                        : 'No surplus has been posted yet. Every logged item appears here on its own.')
+                    + '</span>';
+                return;
+            }
             list.innerHTML = rows.map(function (row) {
                 return db.feedCard(row, { canClaim: false, ownName: mine });
             }).join('');

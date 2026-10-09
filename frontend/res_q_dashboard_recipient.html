@@ -64,6 +64,96 @@
             transform: translateY(-4px);
         }
 
+        /* A feed card: the same notched silhouette the rest of the site wears, held
+           still rather than lifting on hover — a board of cards should not move under
+           the cursor — with a claimed row settling back a shade instead. */
+        .feed-card {
+            background-color: #141414;
+            border: 1px solid #262626;
+            border-radius: 1.25rem;
+            position: relative;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
+            clip-path: polygon(
+                0 0,
+                calc(100% - 26px) 0,
+                100% 26px,
+                100% 100%,
+                0 100%
+            );
+        }
+        .feed-card:hover {
+            border-color: #3a3a3a;
+        }
+        .feed-card.is-claimed {
+            background-color: #101010;
+        }
+
+        /* The feed's avatar: a circle holding the head-and-shoulders silhouette the
+           reference draws, cropped by the circle the way it is there. */
+        .feed-avatar {
+            display: inline-flex;
+            align-items: flex-end;
+            justify-content: center;
+            flex: none;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 9999px;
+            border: 1px solid #262626;
+            overflow: hidden;
+        }
+        .feed-avatar svg {
+            width: 2rem;
+            height: 2rem;
+            display: block;
+        }
+
+        /* The board's tab bar, from the reference: the view being read in cream with
+           the accent rule under it, the others muted until they are pointed at. */
+        .feed-tab {
+            position: relative;
+            padding-bottom: 10px;
+            font-size: 0.875rem;
+            font-weight: 900;
+            color: #777777;
+            transition: color 0.3s ease;
+        }
+        .feed-tab:hover {
+            color: #f4f4f0;
+        }
+        .feed-tab.is-active {
+            color: #f4f4f0;
+        }
+        .feed-tab.is-active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 4px;
+            border-radius: 2px;
+            background-color: #ff4500;
+        }
+
+        /* The one action a post can carry wears the hero cards' own treatment: dark at
+           rest with the site's cream text, filled with the accent on hover or keyboard
+           focus, the text turning black with it. Declared the same way .deliver-card is,
+           so the two read as the same gesture. */
+        .claim-btn {
+            background-color: #141414;
+            border: 1px solid #262626;
+            color: #f4f4f0;
+        }
+        .claim-btn:hover,
+        .claim-btn:focus-visible {
+            background-color: #ff4500;
+            border-color: #ff4500;
+            color: #000000;
+        }
+        .claim-btn:hover *,
+        .claim-btn:focus-visible * {
+            color: #000000;
+        }
+
         /* Orange accent CTA card with notch */
         .notched-orange {
             background-color: #ff4500;
@@ -193,20 +283,24 @@
         <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-            <!-- Left rail: the four section rows carry their labels, then the finished
-                 orders slot; the pipeline status stays a bare pulse. Every item but
-                 Dashboard swaps the working area for that section's blank screen. -->
+            <!-- Left rail: the four section rows carry their labels, then the received
+                 deliveries slot; the pipeline status stays a bare pulse. Every item but
+                 Dashboard swaps the working area for that section's blank screen.
+                 Dashboard and Feed are the two rows every dashboard carries; the two
+                 section rows under them name this role's own work — the deliveries
+                 coming in and the status they have reached — so a recipient's rail never
+                 borrows the donor's sections. -->
             <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
                 <nav class="space-y-2" aria-label="Dashboard sections">
                     <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-[#ff4500] border border-[#ff4500] text-[11px] font-mono uppercase text-black transition-all">Dashboard</a>
                     <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Feed</a>
-                    <a href="#" data-view="surplus-analyzer" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Analyzer</a>
-                    <a href="#" data-view="current-orders" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Current Orders</a>
+                    <a href="#" data-view="incoming-deliveries" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Incoming Deliveries</a>
+                    <a href="#" data-view="delivery-status" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Delivery Status</a>
                 </nav>
 
                 <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <button type="button" id="finishedOrders" data-view="finished-orders" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
-                        <span class="text-[11px] font-mono uppercase text-neutral-400">Finished Orders</span>
+                    <button type="button" id="receivedDeliveries" data-view="received-deliveries" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
+                        <span class="text-[11px] font-mono uppercase text-neutral-400">Received Deliveries</span>
                     </button>
                     <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
                         <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -303,8 +397,18 @@
                  button that no longer works. -->
             <div id="viewFeed" class="hidden lg:col-span-10">
                 <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
-                    <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
-                        <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Live surplus feed</span>
+                    <!-- The board's tab bar, from the reference: the view being read in cream
+                         under an accent rule, the other muted. Both views are real filters
+                         over the rows already read — the whole board, or just what is still
+                         there to take — so switching is instant and the chip at the right
+                         keeps counting the whole board either way. The board's name moves to
+                         a screen-reader heading under the tabs. -->
+                    <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
+                        <div class="flex items-center gap-6" role="tablist" aria-label="Board views">
+                            <span class="sr-only">Live surplus feed</span>
+                            <button type="button" id="feedTabAll" role="tab" aria-selected="true" onclick="setFeedTab('all')" class="feed-tab is-active">All posts</button>
+                            <button type="button" id="feedTabOpen" role="tab" aria-selected="false" onclick="setFeedTab('open')" class="feed-tab">Open</button>
+                        </div>
                         <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
                     </div>
                     <div id="feedList" class="bg-black/20 rounded-2xl border border-neutral-800 p-4 space-y-3 min-h-[240px]">
@@ -487,15 +591,15 @@
                 item.classList.toggle('text-black', on);
                 item.classList.toggle('text-neutral-400', !on);
             });
-            var finished = document.getElementById('finishedOrders');
-            var label = finished ? finished.querySelector('span') : null;
-            var picked = element === finished;
-            if (finished) {
-                finished.classList.toggle('bg-[#ff4500]', picked);
-                finished.classList.toggle('border-[#ff4500]', picked);
-                finished.classList.toggle('bg-neutral-800/50', !picked);
-                finished.classList.toggle('border-neutral-800', !picked);
-                finished.classList.toggle('hover:border-neutral-700', !picked);
+            var received = document.getElementById('receivedDeliveries');
+            var label = received ? received.querySelector('span') : null;
+            var picked = element === received;
+            if (received) {
+                received.classList.toggle('bg-[#ff4500]', picked);
+                received.classList.toggle('border-[#ff4500]', picked);
+                received.classList.toggle('bg-neutral-800/50', !picked);
+                received.classList.toggle('border-neutral-800', !picked);
+                received.classList.toggle('hover:border-neutral-700', !picked);
             }
             if (label) {
                 label.classList.toggle('text-black', picked);
@@ -1254,6 +1358,27 @@
                 + ((error && error.message) || 'the request did not go through') + '.';
         }
 
+        // The board as it was last read, and which of its two views is on screen. The
+        // tab filters those rows rather than reading the table again, so switching is
+        // instant and the chip above still counts the whole board.
+        var feedRows = [];
+        var feedTab = 'all';
+
+        function setFeedTab(name) {
+            feedTab = name === 'open' ? 'open' : 'all';
+            var all = document.getElementById('feedTabAll');
+            var open = document.getElementById('feedTabOpen');
+            if (all) {
+                all.classList.toggle('is-active', feedTab === 'all');
+                all.setAttribute('aria-selected', feedTab === 'all' ? 'true' : 'false');
+            }
+            if (open) {
+                open.classList.toggle('is-active', feedTab === 'open');
+                open.setAttribute('aria-selected', feedTab === 'open' ? 'true' : 'false');
+            }
+            paintFeed();
+        }
+
         function loadFeed() {
             var db = resqDb();
             if (!db) { return; }
@@ -1273,15 +1398,37 @@
         function renderFeed(rows, message) {
             var list = document.getElementById('feedList');
             if (!list) { return; }
-            var db = resqDb();
             if (!rows) {
+                feedRows = [];
                 list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
                     + feedText(message) + '</span>';
                 return;
             }
+            feedRows = rows;
             if (!rows.length) {
                 list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
                     + 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.'
+                    + '</span>';
+                return;
+            }
+            paintFeed();
+        }
+
+        // Draw the view the tab bar is on out of the rows last read: the whole board,
+        // or only what is still there to take. The cards themselves come from the
+        // shared renderer, with the one action a recipient has on an open post.
+        function paintFeed() {
+            var list = document.getElementById('feedList');
+            var db = resqDb();
+            if (!list || !db) { return; }
+            var rows = feedTab === 'open'
+                ? feedRows.filter(function (row) { return row.status !== 'claimed'; })
+                : feedRows;
+            if (!rows.length) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                    + (feedTab === 'open'
+                        ? 'Nothing is open right now \u2014 every post on the board has been claimed.'
+                        : 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.')
                     + '</span>';
                 return;
             }
