@@ -31,6 +31,9 @@
     // here once: a post's tag, the compose box's picker and the feed's *For You*
     // filter all read this list, so a category cannot end up spelled two ways. The
     // labels, the emoji and the hint lines are the profile's own copy.
+    //
+    // The emoji is the category's icon wherever the category is shown: the row in the
+    // picker, the chip on a tagged post, and the compose pill once something is picked.
     var GOODS_TYPES = [
         { value: 'prepared_meals', label: 'Prepared Meals', emoji: '\ud83c\udf72',
           hint: 'Cooked dishes, catered trays, hot meals' },

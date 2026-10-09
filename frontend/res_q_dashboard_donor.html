@@ -462,17 +462,23 @@
                             <!-- The goods category this post is for, in the same long pill
                                  the quantity and the address wear and between the two of
                                  them. The list under it is the goods profile's own — the
-                                 six categories with their emoji and their hint line —
-                                 rendered from the shared vocabulary in resq_supabase.js so a
-                                 category cannot be spelled two ways on two pages. The pick
-                                 is what tags the row, and the tag is what a *For You* feed
+                                 six categories with their hint line — rendered from the
+                                 shared vocabulary in resq_supabase.js so a category cannot
+                                 be spelled two ways on two pages. Every row wears its
+                                 category's emoji, and the pill's own line-art tag hands its
+                                 place to that emoji once a category is picked, so the pill
+                                 says what it will tag the post with at a glance. The pick is
+                                 what tags the row, and the tag is what a *For You* feed
                                  filters on, so it is asked for rather than guessed. -->
                             <div class="relative block flex-1 min-w-[210px]">
                                 <span class="sr-only">Goods category</span>
                                 <div id="goodsTrigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false"
                                     onclick="toggleGoodsMenu()" onkeydown="goodsTriggerKey(event)"
                                     class="w-full flex items-center gap-2 bg-black/20 border border-neutral-800 hover:border-neutral-700 rounded-full pl-10 pr-3 py-2.5 text-sm text-[#f4f4f0] cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700">
-                                    <span aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#777]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"></path><circle cx="7" cy="7" r="1.5"></circle></svg></span>
+                                    <!-- The leading mark: the line-art tag while nothing has been
+                                         picked, and the picked category's own emoji afterwards,
+                                         so the pill says what it will tag the post with. -->
+                                    <span id="goodsGlyph" aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 text-[#777]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"></path><circle cx="7" cy="7" r="1.5"></circle></svg></span>
                                     <span id="goodsLabel" class="truncate text-[#777]">Pick a goods category</span>
                                     <span aria-hidden="true" id="goodsArrow" class="ml-auto font-mono text-[10px] text-[#777] transition-transform duration-200">&#9660;</span>
                                 </div>
@@ -1566,6 +1572,13 @@
         // profile's own six, read from the shared vocabulary rather than retyped here.
         // The pick is asked for rather than guessed: a post with no category would be
         // invisible to every *For You* feed, including this donor's own.
+        //
+        // It is also remembered the way the pickup address is prefilled — a donor
+        // posting the same kind of goods twice should not have to say so twice, and the
+        // pill then opens wearing that category's emoji rather than the placeholder
+        // mark. Only a value that is still one of the six is restored, so a vocabulary
+        // that changes under a browser's stored pick cannot put a stranger in the pill.
+        var GOODS_KEY = 'resqGoodsPick';
         var goodsPick = '';
 
         function goodsTypes() {
@@ -1578,8 +1591,11 @@
             return !!menu && !menu.classList.contains('hidden');
         }
 
-        // One row per category, in the goods profile's own shape: the emoji, the name
-        // and the line that says what belongs in it, over the list's own scroll.
+        // One row per category, in the goods profile's own shape: the category's emoji,
+        // the name and the line that says what belongs in it, over the list's own
+        // scroll. The emoji is the category's icon, so the same mark stands for the
+        // category on the row, on the chip of a post tagged with it, and on the pill
+        // once it is the pick.
         function renderGoodsMenu() {
             var list = document.getElementById('goodsMenuList');
             if (!list) { return; }
@@ -1590,7 +1606,7 @@
                     + ' class="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all '
                     + (on ? 'bg-neutral-800/50 text-[#ff4500]'
                           : 'text-[#f4f4f0] hover:bg-neutral-800/30 hover:text-[#ff4500]') + '">'
-                    + '<span aria-hidden="true" class="text-xl">' + type.emoji + '</span>'
+                    + '<span aria-hidden="true" class="text-xl shrink-0">' + type.emoji + '</span>'
                     + '<span class="min-w-0">'
                         + '<span class="block font-bold text-sm">' + type.label + '</span>'
                         + '<span class="block font-mono text-[10px] text-neutral-500">'
@@ -1628,19 +1644,53 @@
             if (event.key === 'Escape') { closeGoodsMenu(); }
         }
 
-        function chooseGoods(value) {
+        // Everything the chosen category is shown on: the pill's label, the mark beside
+        // it and the row the list marks as chosen. Used by a fresh pick and by the pick
+        // restored on load, so the two cannot show the choice differently.
+        function applyGoodsPick(value) {
             var db = resqDb();
+            var type = (db && db.goodsType) ? db.goodsType(value) : null;
+            if (!type) { return; }
             goodsPick = value;
             var label = document.getElementById('goodsLabel');
             if (label) {
-                label.textContent = (db && db.goodsLabel) ? db.goodsLabel(value) : value;
+                label.textContent = (db && db.goodsLabel) ? db.goodsLabel(value) : type.label;
                 label.classList.remove('text-[#777]');
                 label.classList.add('text-[#f4f4f0]');
             }
+            // The line-art tag is the mark of nothing picked yet; once there is a pick it
+            // gives its place to that category's emoji, so the pill shows what it will
+            // tag the post with without being opened.
+            var glyph = document.getElementById('goodsGlyph');
+            if (glyph) { glyph.textContent = type.emoji; }
+        }
+
+        function storedGoodsPick() {
+            try { return window.localStorage.getItem(GOODS_KEY) || ''; } catch (err) { return ''; }
+        }
+
+        function rememberGoodsPick(value) {
+            try { window.localStorage.setItem(GOODS_KEY, value); } catch (err) { /* storage blocked */ }
+        }
+
+        function restoreGoodsPick() {
+            var db = resqDb();
+            var saved = storedGoodsPick();
+            if (!saved || !db || !db.goodsType || !db.goodsType(saved)) { return; }
+            applyGoodsPick(saved);
+        }
+
+        function chooseGoods(value) {
+            applyGoodsPick(value);
+            rememberGoodsPick(value);
             renderGoodsMenu();
             closeGoodsMenu();
             clearSurplusNote();
         }
+
+        // Run once, on load: the pill comes back wearing the last category this browser
+        // posted under, if there was one.
+        restoreGoodsPick();
 
         // Clicking anywhere else, or tabbing away from the picker, closes the list.
         document.addEventListener('click', function (event) {
