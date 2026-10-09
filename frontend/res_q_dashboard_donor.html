@@ -283,9 +283,21 @@
                                 </label>
                                 <div class="flex flex-wrap items-center gap-4">
                                     <button type="submit" id="surplusSubmit" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Submit to feed</button>
-                                    <span id="surplusNote" class="font-mono text-[10px] text-neutral-600">Every logged item lands in the recipient feed as it is written.</span>
+                                    <span id="surplusNote" class="font-mono text-[10px] text-neutral-600">Every logged item lands in the recipient feed, and the best shelter for it is matched as it is written.</span>
                                 </div>
                             </form>
+
+                            <!-- The allocator's answer to a submission: the shelter the
+                                 backend picked for the item just logged, on screen the
+                                 moment the route answers. Hidden until there is one. -->
+                            <div id="surplusMatch" class="hidden mt-6 p-4 rounded-2xl border border-neutral-800 bg-neutral-800/40">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">Best match</span>
+                                    <span id="surplusMatchScore" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500"></span>
+                                </div>
+                                <div id="surplusMatchName" class="mt-2 text-sm font-black uppercase tracking-widest text-[#f4f4f0]"></div>
+                                <div id="surplusMatchMeta" class="mt-1 font-mono text-[11px] text-neutral-400"></div>
+                            </div>
                         </div>
 
                     </div>
@@ -1290,6 +1302,10 @@
         var CHIP_IDLE = 'text-neutral-500 bg-black/20';
         var CHIP_BUSY = 'text-[#ff9b73] bg-orange-950/60';
         var CHIP_DONE = 'text-emerald-400 bg-emerald-950/60';
+        // Where a logged item's match is asked for: the backend runs its filter, score and
+        // greedy allocation there and answers with the shelter that should take the item.
+        var SURPLUS_MATCH_URL = '/api/submit-surplus';
+        var MATCH_CHIP = 'font-mono text-[10px] uppercase tracking-widest ';
 
         function resqDb() {
             return window.ResQDB || null;
@@ -1344,16 +1360,70 @@
                 + ((error && error.message) || 'the request did not go through') + '.';
         }
 
-        function submitSurplus(event) {
-            if (event) { event.preventDefault(); }
-            var db = resqDb();
-            if (surplusSubmitting) { return; }
-            if (!db) {
-                setChip('surplusFormState', 'no client', CHIP_BUSY);
-                setSurplusNote('The Supabase client is not on this page. Check the connection and reload.',
-                    'text-[#ff9b73]');
+        // The item, the quantity and the pickup point go to the backend's allocator, which
+        // runs the filter, the score and the greedy allocation against every registered
+        // shelter and answers with the one that should take the item.
+        function requestSurplusMatch(item, quantity, location) {
+            return fetch(SURPLUS_MATCH_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + readStore(TOKEN_KEY)
+                },
+                body: JSON.stringify({ item: item, quantity: quantity, location: location })
+            }).then(function (response) {
+                return response.json().catch(function () { return {}; })
+                    .then(function (data) { return { status: response.status, data: data }; });
+            }).catch(function () {
+                return { status: 0, data: { error: 'The backend did not answer.' } };
+            });
+        }
+
+        // The matched shelter, on the panel under the form. A miss or a refusal lands in
+        // the same place, because "nobody needs this today" is an answer too.
+        function renderSurplusMatch(res) {
+            var panel = document.getElementById('surplusMatch');
+            var name = document.getElementById('surplusMatchName');
+            var score = document.getElementById('surplusMatchScore');
+            var meta = document.getElementById('surplusMatchMeta');
+            if (!panel || !name || !score || !meta) { return; }
+            var body = (res && res.data) || {};
+            var match = body.match || null;
+            panel.classList.remove('hidden');
+            if (!match) {
+                name.textContent = body.error ? 'No answer from the backend' : 'No match yet';
+                score.textContent = body.error ? '' : 'unmatched';
+                score.className = MATCH_CHIP + 'text-[#ff9b73]';
+                meta.textContent = body.error || body.reason
+                    || 'Nothing on the network could take this item just now.';
                 return;
             }
+            name.textContent = match.shelter_name || 'Matched shelter';
+            score.textContent = 'score ' + Number(match.match_score).toFixed(2);
+            score.className = MATCH_CHIP + 'text-emerald-400';
+            meta.textContent = match.distance_km + ' km by road'
+                + (body.category ? ' \u00b7 ' + String(body.category).replace(/_/g, ' ') : '')
+                + (body.shelters_considered === undefined ? ''
+                    : ' \u00b7 ' + body.shelters_considered + ' shelter'
+                      + (body.shelters_considered === 1 ? '' : 's') + ' considered');
+        }
+
+        function clearSurplusMatch() {
+            var panel = document.getElementById('surplusMatch');
+            if (panel) { panel.classList.add('hidden'); }
+        }
+
+        // The feed half. A post is only called logged once the database answers with the
+        // row, and a page with no client reports the same thing it always did.
+        function logSurplusPost(post) {
+            var db = resqDb();
+            if (!db) { return Promise.resolve({ ok: false, noClient: true }); }
+            return db.createPost(post);
+        }
+
+        function submitSurplus(event) {
+            if (event) { event.preventDefault(); }
+            if (surplusSubmitting) { return; }
 
             // Every column the table insists on is read before anything is sent, so a
             // half-filled form answers here instead of coming back as a database error.
@@ -1371,16 +1441,23 @@
             var button = document.getElementById('surplusSubmit');
             if (button) { button.disabled = true; }
             setChip('surplusFormState', 'sending', CHIP_BUSY);
-            setSurplusNote('Writing the post to Supabase\u2026');
+            setSurplusNote('Logging it to the feed and matching it against the shelters\u2026');
+            clearSurplusMatch();
 
-            db.createPost({
+            // The two answers are independent: the feed write is the Supabase half and
+            // the match is the backend allocator's, and either can fail on its own.
+            var feed = logSurplusPost({
                 donorName: donorName(),
                 itemName: item,
                 quantity: quantity,
                 location: location
             }).then(function (res) {
-                surplusSubmitting = false;
-                if (button) { button.disabled = false; }
+                if (res.noClient) {
+                    setChip('surplusFormState', 'no client', CHIP_BUSY);
+                    setSurplusNote('The Supabase client is not on this page. Check the connection and reload.',
+                        'text-[#ff9b73]');
+                    return;
+                }
                 if (!res.ok) {
                     setChip('surplusFormState', 'failed', CHIP_BUSY);
                     setSurplusNote(surplusFailure(res.error), 'text-[#ff9b73]');
@@ -1400,11 +1477,18 @@
                     + ' \u2014 it is in the recipient feed now.');
                 refreshMySurplus();
             }).catch(function () {
-                surplusSubmitting = false;
-                if (button) { button.disabled = false; }
                 setChip('surplusFormState', 'failed', CHIP_BUSY);
                 setSurplusNote('Supabase did not accept that: the request did not go through.',
                     'text-[#ff9b73]');
+            });
+
+            var match = requestSurplusMatch(item, quantity, location).then(function (res) {
+                renderSurplusMatch(res);
+            });
+
+            Promise.all([feed, match]).then(function () {
+                surplusSubmitting = false;
+                if (button) { button.disabled = false; }
             });
         }
 

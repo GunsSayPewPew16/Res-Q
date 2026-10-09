@@ -298,6 +298,7 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
+| `POST` | `/api/submit-surplus` | Score a newly logged surplus item against the registered shelters and answer with the one that should take it. Needs a bearer token (`401`). The item's category is read from the words typed, or sent as `category`, or taken from the donor's goods profile; the pickup point is the form's `location` or the account's own confirmed pin. Answers `400` for a missing `item`, an unknown `category`, a bad `expiryHours`, or a pickup point the map cannot find, and `200` with `match: null` plus a `reason` when nothing can take the item. A match carries `shelter_name`, `match_score` and `distance_km` |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 
 ### Matching and delivery orders
@@ -328,6 +329,20 @@ and every recipient need by a donor, so the pipeline can be walked through where
 pin was dropped. They carry `"demo": true` in the response and are never written
 anywhere. Demo orders live on the session token, the way the demo sessions themselves
 do, and go when the process does.
+
+`POST /api/submit-surplus` is the same pipeline reached from the Log surplus form on the
+donor dashboard. The item's category is read from the words typed — a small keyword
+reader, falling back to the donor's own goods profile — the pickup point is the address
+in the form or the account's confirmed pin, and every registered recipient is read as a
+shelter: what a recipient needs is what it accepts, and it is placed by its confirmed
+pin or the address it onboarded with. The hard filter, the score and the greedy
+allocation run against those shelters and the best one comes back with its name, score
+and road distance. In demo mode those shelters are the fabricated peers and the answer
+is marked `"demo": true`, the way every other demo response is. The two inputs the score
+weights that nothing collects yet are not left blank: a shelter nobody has rated
+carries the middle of the 1-to-10 need scale, and logged goods are taken to keep for a
+day. No match is a `200` with a reason rather than an error, because "nobody needs this
+today" is an answer the form can show.
 
 Nothing calls either endpoint yet: wiring the rails and the impact panel to
 `/api/matches` and `/api/orders` is the next piece of work on the pages.

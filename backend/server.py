@@ -10,7 +10,9 @@ credential each time.
 
 Matching is the second half of the API: once an account has confirmed its delivery
 location, GET /api/matches ranks the counterparts near it that share a category, and
-POST /api/orders turns a chosen pair into a delivery order.
+POST /api/orders turns a chosen pair into a delivery order. A logged surplus item goes
+through the same machinery: POST /api/submit-surplus scores it against the registered
+shelters and answers with the one that should take it.
 
     python3 backend/server.py                   # demo mode, port 8080
     RESQ_PERSIST=on python3 backend/server.py   # store accounts in SQLite (backend/resq.db)
@@ -23,6 +25,7 @@ Endpoints
     POST /api/logout                drop the session
     POST /api/profile               save the goods profile (establishment + surplus category)
     POST /api/delivery-location     save the location confirmed on the dashboard map
+    POST /api/submit-surplus        match a logged surplus item to the shelter that takes it
     GET  /api/matches               rank the counterparts near the account, nearest first
     GET  /api/orders                list the delivery orders the account is part of
     POST /api/orders                bind the account and one counterpart into an order
@@ -41,9 +44,11 @@ import re
 import secrets
 import sqlite3
 import sys
+import time
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from itertools import count
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 # This folder is the backend: its code and its database file live here. The pages it
 # serves live beside it in frontend/, so the two are resolved separately — the site's
@@ -135,7 +140,17 @@ PUBLIC_FIELDS = (
 # The delivery location confirmed on the dashboard map. The coordinates are the point
 # for routing; the address is what the map showed at that point when it was confirmed.
 DELIVERY_FIELDS = ("delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at")
+# The two columns a confirmed dashboard pin lives in, which is what places a shelter.
+PIN_FIELDS = ("delivery_lat", "delivery_lng")
 MAX_ADDRESS_CHARS = 400
+# The largest body any form here sends is a registration, well under a kilobyte; a
+# request that declares more than this is answered as unreadable rather than read, so a
+# thread cannot be parked waiting on bytes a client only promised.
+MAX_REQUEST_BODY_BYTES = 64 * 1024
+# The Log surplus form's own input limits, so the route never accepts more than a form
+# could have sent, and nothing a page types can be used to grow a row without bound.
+MAX_ITEM_CHARS = 120
+MAX_QUANTITY_CHARS = 80
 
 # The three impact figures the donor dashboard shows. They belong to the donor's own
 # profile and to no other role: they are that donor's record of what their surplus
@@ -193,6 +208,83 @@ DEFAULT_MATCH_LIMIT = 10
 MAX_MATCH_LIMIT = 50
 KM_PER_DEGREE = 111.32
 EARTH_RADIUS_KM = 6371.0088
+
+# A surplus item and a shelter first meet the hard filter: the shelter has to accept the
+# kind of item on offer, and the two pins have to sit within HARD_FILTER_RADIUS_KM of each
+# other along the road. The road measurement comes from OSRM's public demo router — the
+# same service the root 'import requests.py' experiment called — so it needs no key and no
+# package. That is an outbound call, hence a short timeout and a handled failure rather
+# than a fatal one.
+HARD_FILTER_RADIUS_KM = 15.0
+OSRM_TIMEOUT_SECONDS = 5.0
+OSRM_ROUTE_URL = (
+    "https://router.project-osrm.org/route/v1/driving/%s,%s;%s,%s?overview=false"
+)
+# The same pair of pins is measured again on every refresh and the router is shared with
+# the rest of the internet, so successful answers are remembered for the life of the
+# process; a full cache starts over rather than evicting one entry at a time.
+ROAD_DISTANCE_CACHE = {}
+ROAD_DISTANCE_CACHE_LIMIT = 512
+
+# An address typed on the website carries no coordinates, so the same Nominatim geocoder the
+# root 'import requests.py' experiment called turns it into a pin before anything is
+# measured. Its usage policy asks for one request a second and an identifying agent, so
+# calls are spaced and signed; a hit is remembered like a road distance is.
+NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=%s"
+GEOCODING_TIMEOUT_SECONDS = 5.0
+NOMINATIM_MIN_INTERVAL_SECONDS = 1.0
+GEOCODER_USER_AGENT = "resq-backend/1.0 (prototype; github.com/GunsSayPewPew16/Res-Q)"
+GEOCODE_CACHE = {}
+GEOCODE_CACHE_LIMIT = 256
+GEOCODE_LAST_CALL_AT = 0.0
+# The address columns the onboarding form fills, in the order they read back as one line.
+ADDRESS_PART_FIELDS = ("street", "sub_locality", "locality", "city", "province", "postal")
+
+# The allocation score is the prototype's weighting: how close the drive is, how much the
+# shelter needs the goods, and how soon they expire — 0.3, 0.4 and 3.0. Proximity counts
+# down from the filter radius, and the urgency multiplier is 1 / (hours + 0.1), so goods
+# nearly out of time outrank a comfortable run by design.
+DISTANCE_SCORE_CEILING_KM = 15.0
+DISTANCE_SCORE_WEIGHT = 0.3
+NEED_SCORE_WEIGHT = 0.4
+URGENCY_WEIGHT = 3.0
+URGENCY_SMOOTHING_HOURS = 0.1
+SCORE_DECIMALS = 2
+
+# The allocation score needs a need score and an expiry time, and the Log surplus form
+# collects neither, so a submission fills both with what is written here rather than
+# guessing halfway through the weighting: a shelter nobody has rated carries the middle of
+# the prototype's 1-to-10 scale, and logged goods are taken to keep for a day.
+DEFAULT_SHELTER_NEED_SCORE = 5.0
+DEFAULT_SURPLUS_EXPIRY_HOURS = 24.0
+
+# A logged item arrives as free text ("Crates of ripe tomatoes"), so the submission route
+# reads the words a shop would use and files the item under one of the profile categories.
+# A keyword matches at a word start inside the item or the quantity, so "tomato" catches
+# "tomatoes"; the quantity only decides when the item name said nothing. Nothing matching
+# is an answer too — the caller falls back to the donor's own goods profile rather than
+# putting the item on a shelf nobody asked for.
+SURPLUS_KEYWORDS = (
+    ("prepared_meals", ("meal", "cooked", "curry", "soup", "rice", "biryani", "stew",
+                        "sandwich", "pizza", "roast", "casserole", "dinner", "lunch",
+                        "leftover")),
+    ("fresh_produce", ("produce", "vegetable", "veggie", "fruit", "tomato", "potato",
+                       "onion", "carrot", "lettuce", "salad", "spinach", "apple",
+                       "banana", "orange", "berr", "mushroom", "pepper", "cabbage",
+                       "herb", "melon", "cucumber", "broccoli", "avocado", "lemon")),
+    ("bakery_items", ("bakery", "bread", "bagel", "bun", "roll", "pastry", "croissant",
+                      "cake", "muffin", "cookie", "biscuit", "doughnut", "donut",
+                      "loaf", "loaves")),
+    ("dairy_beverages", ("dairy", "milk", "cheese", "yogurt", "yoghurt", "butter",
+                         "cream", "juice", "beverage", "drink", "smoothie", "kefir")),
+    ("household_essentials", ("soap", "detergent", "hygiene", "shampoo", "sanitiser",
+                              "sanitizer", "cleaning", "cleaner", "tissue", "toothpaste",
+                              "diaper", "nappy", "paper towel", "bleach", "wipes")),
+    ("packaged_goods", ("packaged", "packet", "canned", "tin", "jar", "carton", "box",
+                        "pasta", "noodle", "flour", "grain", "cereal", "snack", "chips",
+                        "bottle", "oil", "sauce", "spice", "sugar", "salt", "coffee",
+                        "tea")),
+)
 
 # An order starts life proposed. Until the status transitions land that is the only
 # status one can be in, and these are the two that stop a second order for the same pair
@@ -446,6 +538,18 @@ def clean_id(value):
     return None
 
 
+def text_answer(data, name):
+    """One text field out of a request body, as a string whatever the client sent.
+
+    A JSON body can carry a number, a list or an object where the form promised a string,
+    and ``value.strip()`` on one of those raises in the middle of a handler — which ends
+    the request with no answer at all instead of the field's own 400. Anything that is not
+    a string reads as absent, exactly like a key that was never sent.
+    """
+    value = data.get(name)
+    return value.strip() if isinstance(value, str) else ""
+
+
 def query_number(query, name, default, minimum, maximum):
     """Read a bounded numeric query parameter; None when it is not a number at all.
 
@@ -473,6 +577,271 @@ def haversine_km(lat1, lng1, lat2, lng2):
     a = (math.sin(d_phi / 2) ** 2
          + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2)
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
+def location_of(record):
+    """The (lat, lng) a surplus item or shelter carries, under its "location" key."""
+    location = record.get("location")
+    if not isinstance(location, (list, tuple)) or len(location) != 2:
+        raise ValueError("a surplus item or shelter needs a location as (lat, lng)")
+    return float(location[0]), float(location[1])
+
+
+def address_text(record):
+    """A record's address as one line: its "address" text, or its stored parts joined."""
+    address = str(record.get("address") or "").strip()
+    if address:
+        return address
+    parts = [str(record.get(field) or "").strip() for field in ADDRESS_PART_FIELDS]
+    return ", ".join(part for part in parts if part)
+
+
+def geocode_address(address):
+    """The (lat, lng) a written address stands for, from the Nominatim geocoder.
+
+    The website's onboarding collects an address but no coordinates, so the same service
+    the root 'import requests.py' experiment called resolves it here, before any distance
+    is measured. Calls are spaced to the service's one-a-second policy and signed with an
+    identifying agent; a hit is remembered for the life of the process. Returns None when
+    the service cannot answer or knows no such place.
+    """
+    global GEOCODE_LAST_CALL_AT
+    key = " ".join(str(address).split()).lower()
+    if key in GEOCODE_CACHE:
+        return GEOCODE_CACHE[key]
+    wait = NOMINATIM_MIN_INTERVAL_SECONDS - (time.monotonic() - GEOCODE_LAST_CALL_AT)
+    if wait > 0:
+        time.sleep(wait)
+    GEOCODE_LAST_CALL_AT = time.monotonic()
+    url = NOMINATIM_SEARCH_URL % quote(key)
+    request = urllib.request.Request(
+        url, headers={"User-Agent": GEOCODER_USER_AGENT, "Accept": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=GEOCODING_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, list) or not payload:
+        return None
+    try:
+        lat = float(payload[0]["lat"])
+        lng = float(payload[0]["lon"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+    if len(GEOCODE_CACHE) >= GEOCODE_CACHE_LIMIT:
+        GEOCODE_CACHE.clear()
+    GEOCODE_CACHE[key] = (lat, lng)
+    return lat, lng
+
+
+def pin_for(record):
+    """The (lat, lng) a record can be placed at, resolving a written address if needed.
+
+    Coordinates come first because they are exact: a "location" pair, like the
+    prototype's, or the delivery_lat/delivery_lng pair the dashboard map writes. A record
+    carrying only an address — what the website's onboarding collects — is geocoded
+    instead, so an address typed on the site feeds the same measurements a confirmed pin
+    does. Raises ValueError when no place can be found for the record.
+    """
+    if record.get("location") is not None:
+        return location_of(record)
+    lat, lng = record.get("delivery_lat"), record.get("delivery_lng")
+    if lat is not None and lng is not None:
+        return float(lat), float(lng)
+    address = address_text(record)
+    if address:
+        pin = geocode_address(address)
+        if pin is not None:
+            return pin
+        raise ValueError("could not place this address on the map: " + address)
+    raise ValueError("a record needs a location, a delivery pin or an address")
+
+
+def road_distance_km(lat1, lng1, lat2, lng2):
+    """Driving distance between two pins, in kilometres, from the OSRM router.
+
+    haversine_km measures through the earth; a delivery drives, so the hard filter
+    measures along the road instead — the call the root 'import requests.py' experiment
+    made, written with urllib so the backend still asks for nothing outside the standard
+    library. Returns None when the router cannot answer, leaving the caller to decide
+    what a missing road distance means.
+    """
+    key = (round(lat1, 5), round(lng1, 5), round(lat2, 5), round(lng2, 5))
+    if key in ROAD_DISTANCE_CACHE:
+        return ROAD_DISTANCE_CACHE[key]
+    # OSRM wants longitude before latitude, and the two pins joined by a semicolon.
+    url = OSRM_ROUTE_URL % (key[1], key[0], key[3], key[2])
+    try:
+        with urllib.request.urlopen(url, timeout=OSRM_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict) or payload.get("code") != "Ok":
+        return None
+    try:
+        metres = float(payload["routes"][0]["distance"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+    distance = round(metres / 1000.0, METRIC_DECIMALS)
+    if len(ROAD_DISTANCE_CACHE) >= ROAD_DISTANCE_CACHE_LIMIT:
+        ROAD_DISTANCE_CACHE.clear()
+    ROAD_DISTANCE_CACHE[key] = distance
+    return distance
+
+
+def pair_distance_km(surplus, shelter, fallback_to_straight_line=True):
+    """How far one surplus item sits from one shelter, measured along the road.
+
+    Road distance is the measurement; when the router cannot answer and the fallback is
+    allowed the great-circle distance stands in, and None comes back only when the road
+    distance was required and could not be had. Either record is placed by pin_for, so an
+    address is geocoded exactly when its coordinates are missing.
+    """
+    lat1, lng1 = pin_for(surplus)
+    lat2, lng2 = pin_for(shelter)
+    distance = road_distance_km(lat1, lng1, lat2, lng2)
+    if distance is None:
+        if not fallback_to_straight_line:
+            return None
+        distance = haversine_km(lat1, lng1, lat2, lng2)
+    return distance
+
+
+def hard_filter(surplus, shelter, max_distance_km=HARD_FILTER_RADIUS_KM,
+                fallback_to_straight_line=True):
+    """Whether a surplus item may go to a shelter at all, before any ranking.
+
+    The two gates the prototype applied, in the same order: the shelter has to accept
+    this kind of item ("item_type" against its "accepted_types"), and the business and
+    the shelter have to be within max_distance_km of each other along the road rather
+    than through the earth. Either side is placed by pin_for, so a record carrying only
+    the address typed on the website measures exactly like one carrying a pin.
+
+    The road measurement is an outbound call, so when the router cannot answer and
+    fallback_to_straight_line is on (the default) the great-circle distance stands in,
+    letting an offline run still filter instead of dropping every candidate. Pass
+    fallback_to_straight_line=False to insist on road distance only.
+    """
+    if surplus.get("item_type") not in (shelter.get("accepted_types") or ()):
+        return False
+    distance = pair_distance_km(surplus, shelter, fallback_to_straight_line)
+    if distance is None:
+        return False
+    return distance <= max_distance_km
+
+
+def match_score(surplus, shelter, distance_km):
+    """The weighted score one valid pair gets: the prototype's formula, kept whole.
+
+    distance_score * 0.3 + need_score * 0.4 + urgency_multiplier * 3.0, where the
+    distance score counts down from the filter radius, the need score is the shelter's
+    own 1-to-10, and the urgency multiplier is 1 / (hours to expiry + 0.1) — goods nearly
+    out of time outrank a comfortable run by design. Raises ValueError when the pair
+    carries no need score or no expiry time to work with.
+    """
+    try:
+        need_score = float(shelter["current_need_score"])
+        expiry_hours = float(surplus["expiry_hours"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("a scored pair needs a need score and an expiry time")
+    distance_score = max(0.0, DISTANCE_SCORE_CEILING_KM - distance_km)
+    urgency_multiplier = 1.0 / (expiry_hours + URGENCY_SMOOTHING_HOURS)
+    return round(
+        distance_score * DISTANCE_SCORE_WEIGHT
+        + need_score * NEED_SCORE_WEIGHT
+        + urgency_multiplier * URGENCY_WEIGHT,
+        SCORE_DECIMALS,
+    )
+
+
+def allocate_surplus(surplus_items, shelters, max_distance_km=HARD_FILTER_RADIUS_KM,
+                     fallback_to_straight_line=True):
+    """The prototype's greedy plan: score every valid pair, then hand out the best first.
+
+    Every pair that passes hard_filter is scored by match_score and sorted from the
+    highest score down, ties settled by the shorter drive. Walking that list once is the
+    whole allocation: the first time an item or a shelter appears it is taken, so no item
+    is promised twice and no shelter is asked to take two deliveries. A pair that cannot
+    be worked with — an address with no place on the map, goods without an expiry time —
+    is left out rather than stopping the rest of the plan.
+    """
+    candidates = []
+    for surplus in surplus_items:
+        for shelter in shelters:
+            try:
+                if not hard_filter(surplus, shelter, max_distance_km,
+                                   fallback_to_straight_line):
+                    continue
+                distance = pair_distance_km(surplus, shelter, fallback_to_straight_line)
+                if distance is None:
+                    continue
+                score = match_score(surplus, shelter, distance)
+            except ValueError:
+                continue
+            candidates.append({
+                "item_id": surplus.get("item_id"),
+                "business": surplus.get("business_name"),
+                "shelter_id": shelter.get("shelter_id"),
+                "shelter_name": shelter.get("name"),
+                "distance_km": round(distance, METRIC_DECIMALS),
+                "match_score": score,
+            })
+
+    candidates.sort(key=lambda candidate: (
+        -candidate["match_score"],
+        candidate["distance_km"],
+        str(candidate["item_id"]),
+        str(candidate["shelter_id"]),
+    ))
+
+    taken_items = set()
+    taken_shelters = set()
+    plan = []
+    for candidate in candidates:
+        if candidate["item_id"] in taken_items or candidate["shelter_id"] in taken_shelters:
+            continue
+        plan.append(candidate)
+        taken_items.add(candidate["item_id"])
+        taken_shelters.add(candidate["shelter_id"])
+    return plan
+
+
+def classify_surplus(item, quantity=""):
+    """The profile category a logged item belongs to, read from the words in it.
+
+    The item name is read first and the quantity only when the name said nothing, and
+    every keyword has to start a word, so "tomato" catches "tomatoes" without "oil"
+    firing on "boiled". Returns None when nothing points at a category.
+    """
+    for text in (item, quantity):
+        haystack = " ".join(str(text or "").lower().split())
+        if not haystack:
+            continue
+        for category, keywords in SURPLUS_KEYWORDS:
+            if any(re.search(r"\b" + re.escape(word), haystack) for word in keywords):
+                return category
+    return None
+
+
+def shelter_record(user, need_score=DEFAULT_SHELTER_NEED_SCORE):
+    """A registered account read as a shelter the allocator can score.
+
+    What a recipient needs ("surplus_types") is what a shelter accepts, and the shelter's
+    name is the recipient's business name where it has one. The prototype ranked shelters
+    on a 1-to-10 need score nothing collects yet, so every shelter carries the documented
+    middle of that scale until a caller has a better number to pass in.
+    """
+    shelter = {
+        "shelter_id": user.get("id"),
+        "name": user.get("business_name") or display_name(user),
+        "accepted_types": decode_list(user.get("surplus_types")),
+        "current_need_score": need_score,
+    }
+    for field in PIN_FIELDS + ADDRESS_PART_FIELDS:
+        if user.get(field) is not None:
+            shelter[field] = user[field]
+    return shelter
 
 
 def bounding_box(lat, lng, radius_km):
@@ -615,14 +984,25 @@ class ResQHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def read_json(self):
-        length = int(self.headers.get("Content-Length") or 0)
-        if not length:
+        # A header that is not a number cannot say how long the body is, and a negative
+        # one makes the read below run to end-of-stream; neither should be able to kill
+        # the request thread part-way through.
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            return None
+        if length <= 0:
             return {}
+        if length > MAX_REQUEST_BODY_BYTES:
+            return None
         raw = self.rfile.read(length)
         try:
-            return json.loads(raw.decode("utf-8"))
+            data = json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
             return None
+        # Every endpoint here reads an object; a body of any other shape is malformed, not
+        # something to trip over halfway through a handler.
+        return data if isinstance(data, dict) else None
 
     def bearer_token(self):
         header = self.headers.get("Authorization") or ""
@@ -719,6 +1099,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_profile()
         if path == "/api/delivery-location":
             return self.api_delivery_location()
+        if path == "/api/submit-surplus":
+            return self.api_submit_surplus()
         if path == "/api/orders":
             return self.api_order_create()
         if path == "/api/dev/switch-role":
@@ -731,12 +1113,12 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
 
-        role = (data.get("role") or "donor").strip().lower()
+        role = text_answer(data, "role").lower() or "donor"
         if role not in ("donor", "recipient"):
             role = "donor"
 
-        first_name = (data.get("firstName") or "").strip()
-        last_name = (data.get("lastName") or "").strip()
+        first_name = text_answer(data, "firstName")
+        last_name = text_answer(data, "lastName")
         if not first_name or not last_name:
             return self.send_json(
                 400, {"error": "Please fill in your name to continue.", "field": "firstName"}
@@ -748,8 +1130,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if not isinstance(contact, dict):
             contact = {}
         kind = "phone" if (contact.get("type") == "phone") else "email"
-        value = (contact.get("value") or "").strip()
-        dial_code = (contact.get("dial") or "").strip() or None
+        value = text_answer(contact, "value")
+        dial_code = text_answer(contact, "dial") or None
         email = phone = None
 
         if kind == "email":
@@ -779,7 +1161,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     400, {"error": "That phone number looks too short.", "field": "phone"}
                 )
 
-        password = data.get("password") or ""
+        password = text_answer(data, "password")
         problem = password_problem(password)
         if problem:
             return self.send_json(400, {"error": problem, "field": "password"})
@@ -801,19 +1183,19 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "role": role,
                 "first_name": first_name,
                 "last_name": last_name,
-                "business_name": (data.get("businessName") or "").strip() or None,
+                "business_name": text_answer(data, "businessName") or None,
                 "email": email,
                 "phone": phone,
                 "dial_code": dial_code,
                 # The address rides along as well, so demo mode answers /api/me with the
                 # same shape persistent mode does; the dashboard map reads it to open on
                 # the address the account onboarded with.
-                "street": (address.get("street") or "").strip() or None,
-                "sub_locality": (address.get("subLocality") or "").strip() or None,
-                "locality": (address.get("locality") or "").strip() or None,
-                "province": (address.get("province") or "").strip() or None,
-                "city": (address.get("city") or "").strip() or None,
-                "postal": (address.get("postal") or "").strip() or None,
+                "street": text_answer(address, "street") or None,
+                "sub_locality": text_answer(address, "subLocality") or None,
+                "locality": text_answer(address, "locality") or None,
+                "province": text_answer(address, "province") or None,
+                "city": text_answer(address, "city") or None,
+                "postal": text_answer(address, "postal") or None,
                 "firm_type": None,
                 "delivery_days": [],
                 "surplus_types": [],
@@ -875,16 +1257,16 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     role,
                     first_name,
                     last_name,
-                    (data.get("businessName") or "").strip() or None,
+                    text_answer(data, "businessName") or None,
                     email,
                     phone,
                     dial_code,
-                    (address.get("street") or "").strip() or None,
-                    (address.get("subLocality") or "").strip() or None,
-                    (address.get("locality") or "").strip() or None,
-                    (address.get("province") or "").strip() or None,
-                    (address.get("city") or "").strip() or None,
-                    (address.get("postal") or "").strip() or None,
+                    text_answer(address, "street") or None,
+                    text_answer(address, "subLocality") or None,
+                    text_answer(address, "locality") or None,
+                    text_answer(address, "province") or None,
+                    text_answer(address, "city") or None,
+                    text_answer(address, "postal") or None,
                     digest,
                     salt,
                     metrics["surplus_saved"],
@@ -904,8 +1286,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
 
-        contact = (data.get("contact") or "").strip()
-        password = data.get("password") or ""
+        contact = text_answer(data, "contact")
+        password = text_answer(data, "password")
         if not contact or not password:
             return self.send_json(
                 400,
@@ -995,7 +1377,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return self.send_json(200, {"ok": True, "user": self.donor_user_with_metrics(row)})
 
     def api_logout(self):
-        token = self.bearer_token() or (self.read_json() or {}).get("token", "")
+        # The token may arrive in the body instead of the header, so it is read the way
+        # every other text field is: anything that is not a string counts as absent,
+        # rather than being bound into the delete below.
+        token = self.bearer_token() or text_answer(self.read_json() or {}, "token")
         if token:
             if not PERSIST:
                 DEMO_SESSIONS.pop(token, None)
@@ -1121,6 +1506,192 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return entry
 
     # -------------------------------------------------------------------- orders
+    # ------------------------------------------------------- surplus submission
+    def api_submit_surplus(self):
+        """Take one logged surplus item and answer with the shelter that should get it.
+
+        The Log surplus form sends what the donor typed, and the account behind the token
+        supplies the pickup point unless the form typed a different one. Every registered
+        recipient counts as a shelter — what a recipient needs ("surplus_types") is what a
+        shelter accepts — and the ones that can be placed on the map go through the same
+        filter, score and greedy allocation the rest of the pipeline uses. The best pair
+        comes back with its shelter name and score, or a plain reason nothing matched.
+        """
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        token = self.bearer_token()
+        if not PERSIST:
+            session_user = DEMO_SESSIONS.get(token)
+            if session_user is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            me = dict(session_user)
+        else:
+            with connect() as conn:
+                row = self.user_for_token(conn, token)
+            if row is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            me = dict(row)
+
+        item = text_answer(data, "item")[:MAX_ITEM_CHARS]
+        if not item:
+            return self.send_json(
+                400,
+                {"error": "Name the item being logged so it can be matched.", "field": "item"},
+            )
+        quantity = text_answer(data, "quantity")[:MAX_QUANTITY_CHARS]
+
+        # The category decides which shelters can take the item at all. The form collects
+        # none, so it is read from the words typed; a caller that knows better can send
+        # "category" and it is used as given.
+        category = text_answer(data, "category").lower()
+        if category and category not in DONOR_SURPLUS:
+            return self.send_json(
+                400,
+                {
+                    "error": "That is not a surplus category we match on.",
+                    "field": "category",
+                    "code": "bad_category",
+                },
+            )
+        if not category:
+            category = classify_surplus(item, quantity)
+            if not category:
+                profile_types = decode_list(me.get("surplus_types"))
+                category = profile_types[0] if profile_types else None
+        if not category:
+            uncategorised = {
+                "ok": True,
+                "match": None,
+                "item": item,
+                "reason": "Could not tell what kind of surplus this is. Name the item"
+                          " more plainly, or set the goods profile on your account.",
+            }
+            if not PERSIST:
+                uncategorised["demo"] = True
+            return self.send_json(200, uncategorised)
+
+        expiry_hours = data.get("expiryHours")
+        if expiry_hours in (None, ""):
+            expiry_hours = DEFAULT_SURPLUS_EXPIRY_HOURS
+        else:
+            try:
+                expiry_hours = float(expiry_hours)
+            except (TypeError, ValueError):
+                expiry_hours = None
+            if expiry_hours is None or expiry_hours <= 0:
+                return self.send_json(
+                    400,
+                    {
+                        "error": "expiryHours has to be a number of hours above zero.",
+                        "field": "expiryHours",
+                    },
+                )
+
+        typed = text_answer(data, "location")[:MAX_ADDRESS_CHARS]
+        surplus = {
+            "item_id": me.get("id"),
+            "business_name": me.get("business_name"),
+            "item_type": category,
+            "expiry_hours": expiry_hours,
+        }
+        # A pickup point typed into the form wins over the account's own saved address,
+        # because that is where the goods actually are; the account's confirmed pin is
+        # used otherwise, and it needs no geocoding at all.
+        if typed and typed != (me.get("delivery_address") or "").strip():
+            surplus["address"] = typed
+        else:
+            for field in PIN_FIELDS + ADDRESS_PART_FIELDS:
+                if me.get(field) is not None:
+                    surplus[field] = me[field]
+        try:
+            lat, lng = pin_for(surplus)
+        except ValueError:
+            return self.send_json(
+                400,
+                {
+                    "error": "That pickup point is not a place the map knows. Confirm your"
+                             " delivery location on the dashboard, or type an address it can"
+                             " find.",
+                    "field": "location",
+                    "code": "no_pickup",
+                },
+            )
+
+        if PERSIST:
+            with connect() as conn:
+                rows = conn.execute(
+                    "SELECT * FROM users WHERE role = 'recipient' AND id != ?",
+                    (me.get("id"),),
+                ).fetchall()
+            shelters = [shelter_record(dict(row)) for row in rows]
+        else:
+            # The fabricated counterparts are the other role's, and a shelter is always a
+            # recipient, so they are read as a donor's peers wherever the item came from.
+            peers = demo_peer_users(
+                {"role": "donor", "city": me.get("city"), "province": me.get("province")},
+                lat, lng,
+            )
+            shelters = [shelter_record(peer) for peer in peers.values()]
+
+        placed = []
+        unplaced = 0
+        for shelter in shelters:
+            try:
+                pin_for(shelter)
+            except ValueError:
+                unplaced += 1
+                continue
+            placed.append(shelter)
+        takers = [shelter for shelter in placed
+                  if category in (shelter.get("accepted_types") or ())]
+        plan = allocate_surplus([surplus], placed) if takers else []
+
+        payload = {
+            "ok": True,
+            "item": item,
+            "category": category,
+            "expiry_hours": expiry_hours,
+            "pickup": {"lat": round(lat, METRIC_DECIMALS), "lng": round(lng, METRIC_DECIMALS)},
+            "shelters_considered": len(placed),
+            "shelters_unplaced": unplaced,
+            "match": None,
+        }
+        if not PERSIST:
+            # Every other demo answer says so, and the shelters just scored against are
+            # the fabricated ones, so this answer is marked the same way.
+            payload["demo"] = True
+        if plan:
+            best = plan[0]
+            payload["match"] = {
+                "shelter_id": best["shelter_id"],
+                "shelter_name": best["shelter_name"],
+                "match_score": best["match_score"],
+                "distance_km": best["distance_km"],
+            }
+        elif not shelters:
+            payload["reason"] = "No registered shelter is on the network yet."
+        elif not takers:
+            payload["reason"] = ("No registered shelter is asking for "
+                                 + category.replace("_", " ") + " right now.")
+        else:
+            payload["reason"] = ("No shelter that needs this item is within "
+                                 + str(HARD_FILTER_RADIUS_KM) + " km of the pickup point.")
+        return self.send_json(200, payload)
+
     def api_orders(self):
         """Every delivery order the signed-in account is part of, newest first."""
         token = self.bearer_token()
@@ -1260,7 +1831,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 },
             )
 
-        category = (data.get("category") or "").strip().lower()
+        category = text_answer(data, "category").lower()
         if not category:
             return self.send_json(
                 400,
@@ -1284,7 +1855,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
         # A scheduled day is the recipient's to prefer, so a day they did not ask for is
         # refused rather than quietly booked.
-        scheduled_for = (data.get("scheduledFor") or "").strip().lower() or None
+        scheduled_for = text_answer(data, "scheduledFor").lower() or None
         if scheduled_for is not None:
             if scheduled_for not in DELIVERY_DAYS:
                 return self.send_json(
@@ -1425,7 +1996,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
         data = self.read_json()
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
-        role = (data.get("role") or "").strip().lower()
+        role = text_answer(data, "role").lower()
         if role not in ("donor", "recipient"):
             return self.send_json(
                 400,
@@ -1480,7 +2051,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 )
 
         role = session_user.get("role", "donor")
-        firm_type = (data.get("firmType") or "").strip().lower()
+        firm_type = text_answer(data, "firmType").lower()
         # Both questions take up to MAX_PICKS answers. The singular keys are still read so
         # a page from before the multi-select change keeps working.
         raw_days = data.get("deliveryDays", data.get("deliveryDay"))
@@ -1595,7 +2166,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     },
                 )
 
-        address = (data.get("address") or "").strip()
+        address = text_answer(data, "address")
         if not address:
             return self.send_json(
                 400,
