@@ -167,6 +167,14 @@
             );
         }
 
+        /* The Surplus Analyser's hero banner: the reference's own gradient, so the
+           screen keeps the accent even while every word of it is left out. */
+        .gradient-banner {
+            background: linear-gradient(135deg, #ff4500 0%, #ff8c00 50%, #141414 100%);
+            border-radius: 1.5rem;
+            position: relative;
+        }
+
         /* The delivery card: the sibling silhouette at rest, and the landing page's
            hero-card treatment while hovered or keyboard-focused — filled with the accent
            orange and everything inside turned black. Declared after the notch rules above
@@ -508,11 +516,151 @@
                 </div>
             </div>
 
-            <!-- Surplus Analyser: the donor's own rows, read back from Supabase. The
-                 chip on each one is the same status field a recipient's claim writes,
-                 so an item somebody has taken turns from pending to claimed here
-                 without a reload. -->
-            <div id="viewSurplusAnalyser" class="hidden lg:col-span-10">
+            <!-- Surplus Analyser — a donor's own screen; the recipient dashboard has no
+                 analyser. The reference's predictor layout is kept as boxes: the
+                 forecast banner, the two quick statistics, the weekly yield chart and
+                 the category split, every card and every bar in place and none of the
+                 reference's copy. Each line of text it carried is held open by a bare
+                 placeholder bar, the way the rest of this skeleton is, so the shape is
+                 what this screen carries and the words can be dropped in later. -->
+            <div id="viewSurplusAnalyser" class="hidden lg:col-span-10 space-y-6">
+
+                <!-- Top bar: the eyebrow over the screen's name, and the two status
+                     chips at the right. -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="space-y-3">
+                        <span class="block h-3 w-40 rounded-full bg-[#ff4500]/30"></span>
+                        <span class="block h-10 w-72 max-w-full rounded-xl bg-neutral-800/50"></span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="block h-9 w-44 rounded-xl bg-[#141414] border border-neutral-800"></span>
+                        <span class="block h-9 w-24 rounded-xl bg-[#ff4500]"></span>
+                    </div>
+                </div>
+
+                <!-- The forecast banner across two columns, the two quick statistics
+                     stacked in the third. -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                    <div class="lg:col-span-2 gradient-banner p-8 md:p-10 flex flex-col justify-between gap-6 min-h-[320px]">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="space-y-3">
+                                <span class="block h-3 w-44 max-w-full rounded-full bg-black/20"></span>
+                                <span class="block h-12 w-56 max-w-full rounded-xl bg-black/20"></span>
+                            </div>
+                            <span class="block h-7 w-32 shrink-0 rounded-full bg-black/20"></span>
+                        </div>
+                        <span class="block h-4 w-full max-w-lg rounded-full bg-black/20"></span>
+                        <div class="flex items-center gap-4">
+                            <span class="block h-11 w-40 rounded-xl bg-black"></span>
+                            <span class="block h-11 w-32 rounded-xl bg-white/20"></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="notched-card border border-neutral-800 p-6 flex flex-col justify-between gap-4 min-h-[148px]">
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="block h-3 w-28 rounded-full bg-neutral-800/60"></span>
+                                <span class="block h-5 w-14 shrink-0 rounded bg-emerald-500/10"></span>
+                            </div>
+                            <div class="space-y-2">
+                                <span class="block h-8 w-32 rounded-lg bg-neutral-800/50"></span>
+                                <span class="block h-3 w-36 max-w-full rounded-full bg-neutral-800/40"></span>
+                            </div>
+                        </div>
+                        <div class="notched-card border border-neutral-800 p-6 flex flex-col justify-between gap-4 min-h-[148px]">
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="block h-3 w-32 rounded-full bg-neutral-800/60"></span>
+                                <span class="block h-5 w-16 shrink-0 rounded bg-orange-500/10"></span>
+                            </div>
+                            <div class="space-y-2">
+                                <span class="block h-8 w-32 rounded-lg bg-neutral-800/50"></span>
+                                <span class="block h-3 w-40 max-w-full rounded-full bg-neutral-800/40"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- The weekly yield chart beside the category split. The bars are
+                     height-set the way the reference sets them, and Friday's is the
+                     accent-filled one. -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-8">
+                        <div class="flex items-center justify-between gap-4 mb-6">
+                            <div class="space-y-2">
+                                <span class="block h-5 w-48 max-w-full rounded-lg bg-neutral-800/50"></span>
+                                <span class="block h-3 w-40 max-w-full rounded-full bg-neutral-800/40"></span>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="block h-7 w-20 rounded-lg bg-neutral-900 border border-neutral-800"></span>
+                                <span class="block w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-800"></span>
+                            </div>
+                        </div>
+                        <div class="h-48 flex items-end justify-between gap-3 pt-6 border-b border-neutral-800 pb-4">
+                            <div class="w-1/5 h-[45%] rounded-t-xl bg-neutral-900 hover:bg-neutral-800 transition-all"></div>
+                            <div class="w-1/5 h-[70%] rounded-t-xl bg-neutral-900 hover:bg-neutral-800 transition-all"></div>
+                            <div class="w-1/5 h-[55%] rounded-t-xl bg-neutral-900 hover:bg-neutral-800 transition-all"></div>
+                            <div class="w-1/5 h-[85%] rounded-t-xl bg-neutral-900 hover:bg-neutral-800 transition-all"></div>
+                            <div class="w-1/5 h-[95%] rounded-t-xl bg-[#ff4500] hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20"></div>
+                        </div>
+                        <div class="flex items-center justify-between gap-4 mt-4">
+                            <span class="block h-3 w-44 max-w-full rounded-full bg-neutral-800/40"></span>
+                            <span class="block h-3 w-36 max-w-full rounded-full bg-neutral-800/40"></span>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-8 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-4 mb-6">
+                                <div class="space-y-2">
+                                    <span class="block h-5 w-52 max-w-full rounded-lg bg-neutral-800/50"></span>
+                                    <span class="block h-3 w-40 max-w-full rounded-full bg-neutral-800/40"></span>
+                                </div>
+                                <span class="block h-7 w-20 shrink-0 rounded-lg bg-neutral-900 border border-neutral-800"></span>
+                            </div>
+                            <div class="space-y-4">
+                                <div>
+                                    <div class="flex items-center justify-between gap-3 mb-1">
+                                        <span class="block h-3 w-44 max-w-full rounded-full bg-neutral-800/40"></span>
+                                        <span class="block h-3 w-8 shrink-0 rounded-full bg-neutral-800/40"></span>
+                                    </div>
+                                    <div class="w-full h-2 rounded-full bg-neutral-900 overflow-hidden"><div class="h-full rounded-full bg-[#ff4500]" style="width: 45%;"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex items-center justify-between gap-3 mb-1">
+                                        <span class="block h-3 w-40 max-w-full rounded-full bg-neutral-800/40"></span>
+                                        <span class="block h-3 w-8 shrink-0 rounded-full bg-neutral-800/40"></span>
+                                    </div>
+                                    <div class="w-full h-2 rounded-full bg-neutral-900 overflow-hidden"><div class="h-full rounded-full bg-purple-500" style="width: 25%;"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex items-center justify-between gap-3 mb-1">
+                                        <span class="block h-3 w-36 max-w-full rounded-full bg-neutral-800/40"></span>
+                                        <span class="block h-3 w-8 shrink-0 rounded-full bg-neutral-800/40"></span>
+                                    </div>
+                                    <div class="w-full h-2 rounded-full bg-neutral-900 overflow-hidden"><div class="h-full rounded-full bg-emerald-500" style="width: 20%;"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex items-center justify-between gap-3 mb-1">
+                                        <span class="block h-3 w-32 max-w-full rounded-full bg-neutral-800/40"></span>
+                                        <span class="block h-3 w-8 shrink-0 rounded-full bg-neutral-800/40"></span>
+                                    </div>
+                                    <div class="w-full h-2 rounded-full bg-neutral-900 overflow-hidden"><div class="h-full rounded-full bg-blue-500" style="width: 10%;"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-4 pt-6 mt-6 border-t border-neutral-800">
+                            <span class="block h-3 w-36 max-w-full rounded-full bg-neutral-800/40"></span>
+                            <span class="block h-3 w-20 shrink-0 rounded-full bg-neutral-800/40"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- The donor's own rows, read back from Supabase. The chip on each one
+                     is the same status field a recipient's claim writes, so an item
+                     somebody has taken turns from pending to claimed here without a
+                     reload. -->
                 <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
                     <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
                         <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Your surplus</span>

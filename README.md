@@ -71,7 +71,8 @@ role chosen at the start.
    whichever name is there stays a bare pipeline pulse.
    Dashboard is the default selection; Feed opens the shared
    board on either dashboard — with the donor's compose box above it, which is where
-   a donor logs an item now — Surplus Analyser opens the donor's own logged surplus,
+   a donor logs an item now — Surplus Analyser opens the predictor boxes and, under
+   them, the donor's own logged surplus,
    and the remaining items — the recipient's two section rows, the donor's Ongoing
    and Finished Deliveries, or the recipient's Received Deliveries slot — still wipe
    the working area for a blank screen of their own. Picking Dashboard brings the
@@ -104,11 +105,12 @@ the matching logic, and invites visitors into the flow above.
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows, plus the delivery-location card |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes, plus the delivery-location card |
 | `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same rail skeleton under its own section names (*Incoming Deliveries*, *Delivery Status*); its *Feed* section is that same live board in three views (all posts, open, and the posts tagged with the goods this recipient needs), with a claim button on every open post |
 | `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, holds the six goods categories one time, and draws every post as the one shared card both roles see |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
 | `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` | The `goods_type` tag column, its constraint to the six categories and the claim-guard update that freezes it — run once against the project, after the file above |
+| `supabase/clear_surplus_posts.sql` | Empties the board between demos: one `delete` run by hand as the project owner, since the publishable key the pages hold cannot delete |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
 visitor's role when signed in, and to the landing page otherwise. Each page works
@@ -211,6 +213,13 @@ once: until it is, the compose box still logs posts, but it logs them untagged a
 says so on the line under the fields, so a half-migrated project loses the category
 rather than the ability to post.
 
+Emptying the board is a separate, deliberate act rather than a migration:
+`supabase/clear_surplus_posts.sql` deletes every row and is run by hand the same way.
+It has to be run as the project owner, because the pages hold a key that may read the
+board, add a post and claim one — and delete nothing — so no page and no script with
+that key can clear the board on its own. Open dashboards empty themselves as soon as
+the delete lands, the same realtime path a new post takes.
+
 The board is the *Feed* on **both** dashboards — donors and recipients are looking at
 the same list of everything published, newest first. The three screens that use it all
 sit on a dashboard rather than behind the API:
@@ -258,6 +267,11 @@ sit on a dashboard rather than behind the API:
 - **Surplus Analyser** — the donor's own rows, the same table narrowed to that
   donor's name, with the status each one has reached. It is the donor's log rather
   than the shared board, which is why it lives beside the feed instead of in it.
+  The screen opens on the surplus predictor's layout, kept as boxes alone: the
+  forecast banner, the two quick statistics, the weekly yield chart and the category
+  split are all built, with none of the reference's copy — each line it carried is
+  held open by a bare placeholder bar, the way the rest of the skeleton is. The
+  section is the donor's own; the recipient dashboard has no analyser.
 
 ### For You, and what a post is tagged with
 
@@ -332,7 +346,11 @@ Nothing is written to a database and no detail is ever rejected as a duplicate,
 so the whole site can be walked through repeatedly without inventing a fresh
 email address each time. Sessions and the details you type live in memory for
 the life of the process; any email or phone plus any password signs you in, and
-restarting the server forgets everything. A session keeps the whole onboarding
+restarting the server forgets everything. Signing out ends the session but not the
+account, so the details you registered with sign back in as the role, the profile and
+the metrics they registered with — a recipient signs back in as that recipient, not as
+a fresh donor — which is what lets one machine walk the whole donor-then-recipient
+journey. A session keeps the whole onboarding
 answer set, address included, and holds the delivery location a person confirms, and a
 donor's three impact figures, the same way, so `/api/me` answers with the same shape it
 does in persistent mode — which

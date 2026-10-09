@@ -59,6 +59,10 @@ DB_PATH = os.environ.get("RESQ_DB", os.path.join(BACKEND_DIR, "resq.db"))
 # Start the server with RESQ_PERSIST=on to store accounts in the database again.
 PERSIST = os.environ.get("RESQ_PERSIST", "off").strip().lower() in ("on", "1", "true", "yes")
 DEMO_SESSIONS = {}
+# Registered demo accounts, by email and by phone. The sessions above come and go with
+# signing in and out; the accounts stay, so the details used at sign-up sign in again as
+# the role they registered with rather than being taken for a stranger.
+DEMO_ACCOUNTS = {}
 # Demo orders belong to a session token the way the sessions themselves do, and go when
 # the process does. The counter hands out ids that look like the persistent ones.
 DEMO_ORDERS = {}
@@ -383,13 +387,33 @@ def verify_password(password, digest, salt):
 
 
 def demo_lookup(email, phone):
-    """Return a demo user registered earlier in this process, if there is one."""
+    """Return a demo account registered earlier in this process, if there is one.
+
+    The registered account is looked up first, because it outlives its session: signing
+    out gives the token back and leaves the account behind, so the same details sign in
+    again as the role they registered with. A session that was never registered — the
+    stranger demo mode welcomes — still answers while it lives.
+    """
+    for key in (email, phone):
+        if key and key in DEMO_ACCOUNTS:
+            return dict(DEMO_ACCOUNTS[key])
     for user in DEMO_SESSIONS.values():
         if email and user.get("email") == email:
             return dict(user)
         if phone and user.get("phone") == phone:
             return dict(user)
     return None
+
+
+def remember_demo_account(user):
+    """Index a registered account so it can sign in again after its session is gone.
+
+    In demo mode the account is one dict shared by the session, the profile answers and
+    the map, so indexing it once keeps every later answer without re-indexing.
+    """
+    for key in (clean_email(user.get("email")), clean_phone(user.get("phone"))):
+        if key:
+            DEMO_ACCOUNTS[key] = user
 
 
 def demo_display_name(contact):
@@ -828,6 +852,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
             for field in DONOR_METRIC_FIELDS:
                 if metrics[field] is not None:
                     user[field] = metrics[field]
+            remember_demo_account(user)
             token = "demo-" + secrets.token_urlsafe(12)
             DEMO_SESSIONS[token] = user
             return self.send_json(201, {"ok": True, "demo": True, "token": token, "user": user})
@@ -915,8 +940,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 },
             )
 
-        # Demo mode: sign anyone in. A contact registered earlier in this run keeps its
-        # details; anything else gets a session so no account has to be created first.
+        # Demo mode: sign anyone in. A contact registered earlier in this run signs in as
+        # the account it registered, role and all, whether or not that session is still
+        # open; anything else gets a donor session so no account has to be created first.
         if not PERSIST:
             email = clean_email(contact) if "@" in contact else None
             phone = None if email else clean_phone(contact)
@@ -1664,7 +1690,9 @@ def main():
         print("Res-Q backend on http://127.0.0.1:%d" % port, flush=True)
         print(
             "  mode: DEMO — nothing is written to a database and no detail is\n"
-            "        rejected as a duplicate. Set RESQ_PERSIST=on to store accounts.",
+            "        rejected as a duplicate. Accounts registered in this run sign back\n"
+            "        in for as long as the process runs. Set RESQ_PERSIST=on to store\n"
+            "        accounts in a database.",
             flush=True,
         )
     try:
