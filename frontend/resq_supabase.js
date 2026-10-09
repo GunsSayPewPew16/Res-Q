@@ -243,6 +243,62 @@
         return post.quantity ? String(post.quantity) : 'quantity not given';
     }
 
+    // One card per post, and the same card on both dashboards: the board is one
+    // board, so a donor reading it and a recipient reading it see the same item
+    // described the same way. What differs is the action. `canClaim` adds the one
+    // action a recipient has on an open post — claiming it — and a donor's copy of
+    // the board leaves it off, because taking surplus is not the donor's side of the
+    // exchange. `ownName` marks the caller's own posts, so a donor scanning for what
+    // they logged finds it without reading every name.
+    function feedCard(row, options) {
+        var opts = options || {};
+        var claimed = row.status === 'claimed';
+        var mine = !!opts.ownName
+            && String(row.donor_name || '').trim() === String(opts.ownName).trim();
+        return '<div class="p-4 rounded-2xl border transition-all ' +
+                (claimed ? 'bg-black/20 border-neutral-800'
+                    : 'bg-neutral-800/50 border-neutral-800 hover:border-neutral-700') + '">' +
+            '<div class="flex flex-wrap items-start justify-between gap-3">' +
+                '<div class="min-w-0">' +
+                    '<span class="block text-sm font-black uppercase tracking-widest ' +
+                        (claimed ? 'text-neutral-500' : 'text-[#f4f4f0]') + '">' +
+                        escapeHtml(row.item_name) + '</span>' +
+                    '<span class="block mt-1 font-mono text-[11px] text-neutral-400">' +
+                        escapeHtml(postNeeds(row)) + '</span>' +
+                '</div>' +
+                '<span class="flex flex-wrap items-center gap-2 shrink-0">' +
+                    (mine ? '<span class="inline-flex items-center h-6 px-3 rounded-full border ' +
+                        'border-neutral-800 bg-black/20 font-mono text-[10px] uppercase ' +
+                        'tracking-widest text-neutral-400">your post</span>' : '') +
+                    '<span class="' + statusChip(row.status) + '">' +
+                        statusLabel(row.status) + '</span>' +
+                '</span>' +
+            '</div>' +
+            '<div class="mt-3 flex flex-wrap items-end justify-between gap-3">' +
+                '<div class="font-mono text-[10px] text-neutral-600">' +
+                    '<span class="block">FROM ' + escapeHtml(row.donor_name) + '</span>' +
+                    '<span class="block mt-1">AT ' + escapeHtml(row.location) + '</span>' +
+                    '<span class="block mt-1">LOGGED ' + escapeHtml(formatWhen(row.created_at)) +
+                    '</span>' +
+                '</div>' +
+                (opts.canClaim && !claimed
+                    ? '<button type="button" data-claim="' + escapeHtml(row.id) + '" ' +
+                        'onclick="claimSurplus(this)" class="px-5 py-3 rounded-xl bg-[#ff4500] ' +
+                        'text-black text-xs font-black uppercase tracking-widest ' +
+                        'hover:bg-[#ff5a1f] transition-all disabled:opacity-40 ' +
+                        'disabled:cursor-not-allowed">Claim</button>'
+                    : '') +
+            '</div>' +
+        '</div>';
+    }
+
+    // The count that sits over the board: how much is still going, out of
+    // everything published to it.
+    function feedSummary(rows) {
+        var open = rows.filter(function (row) { return row.status !== 'claimed'; }).length;
+        return open + ' open / ' + rows.length + ' posted';
+    }
+
     global.ResQDB = {
         url: SUPABASE_URL,
         table: TABLE,
@@ -257,6 +313,8 @@
         statusChip: statusChip,
         statusLabel: statusLabel,
         formatWhen: formatWhen,
-        postNeeds: postNeeds
+        postNeeds: postNeeds,
+        feedCard: feedCard,
+        feedSummary: feedSummary
     };
 })(window);

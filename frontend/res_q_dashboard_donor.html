@@ -243,7 +243,7 @@
                     </button>
                 </div>
 
-                <!-- Map + registration box, then the queue rail -->
+                <!-- Map + a frame waiting for content, then the queue rail -->
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
                     <div class="xl:col-span-8 space-y-6">
@@ -253,39 +253,14 @@
                             <div class="w-full h-72 rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
                         </div>
 
-                        <!-- Log surplus panel: the donor's one action. What is typed here
-                             becomes a row in Supabase's surplus_posts table — the same
-                             table the recipient dashboard reads its feed from — so a logged
-                             item is on somebody else's screen the moment it is written. The
-                             row goes straight to the database rather than through the local
-                             backend, which keeps owning sign-in, the profile and the
-                             confirmed delivery location. -->
+                        <!-- Quick registration frame: the Log surplus form that used to sit
+                             here now lives at the top of the Feed, beside the board it
+                             posts to, so posting and watching the post land are the same
+                             screen. This frame goes back to waiting for content of its
+                             own rather than offering a second way to post. -->
                         <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative">
-                            <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
-                                <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Log surplus</span>
-                                <span id="surplusFormState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
-                            </div>
-
-                            <form id="surplusForm" onsubmit="submitSurplus(event)" class="space-y-4">
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <label class="block">
-                                        <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Item</span>
-                                        <input id="surplusItem" name="item" type="text" maxlength="120" autocomplete="off" placeholder="Crates of ripe tomatoes" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
-                                    </label>
-                                    <label class="block">
-                                        <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Quantity</span>
-                                        <input id="surplusQuantity" name="quantity" type="text" maxlength="80" autocomplete="off" placeholder="24 kg across 6 crates" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
-                                    </label>
-                                </div>
-                                <label class="block">
-                                    <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Pickup location</span>
-                                    <input id="surplusLocation" name="location" type="text" maxlength="160" autocomplete="off" placeholder="100 Queen Street West, Toronto" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
-                                </label>
-                                <div class="flex flex-wrap items-center gap-4">
-                                    <button type="submit" id="surplusSubmit" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Submit to feed</button>
-                                    <span id="surplusNote" class="font-mono text-[10px] text-neutral-600">Every logged item lands in the recipient feed as it is written.</span>
-                                </div>
-                            </form>
+                            <div class="border-b border-neutral-800 pb-4 mb-6"></div>
+                            <div class="min-h-[240px] rounded-xl bg-neutral-800/50"></div>
                         </div>
 
                     </div>
@@ -330,6 +305,67 @@
 
                 </div>
 
+            </div>
+
+            <!-- Feed: the donor's posting desk and the shared board in one screen — the
+                 same board the recipient dashboard reads. The form on the left writes
+                 the next post and the board beside it shows every published post from
+                 every donor, newest first, live while this screen is open. A donor
+                 watches this side of the exchange rather than taking from it, so these
+                 cards carry no claim button, and the donor's own posts are marked so
+                 they are easy to pick out of the crowd. -->
+            <div id="viewFeed" class="hidden lg:col-span-10">
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+
+                    <!-- Log surplus: the donor's one action. What is typed here becomes a
+                         row in Supabase's surplus_posts table — the same table the board
+                         beside it and the recipient dashboard read — so a logged item is
+                         on somebody else's screen the moment it is written. The row goes
+                         straight to the database rather than through the local backend,
+                         which keeps owning sign-in, the profile and the confirmed
+                         delivery location. -->
+                    <div class="xl:col-span-5 bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative">
+                        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
+                            <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Log surplus</span>
+                            <span id="surplusFormState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                        </div>
+
+                        <form id="surplusForm" onsubmit="submitSurplus(event)" class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label class="block">
+                                    <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Item</span>
+                                    <input id="surplusItem" name="item" type="text" maxlength="120" autocomplete="off" placeholder="Crates of ripe tomatoes" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                                </label>
+                                <label class="block">
+                                    <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Quantity</span>
+                                    <input id="surplusQuantity" name="quantity" type="text" maxlength="80" autocomplete="off" placeholder="24 kg across 6 crates" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                                </label>
+                            </div>
+                            <label class="block">
+                                <span class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Pickup location</span>
+                                <input id="surplusLocation" name="location" type="text" maxlength="160" autocomplete="off" placeholder="100 Queen Street West, Toronto" class="w-full bg-black/20 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
+                            </label>
+                            <div class="flex flex-wrap items-center gap-4">
+                                <button type="submit" id="surplusSubmit" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Submit to feed</button>
+                                <span id="surplusNote" class="font-mono text-[10px] text-neutral-600">Every logged item lands on the shared board as it is written.</span>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- The board itself, newest first: every published post, whoever
+                         logged it. A claimed post keeps its card here too, so the board
+                         reads as a record rather than quietly emptying. -->
+                    <div class="xl:col-span-7 bg-[#141414] border border-neutral-800 rounded-3xl p-6">
+                        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
+                            <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Live surplus feed</span>
+                            <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                        </div>
+                        <div id="feedList" class="bg-black/20 rounded-2xl border border-neutral-800 p-4 space-y-3 min-h-[240px]">
+                            <span class="block font-mono text-[11px] text-neutral-500">Waiting for the first post.</span>
+                        </div>
+                    </div>
+
+                </div>
             </div>
 
             <!-- Surplus Received: the donor's own rows, read back from Supabase. The
@@ -501,6 +537,15 @@
                     // The pickup address defaults to the account's own location so the
                     // common case is one field left alone rather than typed again.
                     prefillSurplusLocation();
+                    // The orders figure counts this donor's accepted posts, so the board is
+                    // read as well — and watched while Dashboard is the section in front of
+                    // them, so a claim made in another browser moves the figure here on its
+                    // own instead of waiting for the next load.
+                    if (!document.getElementById('viewDashboard').classList.contains('hidden')) {
+                        openDashboardOrders();
+                    } else {
+                        refreshMySurplus();
+                    }
                     if (role && role !== THIS_PAGE) {
                         window.location.replace(dashboardFor(role));
                     }
@@ -548,15 +593,16 @@
             showView(element.getAttribute('data-view'));
         }
 
-        // Each labelled section owns a screen. Dashboard and the donor's own surplus
-        // have one; every section that has no content of its own yet still opens the
-        // blank frame. Opening a screen that reads the database hands it to that
-        // screen's loader, and leaving it stops the work again.
+        // Each labelled section owns a screen. Dashboard, the shared feed and the
+        // donor's own surplus have one; every section that has no content of its own
+        // yet still opens the blank frame. Opening a screen that reads the database
+        // hands it to that screen's loader, and leaving it stops the work again.
         var SECTION_VIEWS = {
             dashboard: 'viewDashboard',
+            feed: 'viewFeed',
             'surplus-received': 'viewSurplusReceived'
         };
-        var ALL_VIEWS = ['viewDashboard', 'viewSurplusReceived', 'viewBlank'];
+        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewSurplusReceived', 'viewBlank'];
 
         function showView(name) {
             var wanted = SECTION_VIEWS[name] || 'viewBlank';
@@ -564,13 +610,17 @@
                 var view = document.getElementById(id);
                 if (view) { view.classList.toggle('hidden', id !== wanted); }
             });
+            if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
             if (wanted === 'viewSurplusReceived') { openMySurplus(); } else { closeMySurplus(); }
+            if (wanted === 'viewDashboard') { openDashboardOrders(); } else { closeDashboardOrders(); }
         }
 
         // ---------------------------------------------------------------------------
         // Impact metrics: the three figures in the right-hand panel are the donor's own
         // record of what their surplus became, so they are read from the donor profile
-        // the backend keeps them on rather than invented for each load. Kilos carry two
+        // the backend keeps them on rather than invented for each load — except for the
+        // third, the orders, which also counts up from the board: every post of this
+        // donor's that a recipient accepts is one more order accepted. Kilos carry two
         // decimals — fractions of a kilo matter when food is weighed — and the other two
         // are whole counts. A recipient profile holds none of them, which is why this
         // panel lives on this dashboard and not on the other one.
@@ -584,7 +634,6 @@
             var profile = user || {};
             var kilos = Number(profile.surplus_saved);
             var meals = Number(profile.meals_served);
-            var orders = Number(profile.orders_completed);
             // The weight keeps its two decimals, counts of things are whole numbers.
             fillMetric('metricSurplusSaved', isFinite(kilos)
                 ? kilos.toLocaleString('en-US',
@@ -592,8 +641,67 @@
                 : '0.00');
             fillMetric('metricMealsServed',
                 isFinite(meals) ? meals.toLocaleString('en-US') : '0');
-            fillMetric('metricOrdersCompleted',
-                isFinite(orders) ? orders.toLocaleString('en-US') : '0');
+            // The third one is the profile's own figure plus the board's accepted posts,
+            // which is why it is drawn through the same helper the board updates it with.
+            renderOrdersFigure();
+        }
+
+        // ---------------------------------------------------------------------------
+        // Accepted posts. An item of this donor's that a recipient takes off the board is
+        // an order accepted, so the orders figure counts them: what the profile already
+        // held, plus one for every post of theirs carrying a claimed status. It is counted
+        // from the board rather than written back into the profile, which is what keeps it
+        // honest — it always matches the rows that are really there, it needs no second
+        // write against somebody else's account, and it behaves the same in demo mode as
+        // it does with persistence on.
+        //
+        // While the dashboard is the section in front of the donor the count is live, on
+        // the same two legs the board's own screens use: a subscription for the moment a
+        // claim lands, and a re-read behind it. Leaving Dashboard stops both.
+        // ---------------------------------------------------------------------------
+        var acceptedPosts = 0;
+        var ordersWatch = null;
+        var ordersPoll = null;
+
+        // What the profile held for this figure before any of the board's posts counted.
+        function ordersBase(profile) {
+            var base = Number((profile || {}).orders_completed);
+            return isFinite(base) ? base : 0;
+        }
+
+        function ordersFigure() {
+            return ordersBase(resqProfile) + acceptedPosts;
+        }
+
+        function renderOrdersFigure() {
+            fillMetric('metricOrdersCompleted', ordersFigure().toLocaleString('en-US'));
+        }
+
+        function countAccepted(rows) {
+            return (rows || []).filter(function (row) { return row.status === 'claimed'; }).length;
+        }
+
+        function openDashboardOrders() {
+            var db = resqDb();
+            refreshMySurplus();
+            if (!db) { return; }
+            if (!ordersWatch) {
+                ordersWatch = db.watchPosts(function () { refreshMySurplus(); });
+            }
+            if (!ordersPoll) {
+                ordersPoll = window.setInterval(refreshMySurplus, db.pollMs);
+            }
+        }
+
+        function closeDashboardOrders() {
+            if (ordersPoll) {
+                window.clearInterval(ordersPoll);
+                ordersPoll = null;
+            }
+            if (ordersWatch) {
+                ordersWatch();
+                ordersWatch = null;
+            }
         }
 
         // ---------------------------------------------------------------------------
@@ -1397,7 +1505,10 @@
                 setChip('surplusFormState', 'logged', CHIP_DONE);
                 setSurplusNote('Logged as '
                     + ((res.data && res.data.item_name) || item)
-                    + ' \u2014 it is in the recipient feed now.');
+                    + ' \u2014 it is on the board now.');
+                // The post was made on the board's own screen, so the board is refreshed
+                // here rather than waiting for the subscription to echo the row back.
+                loadFeed();
                 refreshMySurplus();
             }).catch(function () {
                 surplusSubmitting = false;
@@ -1420,6 +1531,10 @@
                     return;
                 }
                 var rows = res.data || [];
+                // This donor's own rows are where their accepted orders are counted from,
+                // so the figure moves with them wherever they change.
+                acceptedPosts = countAccepted(rows);
+                renderOrdersFigure();
                 setChip('mySurplusState', rows.length ? rows.length + ' logged' : 'empty', CHIP_DONE);
                 renderMySurplus(rows, '');
             });
@@ -1493,6 +1608,83 @@
             if (mySurplusUnwatch) {
                 mySurplusUnwatch();
                 mySurplusUnwatch = null;
+            }
+        }
+
+        // ---------------------------------------------------------------------------
+        // The shared board. This is the same table the recipient dashboard reads as its
+        // feed, read here too: every published post from every donor, newest first. The
+        // board is one board, so the cards come from the same renderer — without its
+        // claim action, because taking surplus is the recipient's side of the exchange,
+        // and with this donor's own posts marked. It is live the same way the
+        // recipient's copy is: a subscription while the screen is open, with a re-read
+        // behind it for a project where the realtime publication was not set up.
+        // ---------------------------------------------------------------------------
+        var feedPoll = null;
+        var feedUnwatch = null;
+
+        function loadFeed() {
+            var db = resqDb();
+            if (!db) { return; }
+            return db.listPosts({}).then(function (res) {
+                if (!res.ok) {
+                    setChip('feedState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    renderFeed(null, surplusFailure(res.error));
+                    return;
+                }
+                var rows = res.data || [];
+                setChip('feedState', rows.length ? db.feedSummary(rows) : 'no posts',
+                    rows.length ? CHIP_DONE : CHIP_IDLE);
+                renderFeed(rows, '');
+            });
+        }
+
+        function renderFeed(rows, message) {
+            var list = document.getElementById('feedList');
+            if (!list) { return; }
+            var db = resqDb();
+            if (!rows) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
+                    + surplusText(message) + '</span>';
+                return;
+            }
+            if (!rows.length) {
+                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                    + 'No surplus has been posted yet. Every logged item appears here on its own.'
+                    + '</span>';
+                return;
+            }
+            var mine = donorName();
+            list.innerHTML = rows.map(function (row) {
+                return db.feedCard(row, { canClaim: false, ownName: mine });
+            }).join('');
+        }
+
+        function openFeed() {
+            setChip('feedState', 'reading\u2026', CHIP_BUSY);
+            var db = resqDb();
+            if (!db) {
+                setChip('feedState', 'no client', CHIP_BUSY);
+                renderFeed(null, 'The Supabase client is not on this page. Check the connection and reload.');
+                return;
+            }
+            loadFeed();
+            if (!feedUnwatch) {
+                feedUnwatch = db.watchPosts(function () { loadFeed(); });
+            }
+            if (!feedPoll) {
+                feedPoll = window.setInterval(loadFeed, db.pollMs);
+            }
+        }
+
+        function closeFeed() {
+            if (feedPoll) {
+                window.clearInterval(feedPoll);
+                feedPoll = null;
+            }
+            if (feedUnwatch) {
+                feedUnwatch();
+                feedUnwatch = null;
             }
         }
 

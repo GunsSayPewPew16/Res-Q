@@ -57,18 +57,20 @@ role chosen at the start.
    a donor, `res_q_dashboard_recipient.html` for a recipient. Both are layout
    skeletons around the parts that are wired: the delivery card, which opens the
    map overlay described under [The delivery map](#the-delivery-map), the donor's
-   *Log surplus* panel, which writes a row into Supabase, and the two screens that
-   read that table back — the donor's *Surplus Received* and the recipient's
-   *Feed*, both described under [The surplus board](#the-surplus-board-supabase) —
+   *Log surplus* form, which now sits at the top of the donor's *Feed* and writes a
+   row into Supabase, and the screens that read that table back — the *Feed* both
+   roles now share, and the donor's *Surplus Received*, all described under
+   [The surplus board](#the-surplus-board-supabase) —
    while the boxes, the metric row and the queue rail around them still hold no data
    of their own. The slim navigation rail both pages share has four rows, labelled
    Dashboard, Feed, Surplus Received and Incoming Deliveries, with Received
    Deliveries in the first slot below the rail's divider; the slot under it stays a
-   bare pipeline pulse. Dashboard is the default selection; Surplus Received opens
-   the donor's own logged surplus and the recipient's Feed opens the live board,
-   while the remaining items — Incoming Deliveries, or the Received Deliveries
-   slot — still wipe the working area for a blank screen of their own. Picking
-   Dashboard brings the dashboard back. The donor names its own sections; the
+   bare pipeline pulse. Dashboard is the default selection; Feed opens the shared
+   board on either dashboard — with the donor's posting form beside it, which is where
+   a donor logs an item now — Surplus Received opens the donor's own logged surplus,
+   and the remaining items — Incoming Deliveries, or the Received Deliveries slot —
+   still wipe the working area for a blank screen of their own. Picking Dashboard
+   brings the dashboard back. The donor names its own sections; the
    recipient page still carries the donor's earlier set until its own names arrive.
    The right-hand panel of the donor's lower grid carries the impact figures under
    a *Donor Metrics* heading — surplus saved in kilos, meals served and orders
@@ -98,8 +100,8 @@ the matching logic, and invites visitors into the flow above.
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, the *Log surplus* form that posts to the surplus board, the *Surplus Received* section that reads the donor's own rows back, and the delivery-location card |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail; its *Feed* section is the live surplus board with a claim button on every open post |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section holding both the *Log surplus* form and the whole board read back (a donor's own posts marked), the *Surplus Received* section reading only their own rows, plus the delivery-location card |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail; its *Feed* section is that same live board, with a claim button on every open post |
 | `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, and formats a post in the site's tone |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
 
@@ -198,25 +200,39 @@ Apply it once against the project: paste
 New query → Run** in the Supabase dashboard, or point the Supabase CLI at the project
 and run `supabase db push`. The file is written to be safe to run more than once.
 
-Two screens use it, and both are on a dashboard rather than behind the API:
+The board is the *Feed* on **both** dashboards — donors and recipients are looking at
+the same list of everything published, newest first. The three screens that use it all
+sit on a dashboard rather than behind the API:
 
-- **Log surplus** — the donor's panel on the dashboard. Item, quantity and pickup
-  location, with the pickup address prefilled from the account's own confirmed
-  location, and *Submit to feed* inserts the row. Nothing is optimistic: the chip
-  beside the heading reads *logged* only once the database has answered with the row
-  it wrote, and a refusal is shown with its reason instead of a success message.
-- **The board itself** — the recipient's *Feed*, and the donor's *Surplus Received*,
-  which is the same table read back through that donor's own name. Each post carries
-  its item, quantity, donor, pickup location, age and status. An open post has one
-  action, **Claim**, which writes `status = 'claimed'`; the card then keeps its place
-  with a claimed chip and no button, so the board reads as a record of what was
-  offered rather than quietly emptying. A claim only ever matches a post that is still
-  `pending`, so the second visitor to click the same item is told *already claimed* and
-  the card is re-read instead of the claim being overwritten.
+- **Log surplus** — the donor's panel at the top of the donor's own *Feed*, beside
+  the board it posts to, so posting and watching the post land are one screen: item,
+  quantity and pickup location, the pickup address prefilled from the account's own
+  confirmed location, and *Submit to feed* inserts the row. Nothing is optimistic:
+  the chip beside the heading reads *logged* only once the database has answered with
+  the row it wrote, a refusal is shown with its reason instead of a success message,
+  and the board beside it refreshes at that moment rather than waiting for the
+  subscription to echo the row back.
+- **The board itself** — the *Feed* on either dashboard. Each post carries its item,
+  quantity, donor, pickup location, age and status; a donor's own posts are marked
+  *your post* so they are easy to pick out among everyone else's. The two copies
+  differ only in what they offer: a recipient's card has one action, **Claim**, which
+  writes `status = 'claimed'`, and a donor's has none, because taking surplus is the
+  recipient's side of the exchange. A claimed card keeps its place with a claimed chip
+  and no button, so the board reads as a record of what was offered rather than
+  quietly emptying. A claim only ever matches a post that is still `pending`, so the
+  second visitor to click the same item is told *already claimed* and the card is
+  re-read instead of the claim being overwritten. A claim is also an accepted order,
+  and it adds one to that donor's orders figure on their dashboard's effect panel —
+  see [the impact figures](#how-the-pieces-connect).
+- **Surplus Received** — the donor's own rows, the same table narrowed to that
+  donor's name, with the status each one has reached. It is the donor's log rather
+  than the shared board, which is why it lives beside the feed instead of in it.
 
-Both screens are live. While one of them is on screen it subscribes to Postgres
+Every one of those screens is live. While one is on screen it subscribes to Postgres
 changes on the table over Supabase Realtime, so a post logged anywhere appears in an
-open feed on its own and a claim flips the card in every other open feed. A timer
+open feed on its own and a claim flips the card in every other open feed — including
+the donor's copy of the board, which is the same list being watched from the other
+side. A timer
 re-reads the table every 20 seconds as well, which is what covers a project where the
 realtime publication was not set up — the board is then still live, just a little
 later. The subscription and the timer both stop when the section is left.
@@ -369,6 +385,14 @@ How the pieces connect:
   come out of the pipeline yet, and a profile created before the columns existed is
   given its figures the first time it is read. That is what keeps the three figures the
   same on every load instead of changing under whoever is reading them.
+  The orders figure is the one that then moves, because the board is where an order is
+  accepted: **every post of that donor's a recipient claims adds one to it.** The count
+  is read from the board's own rows rather than written back to the profile, so it
+  needs no second write against another account, it cannot drift from the claims that
+  were really made, and it behaves the same in demo mode as with persistence on. While
+  Dashboard is the section in front of the donor it is watched and re-read like the
+  board's own screens are, so a claim made in another browser moves the figure there
+  without a reload.
 - **The confirmed delivery location.** `/api/delivery-location` writes four fields on
   the signed-in account: `delivery_address`, `delivery_lat`, `delivery_lng` and
   `delivery_confirmed_at`. The dashboard map reads them back from `/api/me` when it
@@ -410,14 +434,15 @@ calls it yet, so what the marketing page shows remains illustrative, and the don
 impact figures are still placeholders rather than a count of the deliveries that ran.
 
 The surplus board is further along than the rest: its table is a real Postgres one in
-a managed project, and it is the part of the site two visitors can already see at the
-same time. It writes with the anonymous role and trusts the name on the profile, so
+a managed project, it is the part of the site two visitors can already see at the same
+time, and both roles read the same list of published posts rather than one seeing the
+board and the other seeing only their own rows. It writes with the anonymous role and trusts the name on the profile, so
 anything that had to belong to a particular account would need those writes moved
 behind the backend first.
 
 The dashboards are part wired, part skeleton: the rails name their sections and switch
 between them, four parts are wired end to end — the delivery card, the donor's *Log
-surplus* panel, and the two screens that read the surplus board — and the boxes, metric
+surplus* form on its feed screen, and the three screens that read the surplus board — and the boxes, metric
 row and queue rail around them still hold no data of their own. The map needs no key,
 so it works as soon as the server is running: pick a spot, confirm it, and the address
 and its coordinates are stored on the account and waiting there the next time the map

@@ -1264,10 +1264,8 @@
                     return;
                 }
                 var rows = res.data || [];
-                var open = rows.filter(function (row) { return row.status !== 'claimed'; }).length;
-                setChip('feedState', rows.length
-                    ? open + ' open / ' + rows.length + ' posted'
-                    : 'no posts', rows.length ? CHIP_DONE : CHIP_IDLE);
+                setChip('feedState', rows.length ? db.feedSummary(rows) : 'no posts',
+                    rows.length ? CHIP_DONE : CHIP_IDLE);
                 renderFeed(rows, '');
             });
         }
@@ -1275,6 +1273,7 @@
         function renderFeed(rows, message) {
             var list = document.getElementById('feedList');
             if (!list) { return; }
+            var db = resqDb();
             if (!rows) {
                 list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
                     + feedText(message) + '</span>';
@@ -1286,45 +1285,9 @@
                     + '</span>';
                 return;
             }
-            list.innerHTML = rows.map(feedCard).join('');
-        }
-
-        // One card per post: what it is and how much, who is offering it and where
-        // from, the status, and — while it is still open — the claim button. A
-        // claimed post keeps its card and loses its button, so the board reads as a
-        // record rather than quietly shrinking.
-        function feedCard(row) {
-            var db = resqDb();
-            var claimed = row.status === 'claimed';
-            return '<div class="p-4 rounded-2xl border transition-all ' +
-                    (claimed ? 'bg-black/20 border-neutral-800'
-                        : 'bg-neutral-800/50 border-neutral-800 hover:border-neutral-700') + '">' +
-                '<div class="flex flex-wrap items-start justify-between gap-3">' +
-                    '<div class="min-w-0">' +
-                        '<span class="block text-sm font-black uppercase tracking-widest ' +
-                            (claimed ? 'text-neutral-500' : 'text-[#f4f4f0]') + '">' +
-                            feedText(row.item_name) + '</span>' +
-                        '<span class="block mt-1 font-mono text-[11px] text-neutral-400">' +
-                            feedText(db.postNeeds(row)) + '</span>' +
-                    '</div>' +
-                    '<span class="' + db.statusChip(row.status) + '">' +
-                        db.statusLabel(row.status) + '</span>' +
-                '</div>' +
-                '<div class="mt-3 flex flex-wrap items-end justify-between gap-3">' +
-                    '<div class="font-mono text-[10px] text-neutral-600">' +
-                        '<span class="block">FROM ' + feedText(row.donor_name) + '</span>' +
-                        '<span class="block mt-1">AT ' + feedText(row.location) + '</span>' +
-                        '<span class="block mt-1">LOGGED ' + feedText(db.formatWhen(row.created_at)) +
-                        '</span>' +
-                    '</div>' +
-                    (claimed ? ''
-                        : '<button type="button" data-claim="' + feedText(row.id) + '" ' +
-                            'onclick="claimSurplus(this)" class="px-5 py-3 rounded-xl bg-[#ff4500] ' +
-                            'text-black text-xs font-black uppercase tracking-widest ' +
-                            'hover:bg-[#ff5a1f] transition-all disabled:opacity-40 ' +
-                            'disabled:cursor-not-allowed">Claim</button>') +
-                '</div>' +
-            '</div>';
+            list.innerHTML = rows.map(function (row) {
+                return db.feedCard(row, { canClaim: true });
+            }).join('');
         }
 
         function claimSurplus(button) {
