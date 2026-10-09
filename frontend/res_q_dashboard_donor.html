@@ -283,20 +283,24 @@
         <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-            <!-- Left rail: the four section rows carry their labels, then the received
-                 deliveries slot; the pipeline status stays a bare pulse. Every item but
-                 Dashboard swaps the working area for that section's blank screen. -->
+            <!-- Left rail: this dashboard's own five sections, in the order the work
+                 runs — Dashboard and Feed, the analyser that reads back the surplus
+                 this donor has logged, the deliveries that surplus is out on, and the
+                 ones that have finished. The finished-deliveries slot sits under the
+                 divider with the pipeline status pulse beneath it. Every item but
+                 Dashboard, Feed and the analyser swaps the working area for that
+                 section's own frame. -->
             <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
                 <nav class="space-y-2" aria-label="Dashboard sections">
                     <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-[#ff4500] border border-[#ff4500] text-[11px] font-mono uppercase text-black transition-all">Dashboard</a>
                     <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Feed</a>
-                    <a href="#" data-view="surplus-received" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Received</a>
-                    <a href="#" data-view="incoming-deliveries" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Incoming Deliveries</a>
+                    <a href="#" data-view="surplus-analyser" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Analyser</a>
+                    <a href="#" data-view="ongoing-deliveries" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Ongoing Deliveries</a>
                 </nav>
 
                 <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <button type="button" id="receivedDeliveries" data-view="received-deliveries" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
-                        <span class="text-[11px] font-mono uppercase text-neutral-400">Received Deliveries</span>
+                    <button type="button" id="finishedDeliveries" data-view="finished-deliveries" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
+                        <span class="text-[11px] font-mono uppercase text-neutral-400">Finished Deliveries</span>
                     </button>
                     <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
                         <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -407,16 +411,19 @@
             <div id="viewFeed" class="hidden lg:col-span-10">
                 <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
                     <!-- The board's tab bar, from the reference: the view being read in
-                         cream under an accent rule, the other muted. Both views are real
-                         filters over the rows already read — the whole board, or this
-                         donor's own posts on it — so switching is instant and the chip at
-                         the right keeps counting the whole board either way. The board's
-                         name moves to a screen-reader heading under the tabs. -->
+                         cream under an accent rule, the others muted. All three views are
+                         real filters over the rows already read — the whole board, this
+                         donor's own posts on it, or the posts tagged with the goods this
+                         account picked in its goods profile, which is what *For You*
+                         means — so switching is instant and the chip at the right keeps
+                         counting the whole board either way. The board's name moves to a
+                         screen-reader heading under the tabs. -->
                     <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-5 border-b border-neutral-800">
                         <div class="flex items-center gap-6" role="tablist" aria-label="Board views">
                             <span class="sr-only">Live surplus feed</span>
                             <button type="button" id="feedTabAll" role="tab" aria-selected="true" onclick="setFeedTab('all')" class="feed-tab is-active">Everyone</button>
                             <button type="button" id="feedTabMine" role="tab" aria-selected="false" onclick="setFeedTab('mine')" class="feed-tab">My posts</button>
+                            <button type="button" id="feedTabForYou" role="tab" aria-selected="false" onclick="setFeedTab('foryou')" class="feed-tab">For You</button>
                         </div>
                         <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
                     </div>
@@ -424,16 +431,17 @@
                     <!-- The compose box, from the reference: the silhouette avatar, the one
                          line a post starts on, then the row of controls with the one button
                          at the far right. The controls are the site's own — an item, a
-                         quantity and a pickup location — because those three are what the
-                         table needs, and the pickup address is prefilled from the account's
-                         own confirmed location. What is typed here becomes a row in
-                         Supabase's surplus_posts table, the same table the board under it and
-                         the recipient dashboard read, so a logged item is on somebody else's
-                         screen the moment it is written. The row goes straight to the
-                         database rather than through the local backend, which keeps owning
-                         sign-in, the profile and the confirmed delivery location. Nothing is
-                         optimistic: the chip reads *logged* only once the database has
-                         answered with the row it wrote. -->
+                         quantity, the goods category it is for and a pickup location —
+                         because those four are what the table reads, and the pickup address
+                         is prefilled from the account's own confirmed location. What is
+                         typed here becomes a row in Supabase's surplus_posts table, the
+                         same table the board under it and the recipient dashboard read, so
+                         a logged item is on somebody else's screen the moment it is
+                         written. The row goes straight to the database rather than through
+                         the local backend, which keeps owning sign-in, the profile and the
+                         confirmed delivery location. Nothing is optimistic: the line under
+                         the fields says so only once the database has answered with the row
+                         it wrote. -->
                     <form id="surplusForm" onsubmit="submitSurplus(event)" class="pb-5 mb-5 border-b border-neutral-800">
                         <span class="sr-only">Log surplus</span>
                         <div class="flex items-start gap-3">
@@ -450,13 +458,37 @@
                                 <span aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#777]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"></path><path d="M3 8l9 5 9-5"></path><path d="M12 13v8"></path></svg></span>
                                 <input id="surplusQuantity" name="quantity" type="text" maxlength="80" autocomplete="off" placeholder="24 kg across 6 crates" class="w-full bg-black/20 border border-neutral-800 rounded-full pl-10 pr-4 py-2.5 text-sm text-[#f4f4f0] placeholder-[#777] focus:outline-none focus:border-[#ff4500] transition-all">
                             </label>
+
+                            <!-- The goods category this post is for, in the same long pill
+                                 the quantity and the address wear and between the two of
+                                 them. The list under it is the goods profile's own — the
+                                 six categories with their emoji and their hint line —
+                                 rendered from the shared vocabulary in resq_supabase.js so a
+                                 category cannot be spelled two ways on two pages. The pick
+                                 is what tags the row, and the tag is what a *For You* feed
+                                 filters on, so it is asked for rather than guessed. -->
+                            <div class="relative block flex-1 min-w-[210px]">
+                                <span class="sr-only">Goods category</span>
+                                <div id="goodsTrigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false"
+                                    onclick="toggleGoodsMenu()" onkeydown="goodsTriggerKey(event)"
+                                    class="w-full flex items-center gap-2 bg-black/20 border border-neutral-800 hover:border-neutral-700 rounded-full pl-10 pr-3 py-2.5 text-sm text-[#f4f4f0] cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700">
+                                    <span aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#777]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"></path><circle cx="7" cy="7" r="1.5"></circle></svg></span>
+                                    <span id="goodsLabel" class="truncate text-[#777]">Pick a goods category</span>
+                                    <span aria-hidden="true" id="goodsArrow" class="ml-auto font-mono text-[10px] text-[#777] transition-transform duration-200">&#9660;</span>
+                                </div>
+                                <div id="goodsMenu" role="listbox" aria-label="Goods categories" class="hidden absolute top-full left-0 right-0 mt-2 z-50 bg-[#141414] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden">
+                                    <div id="goodsMenuList" class="p-2 space-y-1 max-h-[212px] overflow-y-auto bg-black/20"></div>
+                                </div>
+                            </div>
+
                             <label class="relative block flex-1 min-w-[220px]">
                                 <span class="sr-only">Pickup location</span>
                                 <span aria-hidden="true" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#777]"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.686-7-11a7 7 0 1 1 14 0c0 5.314-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></span>
                                 <input id="surplusLocation" name="location" type="text" maxlength="160" autocomplete="off" placeholder="100 Queen Street West, Toronto" class="w-full bg-black/20 border border-neutral-800 rounded-full pl-10 pr-4 py-2.5 text-sm text-[#f4f4f0] placeholder-[#777] focus:outline-none focus:border-[#ff4500] transition-all">
                             </label>
-                            <span id="surplusNote" class="hidden xl:inline font-mono text-[10px] text-neutral-600">Every logged item lands on the shared board as it is written.</span>
-                            <span id="surplusFormState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                            <!-- The line the compose box answers on: empty until a post is
+                                 refused or logged, so the row carries no standing copy. -->
+                            <span id="surplusNote" class="hidden xl:inline font-mono text-[10px] text-neutral-600"></span>
                             <button type="submit" id="surplusSubmit" class="px-6 py-2.5 rounded-full bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Post</button>
                         </div>
                     </form>
@@ -470,11 +502,11 @@
                 </div>
             </div>
 
-            <!-- Surplus Received: the donor's own rows, read back from Supabase. The
+            <!-- Surplus Analyser: the donor's own rows, read back from Supabase. The
                  chip on each one is the same status field a recipient's claim writes,
                  so an item somebody has taken turns from pending to claimed here
                  without a reload. -->
-            <div id="viewSurplusReceived" class="hidden lg:col-span-10">
+            <div id="viewSurplusAnalyser" class="hidden lg:col-span-10">
                 <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
                     <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
                         <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Your surplus</span>
@@ -674,15 +706,15 @@
                 item.classList.toggle('text-black', on);
                 item.classList.toggle('text-neutral-400', !on);
             });
-            var received = document.getElementById('receivedDeliveries');
-            var label = received ? received.querySelector('span') : null;
-            var picked = element === received;
-            if (received) {
-                received.classList.toggle('bg-[#ff4500]', picked);
-                received.classList.toggle('border-[#ff4500]', picked);
-                received.classList.toggle('bg-neutral-800/50', !picked);
-                received.classList.toggle('border-neutral-800', !picked);
-                received.classList.toggle('hover:border-neutral-700', !picked);
+            var finished = document.getElementById('finishedDeliveries');
+            var label = finished ? finished.querySelector('span') : null;
+            var picked = element === finished;
+            if (finished) {
+                finished.classList.toggle('bg-[#ff4500]', picked);
+                finished.classList.toggle('border-[#ff4500]', picked);
+                finished.classList.toggle('bg-neutral-800/50', !picked);
+                finished.classList.toggle('border-neutral-800', !picked);
+                finished.classList.toggle('hover:border-neutral-700', !picked);
             }
             if (label) {
                 label.classList.toggle('text-black', picked);
@@ -702,9 +734,9 @@
         var SECTION_VIEWS = {
             dashboard: 'viewDashboard',
             feed: 'viewFeed',
-            'surplus-received': 'viewSurplusReceived'
+            'surplus-analyser': 'viewSurplusAnalyser'
         };
-        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewSurplusReceived', 'viewBlank'];
+        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewSurplusAnalyser', 'viewBlank'];
 
         function showView(name) {
             var wanted = SECTION_VIEWS[name] || 'viewBlank';
@@ -713,7 +745,7 @@
                 if (view) { view.classList.toggle('hidden', id !== wanted); }
             });
             if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
-            if (wanted === 'viewSurplusReceived') { openMySurplus(); } else { closeMySurplus(); }
+            if (wanted === 'viewSurplusAnalyser') { openMySurplus(); } else { closeMySurplus(); }
             if (wanted === 'viewDashboard') { openDashboardOrders(); } else { closeDashboardOrders(); }
         }
 
@@ -1485,7 +1517,7 @@
         // ---------------------------------------------------------------------------
         // Surplus posts. This is the one place a dashboard talks to Supabase rather
         // than to the local backend: the form below writes a row into the shared
-        // surplus_posts table, and the Surplus Received screen reads this donor's own
+        // surplus_posts table, and the Surplus Analyser screen reads this donor's own
         // rows back from it. Both go through window.ResQDB, which fetches the Supabase
         // library on first use and says plainly when the table is not there yet.
         //
@@ -1520,8 +1552,109 @@
             note.className = 'font-mono text-[10px] ' + (tone || 'text-neutral-600');
         }
 
+        // Back to the state the row rests in: nothing said, and the line kept off
+        // narrow screens the way it is at load.
+        function clearSurplusNote() {
+            var note = document.getElementById('surplusNote');
+            if (!note) { return; }
+            note.textContent = '';
+            note.className = 'hidden xl:inline font-mono text-[10px] text-neutral-600';
+        }
+
+        // --------------------------------------------------------- goods category
+        // The pick behind the compose box's third pill. The rows are the goods
+        // profile's own six, read from the shared vocabulary rather than retyped here.
+        // The pick is asked for rather than guessed: a post with no category would be
+        // invisible to every *For You* feed, including this donor's own.
+        var goodsPick = '';
+
+        function goodsTypes() {
+            var db = resqDb();
+            return (db && db.goodsTypes) || [];
+        }
+
+        function goodsMenuOpen() {
+            var menu = document.getElementById('goodsMenu');
+            return !!menu && !menu.classList.contains('hidden');
+        }
+
+        // One row per category, in the goods profile's own shape: the emoji, the name
+        // and the line that says what belongs in it, over the list's own scroll.
+        function renderGoodsMenu() {
+            var list = document.getElementById('goodsMenuList');
+            if (!list) { return; }
+            list.innerHTML = goodsTypes().map(function (type) {
+                var on = type.value === goodsPick;
+                return '<div role="option" aria-selected="' + (on ? 'true' : 'false') + '"'
+                    + ' data-value="' + type.value + '" onclick="chooseGoods(\'' + type.value + '\')"'
+                    + ' class="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all '
+                    + (on ? 'bg-neutral-800/50 text-[#ff4500]'
+                          : 'text-[#f4f4f0] hover:bg-neutral-800/30 hover:text-[#ff4500]') + '">'
+                    + '<span aria-hidden="true" class="text-xl">' + type.emoji + '</span>'
+                    + '<span class="min-w-0">'
+                        + '<span class="block font-bold text-sm">' + type.label + '</span>'
+                        + '<span class="block font-mono text-[10px] text-neutral-500">'
+                            + type.hint + '</span>'
+                    + '</span>'
+                    + (on ? '<span class="ml-auto font-mono text-[10px]">&#10003;</span>' : '')
+                    + '</div>';
+            }).join('');
+        }
+
+        function setGoodsMenu(open) {
+            var menu = document.getElementById('goodsMenu');
+            var trigger = document.getElementById('goodsTrigger');
+            var arrow = document.getElementById('goodsArrow');
+            if (!menu || !trigger) { return; }
+            if (open) { renderGoodsMenu(); }
+            menu.classList.toggle('hidden', !open);
+            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (arrow) { arrow.classList.toggle('rotate-180', open); }
+        }
+
+        function openGoodsMenu() { setGoodsMenu(true); }
+
+        function closeGoodsMenu() { setGoodsMenu(false); }
+
+        function toggleGoodsMenu() { setGoodsMenu(!goodsMenuOpen()); }
+
+        // The trigger is a control, so the keyboard opens it the way a button does.
+        function goodsTriggerKey(event) {
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+                event.preventDefault();
+                toggleGoodsMenu();
+                return;
+            }
+            if (event.key === 'Escape') { closeGoodsMenu(); }
+        }
+
+        function chooseGoods(value) {
+            var db = resqDb();
+            goodsPick = value;
+            var label = document.getElementById('goodsLabel');
+            if (label) {
+                label.textContent = (db && db.goodsLabel) ? db.goodsLabel(value) : value;
+                label.classList.remove('text-[#777]');
+                label.classList.add('text-[#f4f4f0]');
+            }
+            renderGoodsMenu();
+            closeGoodsMenu();
+            clearSurplusNote();
+        }
+
+        // Clicking anywhere else, or tabbing away from the picker, closes the list.
+        document.addEventListener('click', function (event) {
+            if (!goodsMenuOpen()) { return; }
+            var node = event.target;
+            while (node && node !== document) {
+                if (node.id === 'goodsTrigger' || node.id === 'goodsMenu') { return; }
+                node = node.parentNode;
+            }
+            closeGoodsMenu();
+        });
+
         // Who the post is from, named the way the header names them. It is the value
-        // the Surplus Received screen filters on, so both always agree.
+        // the Surplus Analyser screen filters on, so both always agree.
         function donorName() {
             var profile = resqProfile || {};
             var full = [profile.first_name, profile.last_name].filter(function (part) {
@@ -1558,8 +1691,8 @@
             if (event) { event.preventDefault(); }
             var db = resqDb();
             if (surplusSubmitting) { return; }
+            clearSurplusNote();
             if (!db) {
-                setChip('surplusFormState', 'no client', CHIP_BUSY);
                 setSurplusNote('The Supabase client is not on this page. Check the connection and reload.',
                     'text-[#ff9b73]');
                 return;
@@ -1567,47 +1700,54 @@
 
             // Every column the table insists on is read before anything is sent, so a
             // half-filled form answers here instead of coming back as a database error.
+            // The goods category counts as one of them, and the list opens under the
+            // field it is missing from rather than leaving the answer to be guessed.
             var item = surplusValue('surplusItem');
             var quantity = surplusValue('surplusQuantity');
             var location = surplusValue('surplusLocation');
-            if (!item || !quantity || !location) {
-                setChip('surplusFormState', 'incomplete', CHIP_BUSY);
-                setSurplusNote('An item, a quantity and a pickup location are all needed.',
+            if (!item || !quantity || !location || !goodsPick) {
+                setSurplusNote('An item, a quantity, a goods category and a pickup location are all needed.',
                     'text-[#ff9b73]');
+                if (!goodsPick) { openGoodsMenu(); }
                 return;
             }
 
             surplusSubmitting = true;
             var button = document.getElementById('surplusSubmit');
             if (button) { button.disabled = true; }
-            setChip('surplusFormState', 'sending', CHIP_BUSY);
             setSurplusNote('Writing the post to Supabase\u2026');
 
             db.createPost({
                 donorName: donorName(),
                 itemName: item,
                 quantity: quantity,
-                location: location
+                location: location,
+                goodsType: goodsPick
             }).then(function (res) {
                 surplusSubmitting = false;
                 if (button) { button.disabled = false; }
                 if (!res.ok) {
-                    setChip('surplusFormState', 'failed', CHIP_BUSY);
                     setSurplusNote(surplusFailure(res.error), 'text-[#ff9b73]');
                     return;
                 }
 
                 // The fields that describe one item are cleared for the next one; the
-                // pickup address stays, because a donor's address rarely changes.
+                // pickup address and the goods category stay, because a donor's address
+                // rarely changes and the next post is usually the same kind of goods.
                 var itemField = document.getElementById('surplusItem');
                 var quantityField = document.getElementById('surplusQuantity');
                 if (itemField) { itemField.value = ''; }
                 if (quantityField) { quantityField.value = ''; }
                 if (itemField) { itemField.focus(); }
-                setChip('surplusFormState', 'logged', CHIP_DONE);
                 setSurplusNote('Logged as '
                     + ((res.data && res.data.item_name) || item)
-                    + ' \u2014 it is on the board now.');
+                    + ' \u2014 it is on the board now.'
+                    // The tag is the one part that can be dropped: the post itself goes up
+                    // either way, so the line says which of the two happened.
+                    + (res.untagged
+                        ? ' It carries no goods category: supabase/migrations/'
+                            + '20261009000000_add_goods_type_to_surplus_posts.sql has not been run yet.'
+                        : ''));
                 // The post was made on the board's own screen, so the board is refreshed
                 // here rather than waiting for the subscription to echo the row back.
                 loadFeed();
@@ -1615,7 +1755,6 @@
             }).catch(function () {
                 surplusSubmitting = false;
                 if (button) { button.disabled = false; }
-                setChip('surplusFormState', 'failed', CHIP_BUSY);
                 setSurplusNote('Supabase did not accept that: the request did not go through.',
                     'text-[#ff9b73]');
             });
@@ -1724,25 +1863,46 @@
         // ---------------------------------------------------------------------------
         var feedPoll = null;
         var feedUnwatch = null;
-        // The board as it was last read, and which of its two views is on screen. The
+        // The board as it was last read, and which of its three views is on screen. The
         // tab filters those rows rather than reading the table again, so switching is
         // instant and the chip above still counts the whole board.
         var feedRows = [];
         var feedTab = 'all';
+        var FEED_TABS = { all: 'feedTabAll', mine: 'feedTabMine', foryou: 'feedTabForYou' };
 
         function setFeedTab(name) {
-            feedTab = name === 'mine' ? 'mine' : 'all';
-            var all = document.getElementById('feedTabAll');
-            var mine = document.getElementById('feedTabMine');
-            if (all) {
-                all.classList.toggle('is-active', feedTab === 'all');
-                all.setAttribute('aria-selected', feedTab === 'all' ? 'true' : 'false');
-            }
-            if (mine) {
-                mine.classList.toggle('is-active', feedTab === 'mine');
-                mine.setAttribute('aria-selected', feedTab === 'mine' ? 'true' : 'false');
-            }
+            feedTab = FEED_TABS[name] ? name : 'all';
+            Object.keys(FEED_TABS).forEach(function (key) {
+                var tab = document.getElementById(FEED_TABS[key]);
+                if (!tab) { return; }
+                tab.classList.toggle('is-active', feedTab === key);
+                tab.setAttribute('aria-selected', feedTab === key ? 'true' : 'false');
+            });
             paintFeed();
+        }
+
+        // The goods this account picked in its goods profile — what it handles, as a
+        // donor. *For You* is those categories and nothing else. The picks go through
+        // the shared vocabulary, which drops anything the profile holds that is not one
+        // of the six and keeps the order the categories are listed in.
+        function profileGoods() {
+            var picked = (resqProfile && resqProfile.surplus_types) || [];
+            return goodsTypes().filter(function (type) {
+                return picked.indexOf(type.value) !== -1;
+            }).map(function (type) { return type.value; });
+        }
+
+        // What each view says when it has nothing to draw.
+        function feedEmpty() {
+            if (feedTab === 'mine') {
+                return 'Nothing of yours is on the board yet. Every item you log appears here as you log it.';
+            }
+            if (feedTab === 'foryou') {
+                return profileGoods().length
+                    ? 'Nothing on the board is tagged with the goods you handle right now.'
+                    : 'Your goods profile has no categories picked yet, so there is nothing to narrow the board to.';
+            }
+            return 'No surplus has been posted yet. Every logged item appears here on its own.';
         }
 
         function loadFeed() {
@@ -1789,14 +1949,16 @@
             var db = resqDb();
             if (!list || !db) { return; }
             var mine = donorName();
+            var goods = profileGoods();
             var rows = feedTab === 'mine'
                 ? feedRows.filter(function (row) { return db.isOwnPost(row, mine); })
-                : feedRows;
+                : (feedTab === 'foryou'
+                    // An untagged post belongs to no category, so it never reaches this view.
+                    ? feedRows.filter(function (row) { return goods.indexOf(row.goods_type) !== -1; })
+                    : feedRows);
             if (!rows.length) {
                 list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
-                    + (feedTab === 'mine'
-                        ? 'Nothing of yours is on the board yet. Every item you log appears here as you log it.'
-                        : 'No surplus has been posted yet. Every logged item appears here on its own.')
+                    + feedEmpty()
                     + '</span>';
                 return;
             }

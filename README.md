@@ -59,20 +59,23 @@ role chosen at the start.
    map overlay described under [The delivery map](#the-delivery-map), the donor's
    compose box, which now opens the donor's *Feed* and writes a row into Supabase,
    and the screens that read that table back — the *Feed* both
-   roles now share, and the donor's *Surplus Received*, all described under
+   roles now share, and the donor's *Surplus Analyser*, all described under
    [The surplus board](#the-surplus-board-supabase) —
    while the boxes, the metric row and the queue rail around them still hold no data
-   of their own. The slim navigation rail both pages share opens with the same two
-   rows, Dashboard and Feed, and then names each role's own work: the donor's rail
-   reads Surplus Received and Incoming Deliveries, and the recipient's reads Incoming
-   Deliveries and Delivery Status. Both take Received Deliveries in the first slot
-   below the rail's divider, and the slot under that stays a bare pipeline pulse.
+   of their own. Each page owns its own rail, markup and slot included, so
+   relabelling one role's sections cannot move the other's: both open with the same
+   two rows, Dashboard and Feed, and then name their own work. The donor's runs
+   Surplus Analyser, Ongoing Deliveries, Finished Deliveries — the last in the slot
+   below the rail's divider — and the recipient's runs Incoming Deliveries, Delivery
+   Status, Received Deliveries, which takes that same slot position. The slot under
+   whichever name is there stays a bare pipeline pulse.
    Dashboard is the default selection; Feed opens the shared
    board on either dashboard — with the donor's compose box above it, which is where
-   a donor logs an item now — Surplus Received opens the donor's own logged surplus,
-   and the remaining items — the recipient's two section rows, the donor's Incoming
-   Deliveries, or either page's Received Deliveries slot — still wipe the working
-   area for a blank screen of their own. Picking Dashboard brings the dashboard back.
+   a donor logs an item now — Surplus Analyser opens the donor's own logged surplus,
+   and the remaining items — the recipient's two section rows, the donor's Ongoing
+   and Finished Deliveries, or the recipient's Received Deliveries slot — still wipe
+   the working area for a blank screen of their own. Picking Dashboard brings the
+   dashboard back.
    The right-hand panel of the donor's lower grid carries the impact figures under
    a *Donor Metrics* heading — surplus saved in kilos, meals served and orders
    completed — read from that donor's own stored figures, so the same numbers are
@@ -101,10 +104,11 @@ the matching logic, and invites visitors into the flow above.
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section that opens on the *Log surplus* compose box and runs into the whole board read back (a donor's own posts marked), the *Surplus Received* section reading only their own rows, plus the delivery-location card |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same rail skeleton under its own section names (*Incoming Deliveries*, *Delivery Status*); its *Feed* section is that same live board, with a claim button on every open post |
-| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, and draws every post as the one shared card both roles see |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows, plus the delivery-location card |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same rail skeleton under its own section names (*Incoming Deliveries*, *Delivery Status*); its *Feed* section is that same live board in three views (all posts, open, and the posts tagged with the goods this recipient needs), with a claim button on every open post |
+| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, holds the six goods categories one time, and draws every post as the one shared card both roles see |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
+| `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` | The `goods_type` tag column, its constraint to the six categories and the claim-guard update that freezes it — run once against the project, after the file above |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
 visitor's role when signed in, and to the landing page otherwise. Each page works
@@ -193,13 +197,19 @@ is logged rather than waiting for a page to be reloaded.
 | `item_name` | `text` | What the item is |
 | `quantity` | `text` | How much of it, said the way a shop says it — "24 kg across 6 crates" |
 | `location` | `text` | Where it can be collected from |
+| `goods_type` | `text` | Which of the six goods categories the post is for, or `null` on a post logged before the category existed |
 | `status` | `text` | `pending` or `claimed`, defaulting to `pending` |
 | `created_at` | `timestamptz` | Defaulting to `now()`; the board reads newest-first |
 
-Apply it once against the project: paste
+Apply them once against the project, in order: paste
 `supabase/migrations/20261008000000_create_surplus_posts.sql` into **SQL Editor →
-New query → Run** in the Supabase dashboard, or point the Supabase CLI at the project
-and run `supabase db push`. The file is written to be safe to run more than once.
+New query → Run** in the Supabase dashboard, then
+`supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` the same
+way — or point the Supabase CLI at the project and run `supabase db push`. Both files
+are written to be safe to run more than once. The second one only has to be applied
+once: until it is, the compose box still logs posts, but it logs them untagged and
+says so on the line under the fields, so a half-migrated project loses the category
+rather than the ability to post.
 
 The board is the *Feed* on **both** dashboards — donors and recipients are looking at
 the same list of everything published, newest first. The three screens that use it all
@@ -209,23 +219,31 @@ sit on a dashboard rather than behind the API:
   board it posts to, so posting and watching the post land are one screen. It is laid
   out as the reference's compose row: the silhouette avatar, the one line a post
   starts on, then a row of controls with the one button at the far right. The controls
-  are the site's own — an item, a quantity and a pickup location, the pickup address
-  prefilled from the account's own confirmed location — and *Post* inserts the row.
-  Nothing is optimistic:
-  the chip beside the heading reads *logged* only once the database has answered with
-  the row it wrote, a refusal is shown with its reason instead of a success message,
-  and the board beside it refreshes at that moment rather than waiting for the
-  subscription to echo the row back.
+  are the site's own — an item, a quantity, the goods category the post is for and a
+  pickup location, the pickup address prefilled from the account's own confirmed
+  location — and *Post* inserts the row. The category is the third pill in the row and
+  the only one that opens anything: a long pill on the quantity and address silhouette
+  that drops the goods profile's own list under it, the six categories with their
+  emoji and their hint line. It is asked for rather than guessed, because an untagged
+  post belongs to no category and so never reaches a *For You* view. Nothing is
+  optimistic: the line under the fields says the item is on the board only once the
+  database has answered with the row it wrote, a refusal is shown with its reason
+  instead of a success message, and the board beside it refreshes at that moment
+  rather than waiting for the subscription to echo the row back.
 - **The board itself** — the *Feed* on either dashboard, drawn as a feed. Every post
   is a notched card on the site's own palette: the logging donor's avatar, then their
   name with a handle-and-age line beside it, the item as the card's heading, the
   quantity picked out in the accent above the muted pickup address, and a bottom row
   carrying the post's own facts — its age, its status — and the one action the reader
   has on it, a *Claim* that rests dark with cream text and fills with the accent on
-  hover, the way the hero cards do. Above the cards sits the board's tab bar: two
-  views of the same list, the whole board and a narrowed one (*My posts* for a donor,
-  *Open* for a recipient), filtered from the rows already read so switching is
-  instant, while the chip at the right keeps counting the whole board either way. A
+  hover, the way the hero cards do. Above the cards sits the board's tab bar: three
+  views of the same list — the whole board, a narrowed one by authorship or status
+  (*My posts* for a donor, *Open* for a recipient) and *For You*, the posts tagged with
+  the goods the reader picked in their goods profile — all filtered from the rows
+  already read so switching is instant, while the chip at the right keeps counting the
+  whole board either way. Each card carries the category it is filed under beside its
+  status, which is what makes the *For You* view legible: the filter chooses between
+  tagged posts, so it shows which tag it chose. A
   donor's own posts are marked *your post* so they are easy to pick out among everyone
   else's. The two copies differ only in what they offer: a recipient's card has one
   action, **Claim**, which
@@ -237,9 +255,23 @@ sit on a dashboard rather than behind the API:
   re-read instead of the claim being overwritten. A claim is also an accepted order,
   and it adds one to that donor's orders figure on their dashboard's effect panel —
   see [the impact figures](#how-the-pieces-connect).
-- **Surplus Received** — the donor's own rows, the same table narrowed to that
+- **Surplus Analyser** — the donor's own rows, the same table narrowed to that
   donor's name, with the status each one has reached. It is the donor's log rather
   than the shared board, which is why it lives beside the feed instead of in it.
+
+### For You, and what a post is tagged with
+
+*For You* is the board read as one account's own slice of it. A post carries the goods
+category it is for — one of the same six the goods profile offers, written into
+`goods_type` by the compose box — and the tab keeps the posts whose category is one of
+the two the reader picked in their profile: what they handle as a donor, what they need
+as a recipient. A donor whose goods are fresh produce and packaged goods sees the board
+narrowed to those two; anyone reading it with no categories picked is told to pick
+them rather than shown an empty list, and a post logged before the tag existed belongs
+to no category, so it stays on the whole board and out of every *For You*. The six
+categories live once, in `resq_supabase.js`, so the compose box's picker, the card's
+chip and the tab's filter cannot drift apart — and the table constrains the column to
+the same six, so a post cannot be filed under a category nothing else knows.
 
 Every one of those screens is live. While one is on screen it subscribes to Postgres
 changes on the table over Supabase Realtime, so a post logged anywhere appears in an

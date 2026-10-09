@@ -398,16 +398,19 @@
             <div id="viewFeed" class="hidden lg:col-span-10">
                 <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
                     <!-- The board's tab bar, from the reference: the view being read in cream
-                         under an accent rule, the other muted. Both views are real filters
-                         over the rows already read — the whole board, or just what is still
-                         there to take — so switching is instant and the chip at the right
-                         keeps counting the whole board either way. The board's name moves to
-                         a screen-reader heading under the tabs. -->
+                         under an accent rule, the others muted. All three views are real
+                         filters over the rows already read — the whole board, just what is
+                         still there to take, or the posts tagged with the goods this
+                         account asked for in its goods profile, which is what *For You*
+                         means — so switching is instant and the chip at the right keeps
+                         counting the whole board either way. The board's name moves to a
+                         screen-reader heading under the tabs. -->
                     <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
                         <div class="flex items-center gap-6" role="tablist" aria-label="Board views">
                             <span class="sr-only">Live surplus feed</span>
                             <button type="button" id="feedTabAll" role="tab" aria-selected="true" onclick="setFeedTab('all')" class="feed-tab is-active">All posts</button>
                             <button type="button" id="feedTabOpen" role="tab" aria-selected="false" onclick="setFeedTab('open')" class="feed-tab">Open</button>
+                            <button type="button" id="feedTabForYou" role="tab" aria-selected="false" onclick="setFeedTab('foryou')" class="feed-tab">For You</button>
                         </div>
                         <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
                     </div>
@@ -1358,25 +1361,51 @@
                 + ((error && error.message) || 'the request did not go through') + '.';
         }
 
-        // The board as it was last read, and which of its two views is on screen. The
+        // The board as it was last read, and which of its three views is on screen. The
         // tab filters those rows rather than reading the table again, so switching is
         // instant and the chip above still counts the whole board.
         var feedRows = [];
         var feedTab = 'all';
+        var FEED_TABS = { all: 'feedTabAll', open: 'feedTabOpen', foryou: 'feedTabForYou' };
 
         function setFeedTab(name) {
-            feedTab = name === 'open' ? 'open' : 'all';
-            var all = document.getElementById('feedTabAll');
-            var open = document.getElementById('feedTabOpen');
-            if (all) {
-                all.classList.toggle('is-active', feedTab === 'all');
-                all.setAttribute('aria-selected', feedTab === 'all' ? 'true' : 'false');
-            }
-            if (open) {
-                open.classList.toggle('is-active', feedTab === 'open');
-                open.setAttribute('aria-selected', feedTab === 'open' ? 'true' : 'false');
-            }
+            feedTab = FEED_TABS[name] ? name : 'all';
+            Object.keys(FEED_TABS).forEach(function (key) {
+                var tab = document.getElementById(FEED_TABS[key]);
+                if (!tab) { return; }
+                tab.classList.toggle('is-active', feedTab === key);
+                tab.setAttribute('aria-selected', feedTab === key ? 'true' : 'false');
+            });
             paintFeed();
+        }
+
+        // The goods categories this account picked in its goods profile — what it needs,
+        // as a recipient. *For You* is those categories and nothing else. The picks go
+        // through the shared vocabulary, which drops anything the profile holds that is
+        // not one of the six and keeps the order the categories are listed in.
+        function goodsTypes() {
+            var db = resqDb();
+            return (db && db.goodsTypes) || [];
+        }
+
+        function profileGoods() {
+            var picked = (resqProfile && resqProfile.surplus_types) || [];
+            return goodsTypes().filter(function (type) {
+                return picked.indexOf(type.value) !== -1;
+            }).map(function (type) { return type.value; });
+        }
+
+        // What each view says when it has nothing to draw.
+        function feedEmpty() {
+            if (feedTab === 'open') {
+                return 'Nothing is open right now \u2014 every post on the board has been claimed.';
+            }
+            if (feedTab === 'foryou') {
+                return profileGoods().length
+                    ? 'Nothing on the board is tagged with the goods you need right now.'
+                    : 'Your goods profile has no categories picked yet, so there is nothing to narrow the board to.';
+            }
+            return 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.';
         }
 
         function loadFeed() {
@@ -1421,14 +1450,16 @@
             var list = document.getElementById('feedList');
             var db = resqDb();
             if (!list || !db) { return; }
+            var goods = profileGoods();
             var rows = feedTab === 'open'
                 ? feedRows.filter(function (row) { return row.status !== 'claimed'; })
-                : feedRows;
+                : (feedTab === 'foryou'
+                    // An untagged post belongs to no category, so it never reaches this view.
+                    ? feedRows.filter(function (row) { return goods.indexOf(row.goods_type) !== -1; })
+                    : feedRows);
             if (!rows.length) {
                 list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
-                    + (feedTab === 'open'
-                        ? 'Nothing is open right now \u2014 every post on the board has been claimed.'
-                        : 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.')
+                    + feedEmpty()
                     + '</span>';
                 return;
             }

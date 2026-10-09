@@ -26,6 +26,29 @@
     var SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js';
 
     var TABLE = 'surplus_posts';
+
+    // The six goods categories, in the order the goods profile lists them. They live
+    // here once: a post's tag, the compose box's picker and the feed's *For You*
+    // filter all read this list, so a category cannot end up spelled two ways. The
+    // labels, the emoji and the hint lines are the profile's own copy.
+    var GOODS_TYPES = [
+        { value: 'prepared_meals', label: 'Prepared Meals', emoji: '\ud83c\udf72',
+          hint: 'Cooked dishes, catered trays, hot meals' },
+        { value: 'fresh_produce', label: 'Fresh Produce', emoji: '\ud83e\udd66',
+          hint: 'Fruits, vegetables, leafy greens' },
+        { value: 'bakery_items', label: 'Bakery Items', emoji: '\ud83e\udd50',
+          hint: 'Breads, pastries, cakes, daily bake' },
+        { value: 'packaged_goods', label: 'Packaged Goods', emoji: '\ud83d\udce6',
+          hint: 'Canned food, dry goods, snacks' },
+        { value: 'dairy_beverages', label: 'Dairy & Beverages', emoji: '\ud83e\udd5b',
+          hint: 'Milk, yogurt, juices, bottled drinks' },
+        { value: 'household_essentials', label: 'Household & Essentials', emoji: '\ud83e\uddf4',
+          hint: 'Hygiene kits, soap, blankets, paper goods' }
+    ];
+
+    // The column the tag is written to, added by
+    // supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql.
+    var GOODS_COLUMN = 'goods_type';
     // How often an open feed re-reads the table behind the live subscription, so
     // a project that has not put the table in the realtime publication yet still
     // shows new posts rather than nothing.
@@ -89,16 +112,31 @@
     function describe(error) {
         var code = (error && (error.code || error.status)) || '';
         var message = (error && (error.message || error.error_description || error.hint || '')) || '';
+        // The column is asked about first, and deliberately: a missing column is
+        // reported by PostgREST as PGRST204 — "Could not find the 'goods_type' column of
+        // 'surplus_posts' in the schema cache" — and the words "schema cache" in that
+        // message would be read as a missing table by the check below, which is a
+        // different answer to a different problem.
+        if (String(code) === '42703' || String(code) === 'PGRST204'
+            || /column .*does not exist|column .*not found|could not find the .* column/i.test(message)) {
+            return {
+                missingTable: false,
+                missingColumn: true,
+                message: String(message || 'that column is not in this project yet')
+            };
+        }
         if (String(code) === 'PGRST205' || String(code) === '42P01'
-            || /could not find the table|schema cache/i.test(message)) {
+            || /could not find the table/i.test(message)) {
             return {
                 missingTable: true,
+                missingColumn: false,
                 message: 'the surplus_posts table is not in the project yet'
             };
         }
         if (!message && error && error.name) { message = error.name; }
         return {
             missingTable: false,
+            missingColumn: false,
             message: String(message || 'the request to Supabase did not go through')
         };
     }
@@ -143,14 +181,37 @@
 
     // A new post is written as `pending` and never as anything else: the default
     // lives in the database, and only a claim moves it on from there.
+    //
+    // The goods category is written with it. A project that has not run the tag
+    // migration yet would refuse the whole row over that one unknown column, which
+    // would take posting down to fix a tab — so an insert refused *only* for that
+    // reason is retried without the tag, and comes back marked `untagged` so the
+    // compose box can say the item is on the board but carries no category yet.
+    function insertRow(db, row) {
+        return reply(db.from(TABLE).insert(row).select().single()).then(function (res) {
+            if (res.ok || !row[GOODS_COLUMN]) { return res; }
+            if (!res.error || !res.error.missingColumn) { return res; }
+            var untagged = {};
+            Object.keys(row).forEach(function (key) {
+                if (key !== GOODS_COLUMN) { untagged[key] = row[key]; }
+            });
+            return reply(db.from(TABLE).insert(untagged).select().single()).then(function (retry) {
+                if (retry.ok) { retry.untagged = true; }
+                return retry;
+            });
+        });
+    }
+
     function createPost(post) {
+        var row = {
+            donor_name: post.donorName,
+            item_name: post.itemName,
+            quantity: post.quantity,
+            location: post.location
+        };
+        if (post.goodsType) { row[GOODS_COLUMN] = post.goodsType; }
         return withClient(function (db) {
-            return reply(db.from(TABLE).insert({
-                donor_name: post.donorName,
-                item_name: post.itemName,
-                quantity: post.quantity,
-                location: post.location
-            }).select().single());
+            return insertRow(db, row);
         });
     }
 
@@ -270,6 +331,17 @@
         return slug ? '@' + slug : '@donor';
     }
 
+    // The category a post is filed under, looked up by its value. Anything the
+    // project holds that is not one of the six — a null on an older row, say —
+    // reads as no category rather than as a made-up one.
+    function goodsType(value) {
+        var wanted = String(value === null || value === undefined ? '' : value);
+        for (var i = 0; i < GOODS_TYPES.length; i += 1) {
+            if (GOODS_TYPES[i].value === wanted) { return GOODS_TYPES[i]; }
+        }
+        return null;
+    }
+
     // Whether a post belongs to the person reading the board. The names are
     // compared trimmed, because a trailing space is not a different donor.
     function isOwnPost(post, name) {
@@ -347,6 +419,17 @@
                         'items-center gap-x-5 gap-y-3">' +
                         '<span class="font-mono text-[11px] text-[#777]">\u23f1 ' +
                             escapeHtml(formatWhen(row.created_at)) + '</span>' +
+                        // The goods category the post is for, when it has one. It is what
+                        // the *For You* tab filters on, so it is worth showing on the card
+                        // the filter is choosing between.
+                        (goodsType(row.goods_type)
+                            ? '<span class="inline-flex items-center gap-1.5 h-6 px-3 ' +
+                                'rounded-full border border-neutral-800 bg-black/20 ' +
+                                'font-mono text-[10px] uppercase tracking-widest ' +
+                                'text-neutral-400"><span aria-hidden="true">' +
+                                goodsType(row.goods_type).emoji + '</span>' +
+                                escapeHtml(goodsType(row.goods_type).label) + '</span>'
+                            : '') +
                         '<span class="' + statusChip(row.status) + '">' +
                             statusLabel(row.status) + '</span>' +
                         // The one action, wearing the site's hero-card treatment: dark with
@@ -375,6 +458,13 @@
     global.ResQDB = {
         url: SUPABASE_URL,
         table: TABLE,
+        goodsColumn: GOODS_COLUMN,
+        goodsTypes: GOODS_TYPES,
+        goodsType: goodsType,
+        goodsLabel: function (value) {
+            var type = goodsType(value);
+            return type ? type.label : '';
+        },
         pollMs: POLL_MS,
         ready: ready,
         describe: describe,
