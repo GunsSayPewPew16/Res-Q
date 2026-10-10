@@ -115,7 +115,7 @@ the matching logic, and invites visitors into the flow above.
 | File | Purpose |
 | --- | --- |
 | `frontend/index.html` | Landing page — the site's entry point and default document |
-| `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
+| `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on). The HTTP handler and the routes; everything it calls lives in the topic modules beside it |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
 | `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes, plus the delivery-location card |
@@ -138,7 +138,6 @@ So a recipient who follows a donor dashboard link lands on the recipient one
 rather than a page built for somebody else.
 
 ## The delivery map
-
 Both dashboards carry one card that acts: **confirm delivery location**. It opens
 an almost full-screen overlay holding a map, a search bar and a pin. The card
 itself rests as a panel beside the figures — dark, with a line around it — and
@@ -179,9 +178,15 @@ account that a later routing pass would read: the pair of coordinates saved with
 enough to drop a pin for either side of a delivery. Saving it leaves the address the
 account originally onboarded with untouched, so the two never overwrite each other.
 
-The map is [Leaflet](https://leafletjs.com) drawing **OpenStreetMap's own tiles**, and
-both lookups — the address search and the reverse lookup behind a moved pin — are
-OpenStreetMap's **Nominatim** service. All three are free and keyless, so the overlay
+The map is [Leaflet](https://leafletjs.com) drawing **CARTO's Positron** tiles — a
+light, label-first basemap built on OpenStreetMap data — recoloured into the palette
+with a sage multiply layer laid over them inside the map pane: the land takes the
+ramp's sage, the roads stay the lightest thing on the map, and street names stay dark
+and readable under the tint. The delivery pin is drawn in the page rather than
+fetched: an ink teardrop with a mint ring and core, and Leaflet's own controls are
+cut to match — ink zoom buttons with mint glyphs, an ink attribution strip. Both
+lookups — the address search and the reverse lookup behind a moved pin — are
+OpenStreetMap's **Nominatim** service. All of it is free and keyless, so the overlay
 needs no account, no API key and no card. Leaflet is fetched from a CDN the first time
 the overlay opens, so the dashboards themselves stay light.
 
@@ -350,8 +355,57 @@ persistence on.
 
 ## Backend and API
 
+The backend is split so it can be read a topic at a time. Only the HTTP handler and
+the routes live in `backend/server.py` — everything it calls sits in the module that
+owns the topic, and `config.py` owns every constant, limit, vocabulary and demo store:
+
+| Module | What it holds |
+| --- | --- |
+| `backend/config.py` | Every constant the API reads and answers with — field lists, vocabularies, limits, the demo stores |
+| `backend/db.py` | The SQLite connection (`connect`) and the schema plus in-place migration (`init_db`) |
+| `backend/helpers.py` | Request cleaning: selections, stored JSON lists, contacts, ids, bounded query numbers, and how an account is named |
+| `backend/security.py` | Password hashing (PBKDF2-HMAC-SHA256) and the password checks |
+| `backend/geo.py` | Haversine distance, the bounding-box pre-filter, the demo offset point |
+| `backend/accounts.py` | The donor impact figures (seed/fill), demo account and demo peer stores |
+| `backend/matching.py` | What makes two accounts deliverable: shared categories, confirmed pins |
+| `backend/orders.py` | The order's stored shape, shared by both modes |
+| `backend/surplus.py` | The surplus calculator: the regression pipeline, trained once and cached, forecasting per request |
+
+The server itself still uses only the standard library, so nothing has to be
+installed for the site, the accounts and the matching to work. The surplus forecast
+additionally wants pandas and scikit-learn — `surplus.py` imports them inside its
+functions so the rest of the backend runs without them — and the endpoint answers
+`503` with install instructions when they are missing.
+
 The backend listens on `127.0.0.1:8080`. `GET /api/health` reports which mode it
 is in.
+
+### The surplus calculator
+
+`backend/surplus.py` is the predictor the Surplus Analyser screen is built around,
+kept as close to identical as possible to the original `surplus.py` notebook script
+it came from: 200 synthetic days of kitchen history — customers served by day and
+weather, a weekday rhythm with a weekend bump — ending in a random-forest regressor
+through an impute → scale / one-hot pipeline, with the mean absolute error it scores
+at printed when the file is run on its own (`python3 backend/surplus.py`).
+
+The module exposes two calls:
+
+- `train_surplus_model()` — the original script verbatim, seed and features and split
+  unchanged, returning the fitted pipeline and its MAE (9.2 kg on the held-out tail).
+- `forecast_surplus(**features)` — the call a request reaches. Every feature is
+  optional; anything left out is filled with a usable default, and the labels default
+  to **today's** own day and a clear sky. The pipeline is trained on the first call and
+  cached in the process, so the forest is not rebuilt per request.
+
+`GET` or `POST /api/surplus-forecast` calls it. Accepts `day_of_week` (a day name),
+`weather` (Sunny, Cloudy or Rainy) and the four numeric features
+(`expected_customers`, `surplus_yesterday`, `surplus_last_week`, `surplus_rolling_14`),
+any of them, in the query string or a JSON body. A label outside the vocabularies the
+training data was built on is refused with `400` rather than forecast against
+silently, and the answer carries the prediction, the MAE it comes with and the model
+and features that produced it. With pandas or scikit-learn missing, it is `503`,
+`model_dependencies_missing`, with the install line in the message.
 
 ### Demo mode (default)
 
@@ -391,6 +445,7 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
+| `GET`/`POST` | `/api/surplus-forecast` | Tomorrow's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather` and up to four numeric features, in the query string or a JSON body. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy or a number sitting below zero, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed |
 
 ### Matching and delivery orders
 
