@@ -247,10 +247,16 @@
             border-color: transparent;
         }
 
-        /* The Surplus Analyser's banner: the ramp read end to end, so the screen keeps one
-           bright surface the way the reference's does, with ink for everything on it. */
+        /* The Surplus Analyser's banner: the screen keeps one bright surface the way the
+           reference's does, and it is the only gradient on the site. It is the ramp read
+           end to end — mint, sage, the midpoint between line and sage, then the line tone
+           itself — so the card is made of the palette rather than of a second colour, with a
+           soft light source in its top-left corner so it reads as lit rather than as a flat
+           swatch. Everything drawn on it is ink. */
         .gradient-banner {
-            background: linear-gradient(135deg, #DAF1DE 0%, #C2DCC8 45%, #8EB69B 100%);
+            background:
+                radial-gradient(120% 150% at 4% 0%, rgba(218, 241, 222, 0.75), rgba(218, 241, 222, 0) 62%),
+                linear-gradient(135deg, #DAF1DE 0%, #A9CBB2 26%, #8EB69B 52%, #6E9A80 76%, #235347 100%);
             color: #051F20;
             border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
         }
@@ -262,6 +268,100 @@
             height: 0.9rem;
             background: currentColor;
             clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
+        }
+
+        /* THE DELIVERY MAP, dressed in the palette.
+
+           Two pieces do the work. The basemap is a light, label-first one, and a sage layer
+           multiplies over its tiles: the land turns the ramp's sage while the roads — which
+           are white on that basemap — stay the lightest thing on the map, which is the
+           relationship the reference map has. Multiply is also what keeps the labels: a
+           street name is dark, so under a multiply it stays dark instead of washing out, and
+           the contrast step on the tiles below separates it further from the land it sits
+           on. */
+
+        .leaflet-container {
+            background-color: #8EB69B;
+            font-family: inherit;
+        }
+        .leaflet-tile-pane {
+            filter: contrast(1.14) saturate(0.92);
+        }
+        .map-tint-layer {
+            position: absolute;
+            /* Oversized on purpose: the layer lives inside Leaflet's own map pane, which is
+               translated while the map is dragged, so a viewport-sized layer would show its
+               edge at the trailing side of every drag. */
+            left: -2000px;
+            top: -2000px;
+            width: 8000px;
+            height: 8000px;
+            z-index: 350;
+            background-color: #8EB69B;
+            mix-blend-mode: multiply;
+            opacity: 0.95;
+            pointer-events: none;
+        }
+
+        /* Leaflet's own controls, re-cut: the zoom buttons are ink panels with mint glyphs
+           and the credit line sits on ink, rather than the default white boxes. */
+        .leaflet-bar {
+            border: 1px solid #235347 !important;
+            border-radius: 0.75rem !important;
+            overflow: hidden;
+            box-shadow: 0 6px 16px rgba(5, 31, 32, 0.35) !important;
+        }
+        .leaflet-bar a {
+            background-color: #051F20;
+            color: #DAF1DE;
+            border-bottom: 1px solid #235347;
+            width: 34px;
+            height: 34px;
+            line-height: 32px;
+            font-size: 17px;
+        }
+        .leaflet-bar a:hover,
+        .leaflet-bar a:focus {
+            background-color: #163832;
+            color: #DAF1DE;
+        }
+        .leaflet-bar a.leaflet-disabled {
+            background-color: #051F20;
+            color: #235347;
+        }
+        .leaflet-control-attribution {
+            background: rgba(5, 31, 32, 0.88) !important;
+            color: #8EB69B !important;
+            font-size: 10px;
+            padding: 1px 0.5rem;
+            border-top-left-radius: 0.5rem;
+        }
+        .leaflet-control-attribution a { color: #DAF1DE; }
+
+        /* The delivery pin: an ink teardrop with a mint ring and core, drawn here rather than
+           fetched, so it is the palette's own. Leaflet's own div-icon frame is turned off —
+           the teardrop is the whole mark. */
+        .resq-pin-icon {
+            background: transparent;
+            border: 0;
+        }
+        .resq-pin {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            background-color: #051F20;
+            border: 3px solid #DAF1DE;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
+        }
+        .resq-pin span {
+            width: 7px;
+            height: 7px;
+            border-radius: 9999px;
+            background-color: #DAF1DE;
         }
 
         /* Custom scrollbar for the long rails */
@@ -395,15 +495,15 @@
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
                             <div class="space-y-2">
                                 <span class="block text-xs text-[#8EB69B]">Surplus saved</span>
-                                <span class="block font-display text-3xl md:text-4xl leading-none"><span id="metricSurplusSaved">0.00</span> <span class="font-sans text-sm text-[#8EB69B]">kg</span></span>
+                                <span class="block font-display font-bold tabular-nums text-3xl md:text-4xl leading-none"><span id="metricSurplusSaved">0.00</span> <span class="font-sans text-sm text-[#8EB69B]">kg</span></span>
                             </div>
                             <div class="space-y-2">
                                 <span class="block text-xs text-[#8EB69B]">Meals served</span>
-                                <span class="block font-display text-3xl md:text-4xl leading-none"><span id="metricMealsServed">0</span></span>
+                                <span class="block font-display font-bold tabular-nums text-3xl md:text-4xl leading-none"><span id="metricMealsServed">0</span></span>
                             </div>
                             <div class="space-y-2">
                                 <span class="block text-xs text-[#8EB69B]">Orders completed</span>
-                                <span class="block font-display text-3xl md:text-4xl leading-none"><span id="metricOrdersCompleted">0</span></span>
+                                <span class="block font-display font-bold tabular-nums text-3xl md:text-4xl leading-none"><span id="metricOrdersCompleted">0</span></span>
                             </div>
                         </div>
 
@@ -691,12 +791,16 @@
                                 <span class="block h-3 w-44 max-w-full organic-chip bg-[#051F20]/20"></span>
                                 <span class="block h-12 w-56 max-w-full organic-inner bg-[#051F20]/20"></span>
                             </div>
-                            <span class="block h-7 w-32 shrink-0 organic-chip bg-[#051F20]/20"></span>
+                            <!-- This one sits over the ramp's darker half, so it is drawn in
+                                 the accent instead of ink and stays legible there. -->
+                            <span class="block h-7 w-32 shrink-0 organic-chip bg-[#DAF1DE]/40"></span>
                         </div>
                         <span class="block h-4 w-full max-w-lg organic-chip bg-[#051F20]/20"></span>
+                        <!-- The card's two button-shaped bars: the filled one and the ghost
+                             beside it, the pair the reference's banner carries. -->
                         <div class="flex items-center gap-4">
                             <span class="block h-11 w-40 organic-chip bg-[#051F20]"></span>
-                            <span class="block h-11 w-32 organic-chip bg-[#051F20]/15"></span>
+                            <span class="block h-11 w-32 organic-chip bg-[#DAF1DE]/40"></span>
                         </div>
                     </div>
 
@@ -1283,8 +1387,13 @@
         // ---------------------------------------------------------------------------
         var LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
         var LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        var TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-        var TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+        // The basemap is a light, label-first one rather than the reference map's own
+        // drawing: the streets have to stay readable under the tint that puts the map in the
+        // palette, and a label-first basemap is the one that survives it. It is CARTO's
+        // Positron, keyless like the lookups below and credited beside the OSM attribution
+        // the data still needs.
+        var TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+        var TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
         var LOOKUP_URL = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=';
         // addressdetails asks for the place's own parts back as well as its one-line
         // name, and accept-language pins the answer to the language this page is in.
@@ -1617,8 +1726,11 @@
             } else {
                 // Draggable, so the pin can be nudged onto the exact door; wherever it is
                 // left, the address is re-resolved from the spot it landed on.
-                deliverMarker = window.L.marker(point, { draggable: true, title: 'Delivery location' })
-                    .addTo(deliverMap);
+                deliverMarker = window.L.marker(point, {
+                    draggable: true,
+                    title: 'Delivery location',
+                    icon: deliveryPinIcon()
+                }).addTo(deliverMap);
                 deliverMarker.on('dragend', function () {
                     var moved = deliverMarker.getLatLng();
                     deliverPinAt = { lat: moved.lat, lng: moved.lng };
@@ -1697,6 +1809,19 @@
                 });
         }
 
+        // The pin the map draws: an ink teardrop with a mint ring and core, made here rather
+        // than fetched as an image, so it is the palette's own. Its anchor is the tip of the
+        // teardrop — six pixels below the box it is rotated in — so the point it names is the
+        // point it touches.
+        function deliveryPinIcon() {
+            return window.L.divIcon({
+                className: 'resq-pin-icon',
+                html: '<div class="resq-pin"><span></span></div>',
+                iconSize: [30, 30],
+                iconAnchor: [15, 36]
+            });
+        }
+
         function initDeliveryMap() {
             if (deliverMap || !window.L || !deliverEl('deliverMap')) { return; }
             try {
@@ -1714,11 +1839,25 @@
                     + (err && err.message ? err.message : err));
                 return;
             }
-            var tiles = window.L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_CREDIT });
+            var tiles = window.L.tileLayer(TILE_URL, {
+                maxZoom: 19,
+                // The retina tiles are asked for where the screen has the pixels for them,
+                // because a tinted map is one that a soft tile shows through.
+                detectRetina: true,
+                attribution: TILE_CREDIT
+            });
             tiles.on('tileerror', function () {
                 showDeliverNotice('The map tiles could not be loaded. The pin still works, or try again once the connection is back.');
             });
             tiles.addTo(deliverMap);
+            // The sage layer that puts the map in the palette. It goes inside Leaflet's own
+            // map pane rather than over the whole container, which is what lands it above the
+            // tiles and below the pin: the land turns the ramp's sage, the roads stay the
+            // lightest thing on the map, and the pin keeps its own colours.
+            var mapPane = deliverMap.getPanes().mapPane;
+            var paletteLayer = document.createElement('div');
+            paletteLayer.className = 'map-tint-layer';
+            mapPane.appendChild(paletteLayer);
             deliverMap.on('click', function (event) {
                 placeDeliveryPin({ lat: event.latlng.lat, lng: event.latlng.lng }, '');
                 resolvePinAddress();
