@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Res-Q | Landing Page</title>
+    <!-- Crake is a commercial high-contrast serif by Narrow Type, so its webfonts are not
+         in this repository. The display stack asks for Crake first — an installed copy
+         wins, and a licensed woff2 dropped in beside these pages takes over with no other
+         edit — and falls back to Bodoni Moda, a free high-contrast serif of the same
+         family, so the screens can be judged before that licence is settled. Inter
+         carries the body, the labels and the data. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -11,263 +20,428 @@
             theme: {
                 extend: {
                     colors: {
-                        background: '#0c0c0c',
-                        cardbg: '#141414',
-                        cardhover: '#1c1c1c',
-                        accent: '#ff4500',
-                        cream: '#f4f4f0',
-                        muted: '#888888'
+                        /* The green ramp, named the way the dashboards name it:
+                           page, frame, raised, line, sage, mint. */
+                        ink: '#051F20',
+                        canvas: '#0B2B26',
+                        raised: '#163832',
+                        line: '#235347',
+                        sage: '#8EB69B',
+                        mint: '#DAF1DE'
                     },
                     fontFamily: {
                         sans: ['Inter', 'system-ui', 'sans-serif'],
+                        display: ['Crake', 'Bodoni Moda', 'ui-serif', 'Didot', 'Georgia', 'serif']
                     }
                 }
             }
         }
     </script>
     <style>
-        /* Custom notched corners to mimic the Apptronik reference style */
-        .notched-card {
-            background-color: #141414;
-            border-radius: 1.5rem;
-            position: relative;
-            transition: all 0.3s ease;
-            clip-path: polygon(
-                0 0, 
-                calc(100% - 35px) 0, 
-                100% 35px, 
-                100% 100%, 
-                0 100%
-            );
+        /* THE DASHBOARDS' SHAPE LANGUAGE, carried over whole. One canvas holds the page,
+           everything inside it inherits a radius derived from one number so the corners
+           stay concentric, and a panel's only hover gesture is a two-pixel lift by one
+           rung of the ramp. */
+
+        :root {
+            --canvas-r: clamp(1.5rem, 3.5vw, 2.75rem);
+            --gutter: 0.75rem;
+            --step: 0.75rem;
         }
-        .notched-card:hover {
-            background-color: #1c1c1c;
-            transform: translateY(-4px);
+        @media (min-width: 768px) {
+            :root { --gutter: 1.25rem; --step: 0.9rem; }
         }
 
-        /* Inverse notch variant */
-        .notched-card-alt {
-            background-color: #141414;
-            border-radius: 1.5rem;
-            position: relative;
-            transition: all 0.3s ease;
-            clip-path: polygon(
-                35px 0, 
-                100% 0, 
-                100% 100%, 
-                0 100%, 
-                0 35px
-            );
+        body { padding: 0.75rem; }
+        @media (min-width: 768px) { body { padding: 1.25rem; } }
+
+        .organic-canvas { border-radius: var(--canvas-r); }
+        .organic-block { border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter))); }
+        .organic-inner { border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step))); }
+        .organic-chip { border-radius: 9999px; }
+
+        .panel {
+            background-color: #051F20;
+            border: 1px solid #235347;
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+            transition: background-color 0.4s ease, border-color 0.4s ease, transform 0.4s ease;
         }
-        .notched-card-alt:hover {
-            background-color: #1c1c1c;
-            transform: translateY(-4px);
+        .panel-raised {
+            background-color: #163832;
+            border: 1px solid #235347;
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
         }
 
-        /* Orange accent CTA card with notch */
-        .notched-orange {
-            background-color: #ff4500;
-            border-radius: 1.5rem;
-            clip-path: polygon(
-                0 0, 
-                100% 0, 
-                100% calc(100% - 35px), 
-                calc(100% - 35px) 100%, 
-                0 100%
-            );
+        /* The light surface: one per screen, at most. The roadmap's open step is it. */
+        .surface-light {
+            background-color: #DAF1DE;
+            color: #051F20;
         }
 
-        /* Capability cards: fill with the accent orange and turn their text black while
-           hovered, then return to the resting dark card on mouse out. Declared after the
-           notch rules above so it wins the tie on specificity. */
-        .surplus-card:hover {
-            background-color: #ff4500;
+        .spark {
+            display: inline-block;
+            width: 0.9rem;
+            height: 0.9rem;
+            background: currentColor;
+            clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
         }
-        .surplus-card:hover * {
-            color: #000000;
+
+        .site-link { color: #8EB69B; }
+        .site-link:hover { color: #DAF1DE; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #051F20; }
+        ::-webkit-scrollbar-thumb { background: #235347; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8EB69B; }
+
+        /* THE ROADMAP. Six stops on one vertical track: a node column and a story column
+           per row. The open stop is the page's one light surface — ink text on mint — and
+           its description is only ever open when the row is. The others stay quiet: node,
+           name, nothing more. Selecting is a click, a keyboard press, or a hover on a
+           desktop pointer, so the reader's cursor walks the route the way it reads. */
+        .road-row { border-radius: max(1.25rem, calc(var(--canvas-r) - var(--gutter) - 0.25rem)); transition: background-color 0.35s ease, border-color 0.35s ease, transform 0.35s ease; }
+        .road-row[data-open="false"] { border: 1px solid transparent; }
+        .road-row[data-open="true"] {
+            background-color: #DAF1DE;
+            color: #051F20;
+            border: 1px solid #DAF1DE;
+            transform: translateY(-2px);
         }
+        .road-node {
+            width: 2.75rem;
+            height: 2.75rem;
+            flex: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #051F20;
+            border: 1px solid #235347;
+        }
+        .road-row[data-open="true"] .road-node { background-color: #051F20; border-color: rgba(5,31,32,0.25); color: #DAF1DE; }
+        /* The rail between rows: drawn as a segment only when the row below is not first. */
+        .road-seg { width: 2px; flex: 1 1 auto; min-height: 1.4rem; background-color: #235347; }
+        .road-row[data-open="true"] .road-seg-done { background-color: #8EB69B; }
+        .road-title { font-family: 'Crake', 'Bodoni Moda', ui-serif, Didot, Georgia, serif; }
+        .road-row[data-open="true"] .road-cta-arrow { transform: translateX(4px); }
+        .road-cta-arrow { transition: transform 0.3s ease; }
+        /* Concise descriptions: the line the open step carries. Closed rows hold one so
+           the reveal does not shift layout — the text is there, merely hidden. */
+        .road-desc { transition: opacity 0.3s ease; }
+        .road-row[data-open="false"] .road-desc { display: none; }
+        .road-row[data-open="false"]:hover .road-desc,
+        .road-row[data-open="false"].road-preview .road-desc { display: block; opacity: 0.85; }
     </style>
 </head>
-<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white">
+<body class="bg-[#0B2B26] text-[#DAF1DE] font-sans antialiased selection:bg-[#DAF1DE] selection:text-[#051F20]">
 
-    <!-- RES-Q LANDING PAGE: default document for the site, served on load and reload -->
+    <!-- RES-Q LANDING PAGE: the site's default document, inside one inset green canvas,
+         the same arrangement the dashboards use. The six old hero cards are gone; in
+         their place stands one interactive roadmap — six stops from what a donor logs
+         to what a shelter receives — each row opening on a concise line when it is
+         read, one stop lit at a time. -->
 
-    <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <a href="index.html" class="brand-home flex items-center space-x-3">
-                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
-                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-            </a>
-            <!-- Only the capabilities section remains, so the other nav labels stay inert -->
-            <nav class="hidden md:flex items-center space-x-8 text-sm font-mono text-neutral-400">
-                <span class="cursor-default">01 / PIPELINE</span>
-                <a href="#features" class="hover:text-[#f4f4f0] transition-colors">02 / CAPABILITIES</a>
-                <span class="cursor-default">03 / IMPACT</span>
-            </nav>
-            <div>
-                <!-- Opens the onboarding flow (role gate → About You → goods profile) -->
-                <a href="res_q_homepage.html" class="inline-flex items-center px-5 py-2.5 rounded-full bg-[#ff4500] text-white text-sm font-bold tracking-wide hover:bg-orange-600 transition-all shadow-lg shadow-orange-900/20">
-                    Onboarding →
+    <div class="organic-canvas bg-[#0B2B26] border border-[#235347] min-h-[calc(100vh-1.5rem)] md:min-h-[calc(100vh-2.5rem)] flex flex-col">
+
+        <header class="sticky top-0 z-50 bg-[#0B2B26]/95 backdrop-blur-md border-b border-[#235347]"
+                style="border-top-left-radius: var(--canvas-r); border-top-right-radius: var(--canvas-r);">
+            <div class="max-w-[1500px] w-full mx-auto px-4 md:px-6 py-3 flex flex-wrap items-center gap-3">
+                <a href="index.html" class="brand-home organic-chip flex items-center gap-2.5 px-3.5 py-2 bg-[#051F20] border border-[#235347] hover:border-[#8EB69B] transition-colors">
+                    <span class="spark text-[#DAF1DE]" aria-hidden="true"></span>
+                    <span class="font-display text-xl leading-none">Res-Q</span>
                 </a>
-            </div>
-        </div>
-    </header>
-
-    <main class="max-w-7xl mx-auto px-6 py-12">
-
-        <section class="mb-24 pt-8">
-            <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
-                <div>
-                    <span class="text-xs font-mono text-[#ff4500] tracking-widest uppercase block mb-3">// AI-POWERED PROVISION PIPELINE</span>
-                    <h1 class="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-none">
-                        Surplus <br>Matched. <br><span class="text-neutral-500">Delivered.</span>
-                    </h1>
+                <!-- On mobile the nav folds into the brand row; the sections are short,
+                     so a link less row is enough. -->
+                <nav aria-label="Page sections" class="hidden md:flex items-center gap-6 text-sm site-link">
+                    <a href="#roadmap" class="site-link transition-colors">How it works</a>
+                    <a href="#pipeline" class="site-link transition-colors">The pipeline</a>
+                </nav>
+                <div class="ml-auto">
+                    <a href="res_q_homepage.html" class="organic-chip inline-flex items-center gap-2 px-5 py-2.5 bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all">
+                        Get started <span aria-hidden="true">&rarr;</span>
+                    </a>
                 </div>
-                <div class="mt-6 md:mt-0 max-w-md">
-                    <p class="text-neutral-400 text-sm md:text-base leading-relaxed">
-                        End-to-end Python machine learning pipelines transforming daily corporate food and life-essential surplus into automated relief networks for shelters and vulnerable communities.
+            </div>
+        </header>
+
+        <main class="flex-1 w-full max-w-[1500px] mx-auto px-4 md:px-8 py-6 md:py-10 space-y-8">
+
+            <!-- Hero -->
+            <section class="panel p-8 md:p-14">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-end">
+                    <div class="lg:col-span-7 space-y-4 min-w-0">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Res surplus redistribution</span>
+                        <h1 class="font-display text-5xl md:text-7xl leading-[1.02]">
+                            Surplus found.<br>
+                            <span class="text-[#8EB69B]">Matched.</span>
+                            <span class="text-[#051F20]/90 bg-[#DAF1DE] rounded-[0.75rem] px-3 inline-block">Delivered.</span>
+                        </h1>
+                    </div>
+                    <div class="lg:col-span-5 space-y-6">
+                        <p class="text-sm md:text-[15px] leading-relaxed text-[#8EB69B] max-w-md">
+                            Local businesses profiled once, shelters and community groups profiled once —
+                            then the matching runs itself: what is spare tonight becomes what is served
+                            tomorrow.
+                        </p>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <a href="res_q_homepage.html" class="organic-chip inline-flex items-center gap-2 px-6 py-3.5 bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all">
+                                Start onboarding <span aria-hidden="true">&rarr;</span>
+                            </a>
+                            <a href="#roadmap" class="organic-chip inline-flex items-center gap-2 px-6 py-3.5 border border-[#235347] text-[#8EB69B] text-sm hover:border-[#8EB69B] hover:text-[#DAF1DE] transition-all">
+                                See the route
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- The roadmap. One track, six stops, one open at a time. Mouse entering a
+                 closed row previews it; clicking or keyboard-selecting keeps it open and
+                 closes the one before, so exactly one stop is ever lit. -->
+            <section id="roadmap" class="panel p-6 md:p-12">
+                <div class="max-w-3xl mb-8 md:mb-12">
+                    <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B] mb-3">The route one item takes</span>
+                    <h2 class="font-display text-4xl md:text-5xl leading-none">How Res-Q moves surplus</h2>
+                    <p class="mt-4 text-sm text-[#8EB69B] leading-relaxed max-w-xl">
+                        Six stops from a shop floor to a shelter kitchen. Open a stop to read what
+                        happens there — the mint-lit row is where the journey stands right now.
                     </p>
                 </div>
+
+                <div id="roadmapList" class="max-w-4xl mx-auto">
+
+                    <!-- Stop 01 -->
+                    <div class="road-row group" data-open="true" data-stop="1" tabindex="0" role="button" aria-expanded="true" aria-labelledby="road-1-title"
+                        onclick="openRoadStop(1)" onkeydown="roadKey(event, 1)" onmouseenter="roadHover(1)">
+                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
+                            <div class="flex flex-col items-center self-stretch">
+                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">01</span>
+                                <span class="road-seg road-seg-done"></span>
+                            </div>
+                            <div class="min-w-0 flex-1 pt-1">
+                                <div class="flex items-center justify-between gap-4">
+                                    <h3 id="road-1-title" class="road-title text-2xl md:text-3xl leading-none">Profile the business</h3>
+                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
+                                </div>
+                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl opacity-90">
+                                    A shop, bakery or kitchen answers once — where it is, what it usually
+                                    has spare, which days goods can leave — and Res-Q keeps the profile.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stop 02 -->
+                    <div class="road-row group" data-open="false" data-stop="2" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-2-title"
+                        onclick="openRoadStop(2)" onkeydown="roadKey(event, 2)" onmouseenter="roadHover(2)">
+                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
+                            <div class="flex flex-col items-center self-stretch">
+                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">02</span>
+                                <span class="road-seg"></span>
+                            </div>
+                            <div class="min-w-0 flex-1 pt-1">
+                                <div class="flex items-center justify-between gap-4">
+                                    <h3 id="road-2-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Log the surplus</h3>
+                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
+                                </div>
+                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
+                                    Tonight's spare goes on the live board in one line — the item, the
+                                    amount, where pickup happens.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stop 03 -->
+                    <div class="road-row group" data-open="false" data-stop="3" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-3-title"
+                        onclick="openRoadStop(3)" onkeydown="roadKey(event, 3)" onmouseenter="roadHover(3)">
+                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
+                            <div class="flex flex-col items-center self-stretch">
+                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">03</span>
+                                <span class="road-seg"></span>
+                            </div>
+                            <div class="min-w-0 flex-1 pt-1">
+                                <div class="flex items-center justify-between gap-4">
+                                    <h3 id="road-3-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Match with need</h3>
+                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
+                                </div>
+                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
+                                    Shelters filtered by distance and shared goods categories see
+                                    what fits them first.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stop 04 -->
+                    <div class="road-row group" data-open="false" data-stop="4" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-4-title"
+                        onclick="openRoadStop(4)" onkeydown="roadKey(event, 4)" onmouseenter="roadHover(4)">
+                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
+                            <div class="flex flex-col items-center self-stretch">
+                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">04</span>
+                                <span class="road-seg"></span>
+                            </div>
+                            <div class="min-w-0 flex-1 pt-1">
+                                <div class="flex items-center justify-between gap-4">
+                                    <h3 id="road-4-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Claim and schedule</h3>
+                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
+                                </div>
+                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
+                                    A shelter claims the item and books it on a day it already asked
+                                    for deliveries.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stop 05 -->
+                    <div class="road-row group" data-open="false" data-stop="5" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-5-title"
+                        onclick="openRoadStop(5)" onkeydown="roadKey(event, 5)" onmouseenter="roadHover(5)">
+                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
+                            <div class="flex flex-col items-center self-stretch">
+                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">05</span>
+                                <span class="road-seg"></span>
+                            </div>
+                            <div class="min-w-0 flex-1 pt-1">
+                                <div class="flex items-center justify-between gap-4">
+                                    <h3 id="road-5-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Route the pickup</h3>
+                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
+                                </div>
+                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
+                                    Both pins confirmed on the map, the driver gets one pickup and
+                                    one drop-off.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stop 06 -->
+                    <div class="road-row group" data-open="false" data-stop="6" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-6-title"
+                        onclick="openRoadStop(6)" onkeydown="roadKey(event, 6)" onmouseenter="roadHover(6)">
+                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
+                            <div class="flex flex-col items-center self-stretch">
+                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">06</span>
+                            </div>
+                            <div class="min-w-0 flex-1 pt-1">
+                                <div class="flex items-center justify-between gap-4">
+                                    <h3 id="road-6-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Serve the community</h3>
+                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
+                                </div>
+                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
+                                    The kilos, meals and completed runs land on each dashboard —
+                                    the loop closes on a number.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- The pipeline: the one numbered proof the matching is real, restated in the
+                 noise-free green way, plus the paired stat cards. -->
+            <section id="pipeline" class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
+                <div class="lg:col-span-7 panel p-6 md:p-10 flex flex-col justify-between gap-6">
+                    <div class="space-y-3">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">The matching engine</span>
+                        <h2 class="font-display text-3xl md:text-4xl leading-tight">One pipeline, run when the board changes</h2>
+                        <p class="text-sm leading-relaxed text-[#8EB69B] max-w-xl">
+                            A profiled donor list, a profiled recipient list, and a route between them:
+                            the forecast estimates what a kitchen will spare tomorrow, the matcher finds
+                            the shelter nearest that needs it, the order binds both sides.
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="panel-raised p-5">
+                            <span class="block font-display text-2xl md:text-3xl leading-none">Haversine</span>
+                            <span class="block text-xs text-[#8EB69B] mt-2">distance between confirmed pins</span>
+                        </div>
+                        <div class="panel-raised p-5">
+                            <span class="block font-display text-2xl md:text-3xl leading-none">Nearest-first</span>
+                            <span class="block text-xs text-[#8EB69B] mt-2">match ranking the API returns</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-5 panel-raised p-6 md:p-8 font-mono text-xs leading-relaxed">
+                    <div class="flex items-center justify-between pb-4 mb-4 border-b border-[#235347]">
+                        <span class="text-[#8EB69B]">resq_pipeline.py</span>
+                        <span class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-[#DAF1DE] animate-pulse" aria-hidden="true"></span>
+                            <span class="text-[#8EB69B]">REAL</span>
+                        </span>
+                    </div>
+                    <pre class="overflow-x-auto text-[#8EB69B] text-[11px]"><code>def shared_categories(mine, theirs):
+    return list(set(mine) &amp; set(theirs))
+
+def rank(candidates, me):
+    scored = [(haversine_km(me, c), c)
+              for c in candidates
+              if shared_categories(me, c)]
+    scored.sort()
+    return [c for _, c in scored]</code></pre>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="w-full max-w-[1500px] mx-auto px-4 md:px-8 pb-8">
+            <div class="border-t border-[#235347] pt-6 text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]/70 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <span>Res-Q platform — AI for community services</span>
+                <span class="site-link normal-case tracking-normal text-xs">Local businesses &middot; Shelters &middot; Community groups</span>
             </div>
+        </footer>
 
-            <div id="features" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Card A -->
-                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
-                    <div class="flex justify-between items-start">
-                        <span class="text-xs font-mono text-neutral-500">(a)</span>
-                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">INITIALIZE →</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Predictive Surplus</h3>
-                        <p class="text-sm text-neutral-400">Regression pipelines forecasting daily inventory yields based on time, weather, and historical metrics.</p>
-                    </div>
-                </div>
-
-                <!-- Card B -->
-                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
-                    <div class="flex justify-between items-start">
-                        <span class="text-xs font-mono text-neutral-500">(b)</span>
-                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">OPTIMIZE →</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Smart Matching</h3>
-                        <p class="text-sm text-neutral-400">Algorithms pairing surplus stocks with nearest shelter capacity using distance and urgency scores.</p>
-                    </div>
-                </div>
-
-                <!-- Card C -->
-                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
-                    <div class="flex justify-between items-start">
-                        <span class="text-xs font-mono text-neutral-500">(c)</span>
-                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">DEPLOY →</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Live Routing</h3>
-                        <p class="text-sm text-neutral-400">Real-time logistical dispatch ensuring perishable goods reach communities before expiration windows close.</p>
-                    </div>
-                </div>
-
-                <!-- Card D -->
-                <div class="surplus-card notched-card-alt p-8 flex flex-col justify-between h-72 cursor-pointer group">
-                    <div class="flex justify-between items-start">
-                        <span class="text-xs font-mono text-neutral-500">(d)</span>
-                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">EXPAND →</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Essential Goods</h3>
-                        <p class="text-sm text-neutral-400">Scaling beyond meals to route survival essentials, hygiene kits, and warm blankets seamlessly.</p>
-                    </div>
-                </div>
-
-                <!-- Card E -->
-                <div class="surplus-card notched-card p-8 flex flex-col justify-between h-72 cursor-pointer group">
-                    <div class="flex justify-between items-start">
-                        <span class="text-xs font-mono text-neutral-500">(e)</span>
-                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">VERIFY →</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Safety Verification</h3>
-                        <p class="text-sm text-neutral-400">Automated quality checks and compliance monitoring maintaining strict health & safety standards.</p>
-                    </div>
-                </div>
-
-                <!-- Card F -->
-                <div class="surplus-card notched-card-alt p-8 flex flex-col justify-between h-72 cursor-pointer group">
-                    <div class="flex justify-between items-start">
-                        <span class="text-xs font-mono text-neutral-500">(f)</span>
-                        <span class="text-xs font-mono text-[#ff4500] group-hover:translate-x-1 transition-transform">CONNECT →</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold uppercase tracking-tight mb-2">Community Sync</h3>
-                        <p class="text-sm text-neutral-400">Unifying local businesses and support shelters into a single, highly efficient distribution loop.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <footer class="border-t border-neutral-800 py-12 text-neutral-500 text-xs font-mono">
-        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between">
-            <div class="flex items-center space-x-4 mb-4 md:mb-0">
-                <span class="text-white font-bold">RES-Q PLATFORM</span>
-                <span>—</span>
-                <span>AI FOR COMMUNITY SERVICES</span>
-            </div>
-            <div class="flex space-x-6">
-                <span class="cursor-default">Pipeline</span>
-                <a href="#features" class="hover:text-white transition-colors">Documentation</a>
-                <span class="cursor-default">GitHub Repository</span>
-            </div>
-        </div>
-    </footer>
-
-    <div id="actionModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-6">
-        <div class="bg-[#141414] border border-neutral-800 rounded-3xl max-w-md w-full p-8 relative">
-            <button onclick="closeModal()" class="absolute top-6 right-6 text-neutral-400 hover:text-white text-lg font-mono">✕</button>
-            <span class="text-xs font-mono text-[#ff4500] uppercase block mb-2">// PORTAL ACCESS</span>
-            <h3 class="text-2xl font-bold mb-6">Select Your Role</h3>
-            <div class="space-y-4">
-                <button onclick="handleRole('business')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
-                    <div>
-                        <span class="font-bold block text-sm">Food Business / Donor</span>
-                        <span class="text-xs text-neutral-400">Post daily surplus and essentials</span>
-                    </div>
-                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
-                </button>
-                <button onclick="handleRole('shelter')" class="w-full text-left p-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition-all flex items-center justify-between group">
-                    <div>
-                        <span class="font-bold block text-sm">Shelter / Recipient</span>
-                        <span class="text-xs text-neutral-400">View incoming allocations & pickups</span>
-                    </div>
-                    <span class="text-[#ff4500] group-hover:translate-x-1 transition-transform">→</span>
-                </button>
-            </div>
-        </div>
     </div>
 
     <script>
-        function openModal() {
-            document.getElementById('actionModal').classList.remove('hidden');
-            document.getElementById('actionModal').classList.add('flex');
+        // -----------------------------------------------------------------------
+        // The roadmap: one selector, exactly one lit stop. openRoadStop(1..6) keeps
+        // the lit mint surface on the chosen row and clears the one before it, so
+        // the reader always knows where the journey stands. Hover previews a closed
+        // row's line without moving the lit stop; focus and Enter do move it.
+        // -----------------------------------------------------------------------
+        function openRoadStop(stop) {
+            var rows = document.querySelectorAll('#roadmapList .road-row');
+            Array.prototype.forEach.call(rows, function (row) {
+                var wanted = Number(row.getAttribute('data-stop')) === stop;
+                row.setAttribute('data-open', wanted ? 'true' : 'false');
+                row.setAttribute('aria-expanded', wanted ? 'true' : 'false');
+                var title = row.querySelector('.road-title');
+                var desc = row.querySelector('.road-desc');
+                if (wanted) {
+                    if (title) { title.classList.remove('text-[#DAF1DE]'); title.classList.add('text-[#051F20]'); }
+                    if (desc) { desc.classList.remove('text-[#8EB69B]'); desc.classList.add('text-[#051F20]/80'); }
+                } else {
+                    if (title) { title.classList.add('text-[#DAF1DE]'); title.classList.remove('text-[#051F20]'); }
+                    if (desc) { desc.classList.add('text-[#8EB69B]'); desc.classList.remove('text-[#051F20]/80'); }
+                }
+            });
+            document.getElementById('roadmapList').setAttribute('data-open-stop', String(stop));
         }
-        function closeModal() {
-            document.getElementById('actionModal').classList.remove('flex');
-            document.getElementById('actionModal').classList.add('hidden');
+        function roadKey(event, stop) {
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+                event.preventDefault();
+                openRoadStop(stop);
+            }
         }
-
-        // The role chooser is no longer opened by the header button, which now links
-        // straight to the onboarding page. Kept for the wiring that is still pending:
-        // the role chosen here still needs to reach the onboarding flow.
-        function handleRole(role) {
-            alert('Welcome to Res-Q! ' + (role === 'business' ? 'Food business' : 'Shelter') + ' portal selected — onboarding is not connected yet.');
-            closeModal();
+        // Hover previews: the description peeks out of a closed row, without stealing
+        // the lit stop from wherever the reader last clicked.
+        function roadHover(stop) {
+            var fine = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+            if (!fine) { return; }
+            var open = Number(document.getElementById('roadmapList').getAttribute('data-open-stop'));
+            if (stop === open) { return; }
+            var rows = document.querySelectorAll('#roadmapList .road-row');
+            Array.prototype.forEach.call(rows, function (row) {
+                row.classList.toggle('road-preview', Number(row.getAttribute('data-stop')) === stop);
+            });
         }
-
-        // Close the modal on Escape
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeModal();
+        document.getElementById('roadmapList').addEventListener('mouseleave', function () {
+            Array.prototype.forEach.call(document.querySelectorAll('#roadmapList .road-row'), function (row) {
+                row.classList.remove('road-preview');
+            });
         });
+        openRoadStop(1);
 
         // The brand lockup in the corner sends signed-in visitors to the dashboard for their
         // role and everyone else to this landing page.
