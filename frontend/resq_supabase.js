@@ -233,6 +233,38 @@
     }
 
     // -------------------------------------------------------------------------
+    // Claim records: who claimed which post, for the rationing pass.
+    //
+    // The board itself is one shared table — first claim wins and the post stops
+    // being claimable — so a claim that only raced one claimant is already on
+    // the board. What the board does NOT keep is *who* claimed a post: the
+    // recipient's details are written to the claim recorder, a small companion
+    // service beside the site's own backend, which keeps one record per claim
+    // in backend/claim_records.json, each carrying the post id it claimed.
+    // Multiple recipients reaching the same post across the post's life each
+    // get their own record, all tied to that one post id — which is exactly
+    // what the rationing pass joins on.
+    // -------------------------------------------------------------------------
+    var RECORDER_URL = 'http://127.0.0.1:8081/claims';
+
+    function recordClaim(post, recipient) {
+        if (!post || !post.id) {
+            return Promise.resolve({ ok: false, error: { message: 'no post to record' } });
+        }
+        return fetch(RECORDER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post: post, recipient: recipient || null })
+        }).then(function (response) {
+            return response.json().catch(function () { return {}; }).then(function (data) {
+                return { ok: !!data.ok, status: response.status, data: data };
+            });
+        }, function (err) {
+            return { ok: false, error: { message: String(err && err.message || err) } };
+        });
+    }
+
+    // -------------------------------------------------------------------------
     // Live posts
     // -------------------------------------------------------------------------
     // Every insert and every claim is pushed to the callback while the returned
@@ -474,6 +506,8 @@
         listPosts: listPosts,
         createPost: createPost,
         claimPost: claimPost,
+        recordClaim: recordClaim,
+        recorderUrl: RECORDER_URL,
         watchPosts: watchPosts,
         escapeHtml: escapeHtml,
         statusChip: statusChip,

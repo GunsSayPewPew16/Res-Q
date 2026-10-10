@@ -678,6 +678,292 @@
                 </div>
             </div>
 
+            <!-- Delivery Status: the tracking console. Laid out as a skeleton first — every
+                 box the reference layout draws is here in the dashboard's own shape language,
+                 and the copy that will fill it arrives later. One dark console panel holds
+                 everything: the title row with its three figure blocks, a full-width action
+                 banner, the three reading cards (the week heatmap, the delivery history, the
+                 route map) and the recent-activity table under its filter chips. -->
+            <div id="viewDeliveryStatus" class="hidden">
+                <div class="panel p-4 md:p-7 space-y-5">
+
+                    <!-- Title row: the section's name and, beside it, its three figure blocks
+                         (icon chip, one display figure, two muted lines under it). -->
+                    <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_repeat(3,minmax(220px,auto))] gap-4 md:gap-6 items-stretch">
+                        <div class="persona min-w-0 flex flex-col justify-between">
+                            <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Recipient workspace</span>
+                            <h2 class="font-display text-3xl md:text-5xl leading-[1.05] mt-2">Delivery Status</h2>
+                        </div>
+
+                        <div class="organic-inner bg-[#163832] border border-[#235347] p-4 flex items-center gap-4">
+                            <div class="w-12 h-12 shrink-0 organic-inner bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="M12 12v9M12 12 3 7.5M12 12l9-4.5"/></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
+                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                            </div>
+                        </div>
+
+                        <div class="organic-inner bg-[#163832] border border-[#235347] p-4 flex items-center gap-4">
+                            <div class="w-12 h-12 shrink-0 organic-inner bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
+                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                            </div>
+                        </div>
+
+                        <div class="organic-inner bg-[#163832] border border-[#235347] p-4 flex items-center gap-4">
+                            <div class="w-12 h-12 shrink-0 organic-inner bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 16V7h11v9M13 10h4l3 3v3h-2"/><circle cx="6.5" cy="17.5" r="1.75"/><circle cx="16.5" cy="17.5" r="1.75"/><path d="M2 16h2.5M9.5 17.5h5.25"/></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
+                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action banner: one full-width strip — an icon, a name line, two
+                         inline chips, then two chips on the right; the rightmost is the
+                         one mint-filled action the strip offers. -->
+                    <div class="organic-inner bg-[#163832] border border-[#235347] px-4 py-4 flex flex-wrap items-center gap-3 md:gap-4">
+                        <div class="w-10 h-10 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                            <svg viewBox="0 0 24 24" class="w-4.5 h-4.5" style="width:18px;height:18px" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <span class="block h-2.5 w-28 organic-chip bg-[#235347]"></span>
+                            <span class="block h-1.5 w-20 organic-chip bg-[#163832] border border-[#235347] mt-1.5"></span>
+                        </div>
+                        <div class="hidden md:flex items-center gap-3 ml-auto">
+                            <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#8EB69B]"></span>
+                                <span class="h-2 w-24 organic-chip bg-[#235347]"></span>
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347] hover:border-[#8EB69B] transition-colors cursor-default">
+                                <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                                <span class="h-2 w-20 organic-chip bg-[#235347]"></span>
+                            </span>
+                            <span class="surface-light organic-chip inline-flex items-center gap-2 px-4 py-2 text-xs">
+                                <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                                <span class="h-2 w-16 organic-chip bg-[#051F20]/25"></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- The three reading cards: the week's arrivals heatmap, the delivery
+                         history stack, and the route map. -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 md:gap-6">
+
+                        <!-- Heatmap card -->
+                        <article class="panel-raised p-5 space-y-4 md:col-span-2 xl:col-span-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="block h-2.5 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="block h-2 w-14 organic-chip bg-[#235347]"></span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
+                                <div>
+                                    <span class="block h-1.5 w-16 organic-chip bg-[#235347] mb-1.5"></span>
+                                    <span class="flex items-center gap-2"> <span class="font-display text-2xl leading-none text-[#DAF1DE]">0</span><span class="w-3 h-3 rounded-full border border-[#8EB69B] inline-block"></span></span>
+                                </div>
+                                <div>
+                                    <span class="block h-1.5 w-16 organic-chip bg-[#235347] mb-1.5"></span>
+                                    <span class="flex items-center gap-2"> <span class="font-display text-2xl leading-none text-[#DAF1DE]">0</span><span class="w-3 h-3 rounded-full border border-[#8EB69B] inline-block"></span></span>
+                                </div>
+                                <div>
+                                    <span class="block h-1.5 w-16 organic-chip bg-[#235347] mb-1.5"></span>
+                                    <span class="flex items-center gap-2"> <span class="font-display text-2xl leading-none text-[#DAF1DE]">0</span><span class="w-3 h-3 rounded-full border border-[#8EB69B] inline-block"></span></span>
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-[#235347] flex items-center gap-3">
+                                <span class="flex gap-1"> 
+                                    <span class="h-1.5 w-6 organic-chip bg-[#235347]"></span><span class="h-1.5 w-6 organic-chip bg-[#235347]"></span><span class="h-1.5 w-6 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="block h-1.5 flex-1 max-w-[220px] organic-chip bg-[#163832] border border-[#235347]"></span>
+                            </div>
+                            <div id="dsHeatmap" class="space-y-[5px]" role="img" aria-label="Weekly arrivals heatmap placeholder"></div>
+                        </article>
+
+                        <!-- Delivery-history card -->
+                        <article class="panel-raised p-5 space-y-4 md:col-span-1 xl:col-span-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="block h-2.5 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="inline-flex gap-1"><span class="w-1 h-1 rounded-full bg-[#8EB69B]"></span><span class="w-1 h-1 rounded-full bg-[#8EB69B]"></span><span class="w-1 h-1 rounded-full bg-[#8EB69B]"></span></span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="block h-2 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="surface-light organic-chip inline-flex items-center px-3 py-1 text-[10px] uppercase tracking-[0.15em]">
+                                    <span class="h-1.5 w-10 organic-chip bg-[#051F20]/25"></span>
+                                </span>
+                            </div>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-3">
+                                    <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span>
+                                    </span>
+                                    <div class="min-w-0 space-y-1.5 pt-0.5">
+                                        <span class="block h-2 w-28 organic-chip bg-[#235347]"></span>
+                                        <span class="block h-1.5 w-20 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                    </div>
+                                    <div class="ml-auto flex flex-col items-center gap-1 pt-1">
+                                        <span class="w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
+                                        <span class="w-px h-3 bg-[#235347]"></span>
+                                        <span class="w-2 h-2 rounded-full border border-[#8EB69B]"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#8EB69B]"></span>
+                                    </span>
+                                    <div class="min-w-0 space-y-1.5 pt-0.5">
+                                        <span class="block h-2 w-24 organic-chip bg-[#235347]"></span>
+                                        <span class="block h-1.5 w-16 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                    </div>
+                                    <div class="ml-auto flex flex-col items-center gap-1 pt-1">
+                                        <span class="w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
+                                        <span class="w-px h-3 bg-[#235347]"></span>
+                                        <span class="w-2 h-2 rounded-full border border-[#8EB69B]"></span>
+                                    </div>
+                                </div>
+                                <div class="border-t border-dashed border-[#235347] pt-3 space-y-3">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                            <svg viewBox="0 0 24 24" style="width:13px;height:13px" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8 7.5 16 16.5"/><path d="M9 17.5H6a2 2 0 0 1-2-2v-3M15 6.5h3a2 2 0 0 1 2 2v3"/></svg>
+                                        </span>
+                                        <span class="block h-2 w-32 organic-chip bg-[#235347]"></span>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                            <svg viewBox="0 0 24 24" style="width:13px;height:13px" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>
+                                        </span>
+                                        <div class="min-w-0 space-y-1.5">
+                                            <span class="block h-2 w-40 organic-chip bg-[#235347]"></span>
+                                            <span class="block h-1.5 w-24 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+
+                        <!-- Route-map card: one dark block with a drawn route, a pickup
+                             marker, a drop-off ring, and a label chip resting on the road. -->
+                        <article class="relative panel-raised p-0 overflow-hidden md:col-span-1 xl:col-span-3 min-h-[300px]">
+                            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 300 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <g stroke="#235347" stroke-opacity="0.55" fill="none">
+                                    <path d="M0 60 H300" /><path d="M0 130 H300" /><path d="M0 210 H300" /><path d="M0 280 H300" />
+                                    <path d="M55 0 V320" /><path d="M140 0 V320" /><path d="M235 0 V320" />
+                                </g>
+                                <path d="M50 260 C110 250 108 170 150 150 C 195 128 205 90 248 62" stroke="#235347" stroke-width="10" fill="none" stroke-linejoin="round" opacity="0.4"/>
+                                <path d="M50 260 C110 250 108 170 150 150 C 195 128 205 90 248 62" stroke="#DAF1DE" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+                                <circle cx="248" cy="62" r="7" fill="#DAF1DE"/>
+                                <circle cx="248" cy="62" r="12" fill="#DAF1DE" fill-opacity="0.18"/>
+                                <circle cx="50" cy="260" r="7" fill="#0B2B26" stroke="#DAF1DE" stroke-width="2"/>
+                                <circle cx="150" cy="150" r="3" fill="#DAF1DE"/>
+                            </svg>
+                            <div class="absolute top-3 right-3 w-8 h-8 organic-chip bg-[#051F20]/85 border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20 20 4M4 20l.35-4.35M4 20l4.35-.35M20 4l-4.35.35M20 4l-.35 4.35"/></svg>
+                            </div>
+                            <div class="absolute bottom-4 left-4 space-y-2">
+                                <span class="organic-chip inline-flex items-center gap-2 px-3 py-2 bg-[#051F20]/90 border border-[#235347]">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span>
+                                    <span class="h-2 w-16 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <div class="organic-inner bg-[#051F20]/90 border border-[#235347] px-3 py-2 w-36 space-y-1.5">
+                                    <span class="block h-2 w-24 organic-chip bg-[#235347]"></span>
+                                    <span class="block h-1.5 w-20 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+
+                    <!-- Recent activity: filter chips over the deliveries table. The active
+                         chip is the one mint shape here; every row is placeholder cells until
+                         real orders arrive. -->
+                    <div class="panel-raised p-5 space-y-4">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span>
+                                <span class="block h-2.5 w-28 organic-chip bg-[#235347]"></span>
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="surface-light organic-chip inline-flex items-center px-3 py-1 text-[10px] uppercase tracking-[0.15em]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#051F20]/25"></span>
+                                </span>
+                                <span class="organic-chip inline-flex items-center px-3 py-1 bg-[#051F20] border border-[#235347]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="organic-chip inline-flex items-center px-3 py-1 bg-[#051F20] border border-[#235347]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="organic-chip inline-flex items-center px-3 py-1 bg-[#051F20] border border-[#235347]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#235347]"></span>
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2 ml-auto">
+                                <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">
+                                    <span class="h-2 w-16 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="surface-light organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs">
+                                    <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                                    <span class="h-2 w-10 organic-chip bg-[#051F20]/25"></span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="organic-inner bg-[#051F20] border border-[#235347] p-3 overflow-x-auto">
+                            <div class="min-w-[760px]">
+                                <!-- The table's head: six columns drawn as one grid the rows repeat. -->
+                                <div class="grid grid-cols-[24px_1.2fr_1fr_1fr_1.2fr_1fr_.9fr] gap-3 pb-2 border-b border-[#163832]">
+                                    <span class="block h-4 w-full flex items-center justify-center">
+                                        <span class="w-3 h-3 rounded border border-[#235347] bg-[#051F20]"></span>
+                                    </span>
+                                    <span class="block h-2 w-16 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-14 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-14 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-14 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-10 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-12 organic-chip bg-[#235347] self-center"></span>
+                                </div>
+
+                                <div class="grid grid-cols-[24px_1.2fr_1fr_1fr_1.2fr_1fr_.9fr] gap-3 py-3 border-b border-[#163832] items-center">
+                                    <span class="flex items-center justify-center"><span class="w-3 h-3 rounded border border-[#235347] bg-[#051F20]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-20 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-16 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-10 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-20 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-14 organic-chip bg-[#235347]"></span></span>
+                                    <span class="surface-light organic-chip h-7 flex items-center justify-center px-3">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#051F20]/60"></span>
+                                        <span class="h-1.5 w-10 organic-chip bg-[#051F20]/25 ml-2"></span>
+                                    </span>
+                                </div>
+
+                                <div class="grid grid-cols-[24px_1.2fr_1fr_1fr_1.2fr_1fr_.9fr] gap-3 py-3 items-center">
+                                    <span class="flex items-center justify-center"><span class="w-3 h-3 rounded border border-[#235347] bg-[#051F20]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-24 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-12 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-12 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-16 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-12 organic-chip bg-[#235347]"></span></span>
+                                    <span class="surface-light organic-chip h-7 flex items-center justify-center px-3">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#051F20]/60"></span>
+                                        <span class="h-1.5 w-10 organic-chip bg-[#051F20]/25 ml-2"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
             <!-- The remaining section screens: picking any other rail tab wipes the working
                  area and opens this blank frame, which carries the tone and nothing else until
                  that section has content of its own. -->
@@ -866,9 +1152,10 @@
         // loader, which is what makes the feed live only while it is on screen.
         var SECTION_VIEWS = {
             dashboard: 'viewDashboard',
-            feed: 'viewFeed'
+            feed: 'viewFeed',
+            'delivery-status': 'viewDeliveryStatus'
         };
-        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewBlank'];
+        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewDeliveryStatus', 'viewBlank'];
 
         function showView(name) {
             var wanted = SECTION_VIEWS[name] || 'viewBlank';
@@ -878,6 +1165,52 @@
             });
             if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
         }
+
+        // ---------------------------------------------------------------------------
+        // Delivery Status: its arriving-goods heatmap is drawn from one pattern table —
+        // ten rhythm rows, twenty half-day columns each, 0 resting to 4 its busiest
+        // half-day. Numbers would map through HEAT_SHADES; different values only ever
+        // re-tone this one place.
+        // ---------------------------------------------------------------------------
+        var DS_HEAT_PATTERN = [
+            '11220023312133002233',
+            '12331212230120233110',
+            '33012233123211203322',
+            '01120333102133021102',
+            '22011332213310222110',
+            '13302201123230021331',
+            '21033223013311203220',
+            '02113123230133021130',
+            '33210211123032011203',
+            '11203310212330220112'
+        ];
+        var DS_HEAT_SHADES = [
+            'rgba(142, 182, 155, 0.06)',
+            'rgba(142, 182, 155, 0.22)',
+            'rgba(142, 182, 155, 0.4)',
+            'rgba(218, 241, 222, 0.35)',
+            'rgba(218, 241, 222, 0.85)'
+        ];
+
+        (function buildDeliveryHeatmap() {
+            var grid = document.getElementById('dsHeatmap');
+            if (!grid) { return; }
+            while (grid.firstChild) { grid.removeChild(grid.firstChild); }
+
+            DS_HEAT_PATTERN.forEach(function (rowPattern) {
+                var row = document.createElement('div');
+                row.className = 'flex gap-[5px] px-3 md:px-5';
+
+                Array.prototype.forEach.call(rowPattern, function (digit) {
+                    var cell = document.createElement('span');
+                    cell.className = 'flex-1 h-5 rounded-[7px]';
+                    cell.style.backgroundColor = DS_HEAT_SHADES[digit] || DS_HEAT_SHADES[0];
+                    row.appendChild(cell);
+                });
+
+                grid.appendChild(row);
+            });
+        })();
 
         // ---------------------------------------------------------------------------
         // Header panels: the bell opens the notifications panel, which is still an empty
@@ -1771,7 +2104,17 @@
                     loadFeed();
                     return;
                 }
-                setChip('feedState', 'claimed', CHIP_DONE);
+                // The claim won. It is also an accepted order, and the recipient's own
+                // details go with the claimed post to the claim recorder so a rationing
+                // pass can read back who reached this item. The record carries the post
+                // row exactly as the board returned it, so every claimant of the same
+                // post — now or after a re-post — joins on the same post id.
+                var claimedRow = res.data;
+                db.recordClaim(claimedRow, resqProfile || null).then(function (rec) {
+                    setChip('feedState', rec.ok ? 'claimed \u00b7 recorded'
+                                                : 'claimed \u00b7 record failed',
+                            rec.ok ? CHIP_DONE : CHIP_BUSY);
+                });
                 loadFeed();
             }).catch(function () {
                 delete feedClaiming[id];
