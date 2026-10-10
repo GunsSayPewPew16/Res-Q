@@ -258,78 +258,84 @@
 
         /* THE DELIVERY MAP, dressed in the palette.
 
-           Two pieces do the work. The basemap is a light, label-first one, and a sage layer
-           multiplies over its tiles: the land turns the ramp's sage while the roads — which
-           are white on that basemap — stay the lightest thing on the map, which is the
-           relationship the reference map has. Multiply is also what keeps the labels: a
-           street name is dark, so under a multiply it stays dark instead of washing out, and
-           the contrast step on the tiles below separates it further from the land it sits
-           on. */
+           The colours live in the style itself (MAP_STYLE below) rather than in a filter over
+           somebody's tiles: vector tiles are painted per feature, so the land is the ramp's
+           sage, the roads are one uniform white thread whatever class the street is, and the
+           names sit on top in ink with a pale halo — the same relationship the reference map
+           has, and the reason the labels stay readable where a white road runs under them. */
 
-        .leaflet-container {
-            background-color: #8EB69B;
+        .maplibregl-map {
             font-family: inherit;
         }
-        .leaflet-tile-pane {
-            filter: contrast(1.14) saturate(0.92);
-        }
-        .map-tint-layer {
+
+        /* The map sizes itself from its container's box, and that container is stretched over
+           the overlay's map area by `absolute inset-0`. MapLibre's own stylesheet arrives
+           after this one and sets `.maplibregl-map { position: relative }`, which would drop
+           the stretch and collapse the map to nothing — an id rule keeps it winning. */
+        #deliverMap {
             position: absolute;
-            /* Oversized on purpose: the layer lives inside Leaflet's own map pane, which is
-               translated while the map is dragged, so a viewport-sized layer would show its
-               edge at the trailing side of every drag. */
-            left: -2000px;
-            top: -2000px;
-            width: 8000px;
-            height: 8000px;
-            z-index: 350;
-            background-color: #8EB69B;
-            mix-blend-mode: multiply;
-            opacity: 0.95;
-            pointer-events: none;
+            inset: 0;
         }
 
-        /* Leaflet's own controls, re-cut: the zoom buttons are ink panels with mint glyphs
-           and the credit line sits on ink, rather than the default white boxes. */
-        .leaflet-bar {
-            border: 1px solid #235347 !important;
-            border-radius: 0.75rem !important;
+        /* MapLibre's own controls, re-cut: the zoom buttons are ink panels with mint glyphs
+           and the credit line sits on ink, rather than the default white boxes. The rules are
+           scoped to the map's id for the same reason #deliverMap is: MapLibre's stylesheet
+           lands after this one, and only an id keeps these winning over it. */
+        #deliverMap .maplibregl-ctrl-group {
+            background-color: #051F20;
+            border: 1px solid #235347;
+            border-radius: 0.75rem;
             overflow: hidden;
-            box-shadow: 0 6px 16px rgba(5, 31, 32, 0.35) !important;
+            box-shadow: 0 6px 16px rgba(5, 31, 32, 0.35);
         }
-        .leaflet-bar a {
+        #deliverMap .maplibregl-ctrl-group button {
             background-color: #051F20;
             color: #DAF1DE;
             border-bottom: 1px solid #235347;
             width: 34px;
             height: 34px;
-            line-height: 32px;
-            font-size: 17px;
         }
-        .leaflet-bar a:hover,
-        .leaflet-bar a:focus {
+        #deliverMap .maplibregl-ctrl-group button:hover,
+        #deliverMap .maplibregl-ctrl-group button:focus {
             background-color: #163832;
             color: #DAF1DE;
         }
-        .leaflet-bar a.leaflet-disabled {
-            background-color: #051F20;
-            color: #235347;
+        #deliverMap .maplibregl-ctrl-group button + button {
+            border-top: 0;
+            border-bottom: 0;
         }
-        .leaflet-control-attribution {
+        /* The glyph is the button's own background image, so a mint glyph means swapping
+           that image for a mint one — not filtering the dark default, which inverts whatever
+           frame the compositor hands it. The + and − are drawn here to keep the whole control
+           inside the palette. */
+        #deliverMap .maplibregl-ctrl-icon {
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath stroke='%23DAF1DE' stroke-width='2' stroke-linecap='round' d='M14.5 8.5v12M8.5 14.5h12'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 29px 29px;
+        }
+        #deliverMap .maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath stroke='%23DAF1DE' stroke-width='2' stroke-linecap='round' d='M8.5 14.5h12'/%3E%3C/svg%3E");
+        }
+        .maplibregl-ctrl-attrib {
             background: rgba(5, 31, 32, 0.88) !important;
             color: #8EB69B !important;
             font-size: 10px;
             padding: 1px 0.5rem;
             border-top-left-radius: 0.5rem;
         }
-        .leaflet-control-attribution a { color: #DAF1DE; }
+        .maplibregl-ctrl-attrib a { color: #DAF1DE; }
 
         /* The delivery pin: an ink teardrop with a mint ring and core, drawn here rather than
-           fetched, so it is the palette's own. Leaflet's own div-icon frame is turned off —
-           the teardrop is the whole mark. */
+           fetched, so it is the palette's own. It is handed to MapLibre as a marker element,
+           and MapLibre's own marker defaults are turned off — the teardrop is the whole mark.
+           The box is taller than the pin so the teardrop's tip — six pixels past the square it
+           is rotated in — lands on the bottom edge the marker anchors to. */
         .resq-pin-icon {
             background: transparent;
             border: 0;
+            width: 30px;
+            height: 36px;
         }
         .resq-pin {
             width: 30px;
@@ -983,7 +989,7 @@
 
     <!-- Delivery location overlay: an almost full-screen map. It opens on the address the
          account onboarded with, an address from the bar drops the pin, and moving the pin
-         names the address under it. Leaflet is loaded from a CDN on first open so the
+         names the address under it. MapLibre is loaded from a CDN on first open so the
          dashboards stay light. -->
     <div id="deliverOverlay" class="hidden fixed inset-0 z-[90] bg-[#051F20]/85 backdrop-blur-sm p-3 sm:p-6" onclick="closeDeliveryBackdrop(event)">
         <div class="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden organic-block border border-[#235347] bg-[#0B2B26]" role="dialog" aria-modal="true" aria-labelledby="deliverTitle">
@@ -1367,21 +1373,108 @@
         // sits underneath it back into the search bar, so the field always names the
         // spot the pin is on rather than the last place that was searched for.
         //
-        // Leaflet with OpenStreetMap's own tiles, and Nominatim for the address lookup
-        // both ways: free and keyless, so nothing here needs an account, a key or a
-        // card. Both are shared public services, so lookups run per search and per
-        // settled pin movement rather than per keystroke, and the tiles keep the
-        // attribution Leaflet draws for them.
+        // MapLibre GL with OpenFreeMap's vector tiles, and Nominatim for the address
+        // lookup both ways: free and keyless, so nothing here needs an account, a key or
+        // a card. Both are shared public services, so lookups run per search and per
+        // settled pin movement rather than per keystroke, and the map draws the credit
+        // line both of them need.
         // ---------------------------------------------------------------------------
-        var LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        var LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        // The basemap is a light, label-first one rather than the reference map's own
-        // drawing: the streets have to stay readable under the tint that puts the map in the
-        // palette, and a label-first basemap is the one that survives it. It is CARTO's
-        // Positron, keyless like the lookups below and credited beside the OSM attribution
-        // the data still needs.
-        var TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-        var TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+        var MAPLIBRE_CSS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+        var MAPLIBRE_JS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+        var MAP_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>';
+        // The map's whole look is painted here, from vector tiles rather than pictures: the
+        // ground is the ramp's sage, every road is one warm-white thread whose weight alone
+        // says how big the street is, and the names carry a pale halo so they stay readable
+        // over both — which is what the reference map is. A raster tile could only be tinted
+        // towards that; a vector style simply is it. The source is the openmaptiles schema
+        // OpenFreeMap publishes, keyless, and the glyphs under the labels come from the
+        // same place.
+        var MAP_STYLE = {
+            version: 8,
+            glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+            sources: {
+                openmaptiles: {
+                    type: 'vector',
+                    url: 'https://tiles.openfreemap.org/planet',
+                    attribution: MAP_CREDIT
+                }
+            },
+            layers: [
+                // The ground everything else sits on: the sage of the ramp, muted the way
+                // the reference map mutes its own.
+                { id: 'background', type: 'background',
+                  paint: { 'background-color': '#8CA083' } },
+
+                // Ground that is not just ground: parkland a shade lighter, woods and
+                // fields a shade apart, residential blocks barely lifted. This subtlety is
+                // what keeps the white roads the loudest thing on the map.
+                { id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park',
+                  paint: { 'fill-color': '#95A98C', 'fill-opacity': 0.75 } },
+                { id: 'landcover', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+                  filter: ['in', 'class', 'wood', 'grass', 'scrub', 'wetland', 'farmland'],
+                  paint: { 'fill-color': ['match', ['get', 'class'],
+                      'wood', '#849877', 'grass', '#93A78A', 'farmland', '#8FA586', '#8CA083'],
+                      'fill-opacity': 0.55 } },
+                { id: 'landuse', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+                  filter: ['in', 'class', 'residential', 'suburb', 'neighbourhood',
+                      'commercial', 'industrial', 'cemetery', 'hospital', 'school'],
+                  paint: { 'fill-color': '#8FA588', 'fill-opacity': 0.45 } },
+
+                // Water steps out of the green instead of into it: a muted slate-green,
+                // darker than the land, so a shoreline reads at a glance.
+                { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water',
+                  paint: { 'fill-color': '#7C948E' } },
+                { id: 'waterway', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway',
+                  paint: { 'line-color': '#7C948E',
+                      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 18, 3] } },
+
+                // The roads, every one of them the same warm white — the reference map's
+                // one strong line. Width alone says how big the street is; paths and
+                // tracks are dashed so foot traffic reads differently from wheels.
+                { id: 'road-path', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+                  filter: ['all', ['in', 'class', 'path', 'track', 'pedestrian'],
+                      ['!=', 'brunnel', 'tunnel']],
+                  layout: { 'line-cap': 'round', 'line-join': 'round' },
+                  paint: { 'line-color': '#F2F1E8', 'line-dasharray': [2, 2],
+                      'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 18, 1.6] } },
+                { id: 'road', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+                  // `none` is the not-any-of: no foot traffic, no ferries, no tunnels.
+                  filter: ['none',
+                      ['in', 'class', 'path', 'track', 'pedestrian', 'aerialway', 'ferry'],
+                      ['==', 'brunnel', 'tunnel']],
+                  layout: { 'line-cap': 'round', 'line-join': 'round' },
+                  paint: { 'line-color': '#F7F6EE',
+                      'line-width': ['interpolate', ['linear'], ['zoom'],
+                          6, ['match', ['get', 'class'], ['motorway', 'trunk'], 1.1,
+                              'primary', 0.8, 0.35],
+                          12, ['match', ['get', 'class'], ['motorway', 'trunk'], 3.4,
+                              'primary', 2.8, ['secondary', 'tertiary'], 2.2, 1.2],
+                          17, ['match', ['get', 'class'], ['motorway', 'trunk'], 13,
+                              'primary', 10.5, ['secondary', 'tertiary'], 8, 4]] } },
+
+                // The names: a street name runs along its street, a place name sits over
+                // its place, both on a pale halo so nothing turns unreadable where a white
+                // road passes underneath.
+                { id: 'road-label', type: 'symbol', source: 'openmaptiles',
+                  'source-layer': 'transportation_name', minzoom: 12,
+                  layout: { 'symbol-placement': 'line',
+                      'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],
+                      'text-font': ['Noto Sans Regular'],
+                      'text-size': ['interpolate', ['linear'], ['zoom'], 12, 9.5, 17, 12.5],
+                      'text-padding': 2 },
+                  paint: { 'text-color': '#2B3B2D',
+                      'text-halo-color': '#F0F3E8', 'text-halo-width': 1.2 } },
+                { id: 'place-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place',
+                  filter: ['in', 'class', 'city', 'town', 'village', 'suburb',
+                      'neighbourhood', 'hamlet'],
+                  layout: { 'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],
+                      'text-font': ['Noto Sans Bold'],
+                      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10.5, 15, 14],
+                      'text-letter-spacing': 0.06 },
+                  paint: { 'text-color': '#22322A',
+                      'text-halo-color': '#F0F3E8', 'text-halo-width': 1.4 } }
+            ]
+        };
         var LOOKUP_URL = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=';
         // addressdetails asks for the place's own parts back as well as its one-line
         // name, and accept-language pins the answer to the language this page is in.
@@ -1401,8 +1494,9 @@
         var deliverAddressState = 'none';
         var deliverHint = 'No pin yet — search an address or tap the map.';
         var addressLookupTimer = null;
-        var leafletRequested = false;
-        var leafletOnPage = false;
+        var maplibreRequested = false;
+        var maplibreOnPage = false;
+        var mapTroubleShown = false;
         var startPinDone = false;
         var savingLocation = false;
         var savedLocation = null;
@@ -1703,30 +1797,34 @@
         }
 
         function placeDeliveryPin(at, label) {
-            if (!deliverMap || !window.L) { return; }
+            if (!deliverMap || !window.maplibregl) { return; }
             // An unnamed pin has no address yet: keeping the previous one would let a
             // moved pin be confirmed against the address it used to sit on.
             deliverAddress = label || '';
             deliverAddressState = label ? 'named' : 'none';
-            var point = [at.lat, at.lng];
+            // MapLibre speaks longitude first, the other way round from the [lat, lng]
+            // the lookups answer in.
+            var point = [at.lng, at.lat];
             if (deliverMarker) {
-                deliverMarker.setLatLng(point);
+                deliverMarker.setLngLat(point);
             } else {
                 // Draggable, so the pin can be nudged onto the exact door; wherever it is
                 // left, the address is re-resolved from the spot it landed on.
-                deliverMarker = window.L.marker(point, {
+                deliverMarker = new window.maplibregl.Marker({
+                    element: deliveryPinElement(),
+                    anchor: 'bottom',
                     draggable: true,
-                    title: 'Delivery location',
-                    icon: deliveryPinIcon()
-                }).addTo(deliverMap);
+                    title: 'Delivery location'
+                }).setLngLat(point).addTo(deliverMap);
                 deliverMarker.on('dragend', function () {
-                    var moved = deliverMarker.getLatLng();
+                    var moved = deliverMarker.getLngLat();
                     deliverPinAt = { lat: moved.lat, lng: moved.lng };
                     resolvePinAddress();
                 });
             }
             deliverPinAt = { lat: at.lat, lng: at.lng };
-            deliverMap.setView(point, Math.max(deliverMap.getZoom(), 16), { animate: false });
+            // Snapping is what a location picker wants anyway: no glide between spots.
+            deliverMap.jumpTo({ center: point, zoom: Math.max(deliverMap.getZoom(), 16) });
             hideDeliverNotice();
             renderDeliveryReadout();
         }
@@ -1798,28 +1896,30 @@
         }
 
         // The pin the map draws: an ink teardrop with a mint ring and core, made here rather
-        // than fetched as an image, so it is the palette's own. Its anchor is the tip of the
-        // teardrop — six pixels below the box it is rotated in — so the point it names is the
-        // point it touches.
-        function deliveryPinIcon() {
-            return window.L.divIcon({
-                className: 'resq-pin-icon',
-                html: '<div class="resq-pin"><span></span></div>',
-                iconSize: [30, 30],
-                iconAnchor: [15, 36]
-            });
+        // than fetched as an image, so it is the palette's own. Its box is taller than the
+        // teardrop because the tip — the point it names — sits at the bottom, which is where
+        // the marker anchors it.
+        function deliveryPinElement() {
+            var pin = document.createElement('div');
+            pin.className = 'resq-pin-icon';
+            pin.innerHTML = '<div class="resq-pin"><span></span></div>';
+            return pin;
         }
 
         function initDeliveryMap() {
-            if (deliverMap || !window.L || !deliverEl('deliverMap')) { return; }
+            if (deliverMap || !window.maplibregl || !deliverEl('deliverMap')) { return; }
             try {
-                deliverMap = window.L.map(deliverEl('deliverMap'), {
-                    center: START_VIEW,
+                deliverMap = new window.maplibregl.Map({
+                    container: deliverEl('deliverMap'),
+                    style: MAP_STYLE,
+                    // The map speaks [lng, lat], the other way round from START_VIEW.
+                    center: [START_VIEW[1], START_VIEW[0]],
                     zoom: 12,
+                    attributionControl: false,
                     // A transition that cannot run leaves the view stuck halfway, which
                     // is what happens in renderers that never composite a frame. Snapping
                     // is what a location picker wants anyway.
-                    zoomAnimation: false
+                    fadeDuration: 0
                 });
             } catch (err) {
                 deliverMap = null;
@@ -1827,52 +1927,44 @@
                     + (err && err.message ? err.message : err));
                 return;
             }
-            var tiles = window.L.tileLayer(TILE_URL, {
-                maxZoom: 19,
-                // The retina tiles are asked for where the screen has the pixels for them,
-                // because a tinted map is one that a soft tile shows through.
-                detectRetina: true,
-                attribution: TILE_CREDIT
-            });
-            tiles.on('tileerror', function () {
+            deliverMap.addControl(new window.maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+            deliverMap.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), 'top-left');
+            deliverMap.on('error', function () {
+                // Tile and glyph failures arrive in bursts; one notice is the whole story.
+                if (mapTroubleShown) { return; }
+                mapTroubleShown = true;
                 showDeliverNotice('The map tiles could not be loaded. The pin still works, or try again once the connection is back.');
             });
-            tiles.addTo(deliverMap);
-            // The sage layer that puts the map in the palette. It goes inside Leaflet's own
-            // map pane rather than over the whole container, which is what lands it above the
-            // tiles and below the pin: the land turns the ramp's sage, the roads stay the
-            // lightest thing on the map, and the pin keeps its own colours.
-            var mapPane = deliverMap.getPanes().mapPane;
-            var paletteLayer = document.createElement('div');
-            paletteLayer.className = 'map-tint-layer';
-            mapPane.appendChild(paletteLayer);
             deliverMap.on('click', function (event) {
-                placeDeliveryPin({ lat: event.latlng.lat, lng: event.latlng.lng }, '');
+                placeDeliveryPin({ lat: event.lngLat.lat, lng: event.lngLat.lng }, '');
                 resolvePinAddress();
             });
-            deliverMap.invalidateSize();
+            deliverMap.resize();
             placeStartingPin();
         }
 
-        // Leaflet comes from a CDN the first time the map opens. No key, no account.
-        function loadLeaflet() {
-            if (leafletOnPage) { initDeliveryMap(); return; }
-            if (leafletRequested) { return; }
-            leafletRequested = true;
+        // MapLibre comes from a CDN the first time the map opens — its stylesheet and its
+        // script, since the pin and the controls are laid out by that stylesheet. The tiles
+        // are OpenFreeMap's keyless vector endpoint, so nothing here needs an account or a
+        // token.
+        function loadMaplibre() {
+            if (maplibreOnPage) { initDeliveryMap(); return; }
+            if (maplibreRequested) { return; }
+            maplibreRequested = true;
             var css = document.createElement('link');
             css.rel = 'stylesheet';
-            css.href = LEAFLET_CSS;
+            css.href = MAPLIBRE_CSS;
             document.head.appendChild(css);
             var script = document.createElement('script');
-            script.src = LEAFLET_JS;
+            script.src = MAPLIBRE_JS;
             script.async = true;
             script.onload = function () {
-                leafletOnPage = true;
+                maplibreOnPage = true;
                 hideDeliverNotice();
                 initDeliveryMap();
             };
             script.onerror = function () {
-                leafletRequested = false;
+                maplibreRequested = false;
                 showDeliverNotice('The map library could not be loaded. Check the connection and try again.');
             };
             document.head.appendChild(script);
@@ -1884,11 +1976,11 @@
             var wasOpen = !overlay.classList.contains('hidden');
             overlay.classList.remove('hidden');
             document.documentElement.style.overflow = 'hidden';
-            if (!wasOpen) { loadLeaflet(); }
+            if (!wasOpen) { loadMaplibre(); }
             var input = deliverEl('deliverSearch');
             if (input && !wasOpen) { input.focus(); }
             // The map is sized from its container, so it has to be told the overlay moved.
-            if (deliverMap) { window.setTimeout(function () { deliverMap.invalidateSize(); }, 0); }
+            if (deliverMap) { window.setTimeout(function () { deliverMap.resize(); }, 0); }
             // In case the profile arrived after the map was first built.
             placeStartingPin();
         }

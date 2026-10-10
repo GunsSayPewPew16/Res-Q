@@ -178,24 +178,26 @@ account that a later routing pass would read: the pair of coordinates saved with
 enough to drop a pin for either side of a delivery. Saving it leaves the address the
 account originally onboarded with untouched, so the two never overwrite each other.
 
-The map is [Leaflet](https://leafletjs.com) drawing **CARTO's Positron** tiles — a
-light, label-first basemap built on OpenStreetMap data — recoloured into the palette
-with a sage multiply layer laid over them inside the map pane: the land takes the
-ramp's sage, the roads stay the lightest thing on the map, and street names stay dark
-and readable under the tint. The delivery pin is drawn in the page rather than
-fetched: an ink teardrop with a mint ring and core, and Leaflet's own controls are
-cut to match — ink zoom buttons with mint glyphs, an ink attribution strip. Both
-lookups — the address search and the reverse lookup behind a moved pin — are
-OpenStreetMap's **Nominatim** service. All of it is free and keyless, so the overlay
-needs no account, no API key and no card. Leaflet is fetched from a CDN the first time
-the overlay opens, so the dashboards themselves stay light.
+The map is [MapLibre GL](https://maplibre.org) drawing **OpenFreeMap** vector tiles —
+OpenStreetMap data, painted by a style that lives in the page rather than recoloured
+afterwards: the ground is the ramp's sage, every road is one warm-white thread whose
+weight alone says how big the street is, and the names carry a pale halo so they stay
+readable where a white road runs under them. Painting the tiles feature by feature is
+what the look needs — a picture of a map could only be filtered towards it. The
+delivery pin is drawn in the page rather than fetched: an ink teardrop with a mint
+ring and core, and MapLibre's own controls are cut to match — ink zoom buttons with
+mint glyphs, an ink attribution strip. Both lookups — the address search and the
+reverse lookup behind a moved pin — are OpenStreetMap's **Nominatim** service. All of
+it is free and keyless, so the overlay needs no account, no API key and no card.
+MapLibre is fetched from a CDN the first time the overlay opens, so the dashboards
+themselves stay light.
 
 Both OSM services are shared public infrastructure, so the overlay stays a good
 citizen: lookups run once per search and once per settled pin movement rather than on
 every keystroke (Nominatim's policy forbids type-ahead against their public instance,
 and the reverse lookup is debounced behind the drag and asked for no more than two
 attempts at one spot), the map keeps the attribution
-Leaflet draws for the tiles, and heavy or automated use would need a self-hosted tile
+MapLibre draws for the tiles, and heavy or automated use would need a self-hosted tile
 server or a commercial provider rather than these endpoints.
 
 If the library, the tiles or a lookup cannot be reached, the overlay says which one

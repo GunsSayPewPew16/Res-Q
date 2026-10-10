@@ -13,7 +13,7 @@
  * secret. The secret key is never used here.
  *
  * The library itself is fetched from a CDN the first time a dashboard actually
- * needs the database, the way Leaflet is fetched when the map overlay opens, so
+ * needs the database, the way MapLibre is fetched when the map overlay opens, so
  * a signed-in visitor who never opens the feed or the form loads none of it.
  * ------------------------------------------------------------------------- */
 (function (global) {
@@ -21,7 +21,7 @@
 
     var SUPABASE_URL = 'https://paeshgdpqbjoagpbybhl.supabase.co';
     var SUPABASE_KEY = 'sb_publishable_pRaPy6MH_oBWtx6Ei2Uatw_VM9Z2y8w';
-    // Pinned the way Leaflet is: the bundle is the UMD build, whose global is
+    // Pinned the way MapLibre is: the bundle is the UMD build, whose global is
     // `supabase` and whose entry point is `createClient`.
     var SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js';
 
