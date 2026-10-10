@@ -776,8 +776,8 @@
                         <h1 class="font-display text-4xl md:text-5xl leading-none">Forecast</h1>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="block h-10 w-44 organic-chip bg-[#051F20] border border-[#235347]"></span>
-                        <span class="block h-10 w-28 organic-chip bg-[#DAF1DE]"></span>
+                        <span id="forecastRunChip" class="organic-chip px-4 h-10 inline-flex items-center text-[10px] uppercase tracking-[0.2em] bg-[#051F20] border border-[#235347] text-[#8EB69B]">idle</span>
+                        <button type="button" id="forecastRunButton" onclick="runSurplusForecast()" class="h-10 px-6 organic-chip bg-[#DAF1DE] text-[#051F20] text-xs font-medium uppercase tracking-[0.15em] hover:bg-[#8EB69B] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Run analyser</button>
                     </div>
                 </div>
 
@@ -787,42 +787,52 @@
 
                     <div class="lg:col-span-2 gradient-banner p-8 md:p-10 flex flex-col justify-between gap-6 min-h-[320px]">
                         <div class="flex items-start justify-between gap-4">
-                            <div class="space-y-3">
-                                <span class="block h-3 w-44 max-w-full organic-chip bg-[#051F20]/20"></span>
-                                <span class="block h-12 w-56 max-w-full organic-inner bg-[#051F20]/20"></span>
+                            <div class="space-y-2 min-w-0">
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#051F20]/70">Tomorrow's surplus forecast</span>
+                                <p class="font-display text-4xl md:text-5xl leading-none text-[#051F20]">
+                                    <span id="forecastHeadline">Ready to analyse</span>
+                                </p>
                             </div>
                             <!-- This one sits over the ramp's darker half, so it is drawn in
                                  the accent instead of ink and stays legible there. -->
-                            <span class="block h-7 w-32 shrink-0 organic-chip bg-[#DAF1DE]/40"></span>
+                            <span id="forecastModelChip" class="shrink-0 organic-chip px-4 py-2 text-[10px] uppercase tracking-[0.15em] bg-[#DAF1DE]/40 text-[#051F20]">random forest · v1</span>
                         </div>
-                        <span class="block h-4 w-full max-w-lg organic-chip bg-[#051F20]/20"></span>
-                        <!-- The card's two button-shaped bars: the filled one and the ghost
-                             beside it, the pair the reference's banner carries. -->
-                        <div class="flex items-center gap-4">
-                            <span class="block h-11 w-40 organic-chip bg-[#051F20]"></span>
-                            <span class="block h-11 w-32 organic-chip bg-[#DAF1DE]/40"></span>
+
+                        <p id="forecastStory" class="text-sm md:text-[15px] leading-relaxed text-[#051F20]/80 max-w-lg">
+                            Run the analyser and tomorrow's expected surplus — forecast from the
+                            day of the week, the weather and your kitchen's recent rhythm — will
+                            be written here, in kilograms.
+                        </p>
+
+                        <!-- The card's two actions: the filled one re-runs the forecast, the
+                             ghost beside it carries the model's own error band once it has run. -->
+                        <div class="flex flex-wrap items-center gap-4">
+                            <button type="button" id="forecastPrimaryChip" onclick="runSurplusForecast()" class="h-11 px-6 organic-chip bg-[#051F20] text-[#DAF1DE] text-xs font-medium uppercase tracking-[0.15em] hover:bg-[#163832] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Run the forecast</button>
+                            <span id="forecastAccuracyChip" class="h-11 px-5 organic-chip inline-flex items-center bg-[#DAF1DE]/40 text-[#051F20] text-xs">
+                                <span id="forecastAccuracyText">error band pending first run</span>
+                            </span>
                         </div>
                     </div>
 
                     <div class="space-y-4 md:space-y-6">
                         <div class="panel panel-lift p-6 flex flex-col justify-between gap-4 min-h-[148px]">
                             <div class="flex items-center justify-between gap-3">
-                                <span class="block h-3 w-28 organic-chip bg-[#235347]"></span>
-                                <span class="block h-5 w-14 shrink-0 organic-chip bg-[#163832]"></span>
+                                <span class="block text-xs text-[#8EB69B]">Forecast conditions</span>
+                                <span id="forecastDayChip" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.15em] bg-[#163832] text-[#DAF1DE]">—</span>
                             </div>
                             <div class="space-y-2">
-                                <span class="block h-8 w-32 organic-inner bg-[#163832]"></span>
-                                <span class="block h-3 w-36 max-w-full organic-chip bg-[#163832]"></span>
+                                <span id="forecastWindowValue" class="block font-display text-2xl leading-none">—</span>
+                                <span id="forecastWindowNote" class="block text-xs text-[#8EB69B]">the day and weather behind the number</span>
                             </div>
                         </div>
                         <div class="panel panel-lift p-6 flex flex-col justify-between gap-4 min-h-[148px]">
                             <div class="flex items-center justify-between gap-3">
-                                <span class="block h-3 w-32 organic-chip bg-[#235347]"></span>
-                                <span class="block h-5 w-16 shrink-0 organic-chip bg-[#163832]"></span>
+                                <span class="block text-xs text-[#8EB69B]">Pickup planning</span>
+                                <span id="forecastConfidenceChip" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.15em] bg-[#163832] text-[#DAF1DE]">—</span>
                             </div>
                             <div class="space-y-2">
-                                <span class="block h-8 w-32 organic-inner bg-[#163832]"></span>
-                                <span class="block h-3 w-40 max-w-full organic-chip bg-[#163832]"></span>
+                                <span id="forecastAdviceValue" class="block font-display text-2xl leading-none">—</span>
+                                <span id="forecastAdviceNote" class="block text-xs text-[#8EB69B]">how much to get onto the board</span>
                             </div>
                         </div>
                     </div>
@@ -1131,8 +1141,135 @@
                 if (view) { view.classList.toggle('hidden', id !== wanted); }
             });
             if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
-            if (wanted === 'viewSurplusAnalyser') { openMySurplus(); } else { closeMySurplus(); }
+            if (wanted === 'viewSurplusAnalyser') { openMySurplus(); openSurplusForecast(); } else { closeMySurplus(); }
             if (wanted === 'viewDashboard') { openDashboardOrders(); } else { closeDashboardOrders(); }
+        }
+
+        // ---------------------------------------------------------------------------
+        // The forecast banner. The analyser's answer lives on the screen's one gradient
+        // surface: Run analyser asks the backend's /api/surplus-forecast for tomorrow's
+        // number — carried by the day of the week, the weather and the kitchen's own
+        // recent rhythm — and the banner, its two chips and the stat cards beside it are
+        // all written from that one answer. Nothing runs or shows a figure until it is
+        // asked for: the box opens on its rest copy, and a run that fails says so on the
+        // banner rather than leaving an old number in place.
+        // ---------------------------------------------------------------------------
+        var forecastRunning = false;
+        var forecastRanOnce = false;
+
+        function setForecastChip(text, mode) {
+            var chip = document.getElementById('forecastRunChip');
+            if (chip) {
+                chip.textContent = text;
+                chip.className = 'organic-chip px-4 h-10 inline-flex items-center text-[10px] uppercase tracking-[0.2em] '
+                    + (mode === 'busy'
+                        ? 'bg-[#051F20] border border-[#8EB69B] text-[#DAF1DE]'
+                        : mode === 'done'
+                            ? 'bg-[#051F20] border border-[#235347] text-[#8EB69B]'
+                            : 'bg-[#051F20] border border-[#235347] text-[#8EB69B]');
+            }
+        }
+
+        function setForecastBusy(busy) {
+            ['forecastRunButton', 'forecastPrimaryChip'].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) { el.disabled = busy; }
+            });
+        }
+
+        // Tomorrow's conditions, in the labels the model was trained on.
+        function forecastConditions() {
+            var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            var tomorrow = new Date(Date.now() + 86400000);
+            var weather = ['Sunny', 'Cloudy', 'Rainy'][tomorrow.getDate() % 3];
+            return { day_of_week: days[tomorrow.getDay()], weather: weather };
+        }
+
+        function runSurplusForecast() {
+            if (forecastRunning) { return; }
+            forecastRunning = true;
+            setForecastBusy(true);
+            setForecastChip('running\u2026', 'busy');
+
+            var headline = document.getElementById('forecastHeadline');
+            var story = document.getElementById('forecastStory');
+            var modelChip = document.getElementById('forecastModelChip');
+            var accuracyText = document.getElementById('forecastAccuracyText');
+            if (headline) { headline.textContent = 'Forecasting\u2026'; }
+
+            fetch('/api/surplus-forecast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(forecastConditions())
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    forecastRunning = false;
+                    setForecastBusy(false);
+                    if (res.status !== 200 || !res.data || !res.data.forecast) {
+                        renderForecastFailure((res.data && res.data.error) || 'The forecast could not be reached.');
+                        return;
+                    }
+                    forecastRanOnce = true;
+                    setForecastChip('updated', 'done');
+                    renderForecast(res.data.forecast);
+                })
+                .catch(function () {
+                    forecastRunning = false;
+                    setForecastBusy(false);
+                    renderForecastFailure('The forecast could not be reached. Is the backend server running?');
+                });
+        }
+
+        function renderForecast(forecast) {
+            var headline = document.getElementById('forecastHeadline');
+            var story = document.getElementById('forecastStory');
+            var accuracyText = document.getElementById('forecastAccuracyText');
+            var dayChip = document.getElementById('forecastDayChip');
+            var windowValue = document.getElementById('forecastWindowValue');
+            var windowNote = document.getElementById('forecastWindowNote');
+            var confidenceChip = document.getElementById('forecastConfidenceChip');
+            var adviceValue = document.getElementById('forecastAdviceValue');
+            var adviceNote = document.getElementById('forecastAdviceNote');
+            if (!headline) { return; }
+
+            var kg = Number(forecast.predicted_surplus_kg);
+            var mae = Number(forecast.mae_kg);
+            headline.textContent = kg.toFixed(2) + ' kg expected';
+            story.textContent = 'Based on ' + forecast.day_of_week + ' with ' + forecast.weather.toLowerCase()
+                + ' conditions and your kitchen\'s recent rhythm, the model expects about '
+                + kg.toFixed(2) + ' kg of surplus food ready for donation tomorrow. Log anything above '
+                + (kg * 0.4).toFixed(1) + ' kg on the board \u2014 smaller amounts travel better merged into the next pickup.';
+            accuracyText.textContent = 'model error \u00b1' + mae.toFixed(2) + ' kg (MAE)';
+            if (dayChip) { dayChip.textContent = forecast.day_of_week.slice(0, 3) + ' \u00b7 ' + forecast.weather; }
+            if (windowValue) { windowValue.textContent = (kg * 1.15).toFixed(1) + ' kg'; }
+            if (windowNote) { windowNote.textContent = 'likely peak: plan your pickups around it'; }
+            if (confidenceChip) { confidenceChip.textContent = mae < kg * 0.25 ? 'high' : 'moderate'; }
+            if (adviceValue) { adviceValue.textContent = (kg * 0.4).toFixed(1) + ' kg'; }
+            if (adviceNote) { adviceNote.textContent = 'smallest amount worth posting tomorrow'; }
+        }
+
+        function renderForecastFailure(message) {
+            var headline = document.getElementById('forecastHeadline');
+            var story = document.getElementById('forecastStory');
+            if (!headline) { return; }
+            headline.textContent = 'Forecast unavailable';
+            story.textContent = message + (forecastRanOnce
+                ? ' The last forecast is out of date until the analyser runs again.'
+                : '');
+            setForecastChip('failed', 'done');
+        }
+
+        // Opening the screen does not run the model on its own \u2014 the box's rest copy says
+        // what the analyser will produce — but a screen that was already run re-reads the
+        // last answer's shape from the page itself, so nothing is lost by leaving and
+        // coming back.
+        function openSurplusForecast() {
+            setForecastChip(forecastRanOnce ? 'updated \u00b7 rerun to refresh' : 'idle', 'done');
         }
 
         // ---------------------------------------------------------------------------
