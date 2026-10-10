@@ -61,28 +61,41 @@ role chosen at the start.
    and the screens that read that table back — the *Feed* both
    roles now share, and the donor's *Surplus Analyser*, all described under
    [The surplus board](#the-surplus-board-supabase) —
-   while the boxes, the metric row and the queue rail around them still hold no data
-   of their own. Each page owns its own rail, markup and slot included, so
-   relabelling one role's sections cannot move the other's: both open with the same
-   two rows, Dashboard and Feed, and then name their own work. The donor's runs
-   Surplus Analyser, Ongoing Deliveries, Finished Deliveries — the last in the slot
-   below the rail's divider — and the recipient's runs Incoming Deliveries, Delivery
-   Status, Received Deliveries, which takes that same slot position. The slot under
-   whichever name is there stays a bare pipeline pulse.
-   Dashboard is the default selection; Feed opens the shared
+   while the boxes around them — the working board, the orders that have finished,
+   the routing map — still hold no data of their own. Each page owns its own rail,
+   markup and slots included, so relabelling one role's sections cannot move the
+   other's: the rail runs **across the top** of the page as a row of tabs rather than
+   down the side, and every tab names the section it opens in `data-view`, so the
+   mapping from tab to screen is one table in each script. Both open with the same
+   two tabs, Dashboard and Feed, and then name their own work: the donor's runs
+   Surplus Analyser, Ongoing Deliveries, Finished Deliveries, and the recipient's
+   runs Incoming Deliveries, Delivery Status, Received Deliveries.
+   The tab being read is the one lit shape in the rail — filled with the mint accent,
+   its label turned to ink — while every other tab is its label and nothing else,
+   which is what keeps a five-tab rail from reading as five buttons. On a narrow
+   screen the tabs wrap onto their own line and scroll sideways rather than out of
+   reach. Dashboard is the default selection; Feed opens the shared
    board on either dashboard — with the donor's compose box above it, which is where
    a donor logs an item now — Surplus Analyser opens the predictor boxes and, under
    them, the donor's own logged surplus,
-   and the remaining items — the recipient's two section rows, the donor's Ongoing
-   and Finished Deliveries, or the recipient's Received Deliveries slot — still wipe
+   and the remaining tabs — the recipient's two section tabs and its received-
+   deliveries tab, the donor's Ongoing and Finished Deliveries — still wipe
    the working area for a blank screen of their own. Picking Dashboard brings the
    dashboard back.
-   The right-hand panel of the donor's lower grid carries the impact figures under
-   a *Donor Metrics* heading — surplus saved in kilos, meals served and orders
-   completed — read from that donor's own stored figures, so the same numbers are
-   there on every load. The selected item fills with the site's accent orange and its label
-   turns black, the way the landing cards invert when they are hovered, while every
-   other item keeps the dark tone with a neutral label. The bell in the header
+   The Dashboard screen is one arrangement on both dashboards, borrowed from the
+   reference layout: a title row with the single action the screen offers (the
+   donor's *Log surplus* opens the Feed, the recipient's *Browse the board* does the
+   same), the figures this role keeps beside the delivery card, then the filter row
+   and the working board under it. The figures are a donor's impact record — surplus
+   saved in kilos, meals served and orders completed, read from that donor's own
+   stored profile, so the same numbers are there on every load — and the recipient's
+   three counters, which hold placeholder bars because nothing reads them yet. The
+   board under the filters is the **one light surface on the page**: three small
+   filter labels over a mint box headed *Pending orders*, which holds the orders
+   still waiting and, inset into its right-hand side, the selected order's details.
+   Below it sit the routing map and a panel still waiting for content of its own, and
+   under those the *Latest completed orders* cards — one per finished order, empty
+   until an order finishes. The bell in the header
    opens a small notifications panel under it rather than a browser alert, and the
    account pill beside it opens the same kind of panel; nothing feeds either list
    yet, so both are left empty on purpose.
@@ -105,8 +118,8 @@ the matching logic, and invites visitors into the flow above.
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes, plus the delivery-location card |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same rail skeleton under its own section names (*Incoming Deliveries*, *Delivery Status*); its *Feed* section is that same live board in three views (all posts, open, and the posts tagged with the goods this recipient needs), with a claim button on every open post |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes, plus the delivery-location card |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same arrangement for recipients, carrying the same top rail under its own section names (*Incoming Deliveries*, *Delivery Status*, *Received Deliveries*) and the same Dashboard screen with its own counters; its *Feed* section is that same live board in three views (all posts, open, and the posts tagged with the goods this recipient needs), with a claim button on every open post |
 | `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, holds the six goods categories one time, and draws every post as the one shared card both roles see |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
 | `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` | The `goods_type` tag column, its constraint to the six categories and the claim-guard update that freezes it — run once against the project, after the file above |
@@ -128,9 +141,9 @@ rather than a page built for somebody else.
 
 Both dashboards carry one card that acts: **confirm delivery location**. It opens
 an almost full-screen overlay holding a map, a search bar and a pin. The card
-itself rests dark on the same notched silhouette as the cards beside it and fills
-with the accent orange while hovered — or while keyboard-focused — the way the
-landing page's capability cards do.
+itself rests as a panel beside the figures — dark, with a line around it — and
+fills with the mint accent while hovered — or while keyboard-focused — with
+everything inside it turned to ink.
 
 - It opens **on the location the account confirmed**, with the pin already on it,
   zoomed in. An account that has not confirmed one yet opens on the address it gave
@@ -240,7 +253,7 @@ sit on a dashboard rather than behind the API:
   instead of a success message, and the board beside it refreshes at that moment
   rather than waiting for the subscription to echo the row back.
 - **The board itself** — the *Feed* on either dashboard, drawn as a feed. Every post
-  is a notched card on the site's own palette: the logging donor's avatar, then their
+  is a card on the site's own palette: the logging donor's avatar, then their
   name with a handle-and-age line beside it, the item as the card's heading, the
   quantity picked out in the accent above the muted pickup address, and a bottom row
   carrying the post's own facts — its age, its status — and the one action the reader
@@ -469,17 +482,39 @@ How the pieces connect:
 
 ## Design language
 
-The site is deliberately dark and technical:
+Both dashboards wear the new palette and type, drawn from a swatch sheet and a
+serif specimen the project owner supplied: they are the first pages rolled over,
+and the landing and onboarding pages still carry the earlier dark-and-technical
+treatment until the same pass reaches them.
+
+The dashboards are dark, quiet and editorial rather than technical:
+
+- One green ramp, six steps deep: page `#051F20`, frame `#0B2B26`, raised
+  `#163832`, line `#235347`, sage `#8EB69B`, mint `#DAF1DE`. The mint is the
+  accent — actions, the one lit rail tab, and the one light surface a screen is
+  allowed — while the sage carries every secondary label, so nothing shouts twice.
+- Tailwind tokens are declared inline in each page's `tailwind.config`, and the ramp
+  is also re-declared over Tailwind's own neutral scale. The pieces drawn at runtime
+  — a feed card, a status chip, the goods menu — are written with `neutral-*`, so
+  re-hueing the page happens in one place instead of in every string.
+- Type carries the hierarchy: a high-contrast display serif for names and headings
+  and Inter for the body, the labels and the data. Crake is a commercial webfont, so
+  the display stack asks for it first and falls back to Bodoni Moda, a free serif of
+  the same family — a licensed copy dropped in beside the pages takes over with no
+  further edit. No monospace micro-labels, no uppercase headline blocks.
+- Notched corners are gone. One canvas holds the page, everything inside it inherits
+  that radius minus the gutter so the corners stay concentric, and a panel's only
+  hover gesture is a two-pixel lift by one rung of the ramp.
+- Layouts use a split panel: a branded left half and a single-column form on
+  the right.
+
+The landing and onboarding pages are still deliberately dark and technical:
 
 - Near-black background (`#0c0c0c`), raised card surfaces (`#141414`) and a
   single safety-orange accent (`#ff4500`) used for actions and labels.
-- Tailwind tokens are declared inline in each page's `tailwind.config`, so all
-  three pages share one palette.
 - Notched cards (`clip-path` corner cuts), oversized black-weight headings in
   uppercase, and monospace micro-labels such as `// 01. SELECT FIRM
   CLASSIFICATION` carry the operator-console feel.
-- Layouts use a split panel: a branded left half and a single-column form on
-  the right.
 
 ## Status
 

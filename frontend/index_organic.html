@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Res-Q | Landing Page (organic probe)</title>
+    <!-- Crake is a commercial high-contrast serif by Narrow Type, so its webfonts are
+         not in this repository. The stack below asks for Crake first, which means it is
+         used wherever the viewer has it installed — or once its woff2 files are dropped
+         in beside this page — and falls back to Bodoni Moda meanwhile: a free
+         high-contrast serif of the same family, so the page can be judged before the
+         licence question is settled. Inter carries the body, the labels and the data. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+            colors: {
+                background: '#051F20',
+                cardbg: '#0B2B26',
+                cardhover: '#163832',
+                accent: '#DAF1DE',
+                cream: '#DAF1DE',
+                muted: '#8EB69B',
+
+                /* The green ramp, named the way the palette names it: page, frame,
+                   raised, line, sage, mint. The markup mostly carries the raw values,
+                   so these exist for anything that would rather read by name.
+
+                   Under them, Tailwind's own neutral scale is redefined as the same
+                   ramp. Nearly every tone and hairline on this page is written with
+                   neutral-*, so redefining the scale re-hues the page in one place
+                   rather than in a hundred and fifty class names — and every
+                   /opacity and divide-* rule keeps working, which swapping classes by
+                   hand would quietly break. 600 is the one tone not in the six
+                   swatches: it is the midpoint between line and sage, used only where
+                   something has to sit visibly above the surface on hover. */
+                ink: '#051F20',
+                canvas: '#0B2B26',
+                raised: '#163832',
+                line: '#235347',
+                sage: '#8EB69B',
+                mint: '#DAF1DE',
+                neutral: {
+                    100: '#DAF1DE',
+                    200: '#DAF1DE',
+                    300: '#DAF1DE',
+                    400: '#8EB69B',
+                    500: '#8EB69B',
+                    600: '#6E9A80',
+                    700: '#235347',
+                    800: '#235347',
+                    900: '#051F20',
+                    950: '#051F20'
+                }
+            },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        /* Crake is commercial, so it is asked for first — an installed
+                           copy wins, and a licensed webfont dropped in later takes over
+                           from Bodoni Moda without another edit. */
+                        display: ['Crake', 'Bodoni Moda', 'ui-serif', 'Didot', 'Georgia', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* ORGANIC PROBE — the shape language, and four ways of presenting the six
+           capabilities to choose between.
+
+           This page is a second landing page built to be compared against the first:
+           same copy, same palette, only the layout is redrawn. Colour comes later, so
+           nothing here is a colour decision.
+
+           The three rules the whole page is built on:
+
+           1. one canvas. The page is an inset rounded frame rather than a full-bleed
+              column, with a gutter between the frame and everything inside it.
+           2. nested radii. A block sitting in that gutter inherits the canvas radius
+              minus the gutter, so its corner stays concentric with the canvas corner
+              instead of crossing it — the difference between "inside a rounded box"
+              and "nested in it". Deeper blocks step down again by the same logic.
+           3. swept seams and kept-whole blocks. Where two regions meet, one of them
+              sweeps through a big single-corner radius; everywhere else the corner is
+              even. A sweep is the only place a corner is allowed to be uneven, so it
+              reads as a deliberate flow rather than a wobble. */
+
+        :root {
+            --canvas-r: clamp(1.75rem, 4.5vw, 3.25rem);
+            /* The gutter steps with the padding on <body>, so the nesting stays
+               concentric at every width: 0.75rem against the page's p-3, 1.25rem
+               against its md:p-5. */
+            --gutter: 0.75rem;
+            --step: 0.75rem;
+        }
+        @media (min-width: 768px) {
+            :root { --gutter: 1.25rem; --step: 0.9rem; }
+        }
+
+        .organic-canvas {
+            border-radius: var(--canvas-r);
+        }
+        /* The max() floors matter at narrow widths: the canvas radius clamps down to
+           1.75rem while the gutter only drops to 0.75rem, and without a floor the
+           subtraction would flatten a nested block to a near-square corner and take an
+           inner one to zero — exactly where the nesting is most visible. */
+        .organic-block {
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+        }
+        .organic-inner {
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+        }
+        .organic-chip {
+            border-radius: 9999px;
+        }
+
+        /* The swept corner: bigger than the canvas radius so it reads as a flow, not
+           as a rounding. Applied to one corner of a block, on the side facing the
+           region it opens onto. */
+        .sweep-tl { border-top-left-radius: calc(var(--canvas-r) + 1.5rem); }
+        .sweep-bl { border-bottom-left-radius: calc(var(--canvas-r) + 1.5rem); }
+        .sweep-tr { border-top-right-radius: calc(var(--canvas-r) + 1.5rem); }
+        .sweep-br { border-bottom-right-radius: calc(var(--canvas-r) + 1.5rem); }
+
+        /* The hero's own sweep, deeper than the standard one because it has to open
+           far enough for the heading's last line and the paragraph under it to sit in
+           the void it carves. Declared after .organic-block so it wins the corner. */
+        .hero-sweep { border-bottom-left-radius: 9rem; }
+
+        /* The media slot. There is no photography in this project and no illustration
+           of people, so a picture is a panel: a soft gradient with its own light
+           source in one corner and faint rings, which is enough to read as "an image
+           goes here" at layout stage without pretending to be one. */
+        .media {
+            background:
+                radial-gradient(120% 150% at 78% 12%, rgba(218,241,222,0.22), transparent 58%),
+                repeating-radial-gradient(circle at 78% 14%, rgba(218,241,222,0.05) 0 1px, transparent 1px 28px),
+                linear-gradient(160deg, #163832, #051F20 68%);
+        }
+
+        /* Decoration, kept as geometry: a dot field, a soft blob, a spark. All three
+           are neutral so they survive whatever palette lands later. */
+        .dot-field {
+            background-image: radial-gradient(rgba(218,241,222,0.20) 1.5px, transparent 1.6px);
+            background-size: 15px 15px;
+        }
+        .blob {
+            border-radius: 58% 42% 47% 53% / 43% 51% 49% 57%;
+            background: radial-gradient(120% 120% at 30% 20%, rgba(218,241,222,0.20), rgba(142,182,155,0.05) 46%, transparent 72%);
+        }
+        .spark {
+            display: inline-block;
+            width: 0.85rem;
+            height: 0.85rem;
+            background: currentColor;
+            clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
+        }
+
+        /* The one interaction the shape language needs: a block leans in on hover the
+           way the flat page's cards did, but slowly, and without the clip-path snap. */
+        .organic-card {
+            transition: background-color 0.4s ease, transform 0.4s ease, border-color 0.4s ease;
+        }
+        .organic-card:hover {
+            background-color: #163832;
+            border-color: #235347;
+            transform: translateY(-2px);
+        }
+        .organic-ring {
+            transition: color 0.3s ease, border-color 0.3s ease, background-color 0.3s ease;
+        }
+        .organic-ring:hover {
+            background-color: #DAF1DE;
+            border-color: #DAF1DE;
+            color: #051F20;
+        }
+
+        /* ---------------------------------------------------------------------
+           A — the route walk. A dashed line with a marker travelling it, and six
+           stops the visitor can pick. The line is drawn with preserveAspectRatio
+           "none" so it fills whatever width it is given; the stops and the marker
+           are positioned by the script, which reads the same path's geometry, so
+           they cannot drift away from the line.
+           --------------------------------------------------------------------- */
+        .route-line { stroke-dasharray: 4 10; }
+        .route-trace { stroke-dasharray: 0 99999; }  /* the script sets the visible run */
+        .route-marker {
+            position: absolute;
+            width: 0.85rem;
+            height: 0.85rem;
+            border-radius: 9999px;
+            background-color: #DAF1DE;
+            box-shadow: 0 0 0 6px rgba(218,241,222,0.14);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .route-stop {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.35rem;
+            background: none;
+            border: 0;
+            padding: 0;
+            cursor: pointer;
+            z-index: 1;
+        }
+        .route-stop-mark {
+            width: 2.35rem;
+            height: 2.35rem;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #051F20;
+            border: 1px solid #235347;
+            color: #8EB69B;
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 0.72rem;
+            font-weight: 500;
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+        }
+        .route-stop[aria-pressed="true"] .route-stop-mark {
+            background-color: #DAF1DE;
+            border-color: #DAF1DE;
+            color: #051F20;
+        }
+        /* The name sits on the route itself, so it wears a small cap of the block's
+           own colour: without it the trace runs straight through the letters. */
+        .route-stop-name {
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: #8EB69B;
+            white-space: nowrap;
+            padding: 0.2rem 0.5rem;
+            border-radius: 9999px;
+            background-color: #051F20;
+            transition: color 0.3s ease;
+        }
+        .route-stop[aria-pressed="true"] .route-stop-name { color: #DAF1DE; }
+        @media (max-width: 767px) { .route-stop-name { display: none; } }
+
+        @media (prefers-reduced-motion: reduce) {
+            .organic-card, .organic-ring { transition: none; }
+        }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #051F20; }
+        ::-webkit-scrollbar-thumb { background: #235347; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #DAF1DE; }
+    </style>
+    <noscript>
+        <style>
+            /* With scripting off, the route falls back to the plain list it is made
+               of: the stops stack with their names, the readout shows the first one and
+               nothing moves. */
+            #routeStage { height: auto; }
+            #routeSvg, #routeMarker { display: none; }
+            .route-stop {
+                position: static;
+                transform: none;
+                flex-direction: row;
+                align-items: center;
+                gap: 0.6rem;
+                padding: 0.35rem 0;
+                width: 100%;
+            }
+            .route-stop-mark { width: 1.9rem; height: 1.9rem; }
+        </style>
+    </noscript>
+</head>
+<body class="bg-[#051F20] text-[#DAF1DE] font-sans antialiased selection:bg-[#DAF1DE] selection:text-[#051F20] p-3 md:p-5">
+
+    <!-- ORGANIC PROBE of the landing page. Same copy as index.html, same palette, same
+         links — the layout is the only thing that differs, so the two can be held side
+         by side. Nothing links here yet. -->
+
+    <div class="organic-canvas relative mx-auto max-w-[1400px] bg-[#0B2B26] border border-neutral-800 overflow-hidden">
+
+        <!-- Decoration layer: one soft blob behind the hero, clipped by the canvas so it
+             fades out at the frame edge rather than being cut off by it. -->
+        <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
+            <div class="blob absolute -top-24 right-[8%] w-[26rem] h-[26rem] opacity-70"></div>
+            <div class="dot-field absolute left-[42%] top-[38%] w-20 h-20 opacity-30"></div>
+        </div>
+
+        <!-- Top bar: the lockup in its own chip, the labels in one long pill, and the
+             one action as a pill with a circular mark beside it. -->
+        <div class="relative flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
+            <a href="index.html" class="brand-home organic-block flex items-center gap-3 bg-[#051F20] border border-neutral-800 pl-4 pr-5 py-3">
+                <span class="font-display text-2xl leading-none tracking-tight">Res-<span class="text-[#DAF1DE]">Q</span></span>
+            </a>
+
+            <nav class="organic-chip flex items-center gap-1 bg-[#051F20] border border-neutral-800 p-1.5 text-sm text-neutral-400">
+                <span class="px-4 py-2 rounded-full cursor-default">Pipeline</span>
+                <a href="#capabilities" class="px-4 py-2 rounded-full text-[#DAF1DE] bg-neutral-800/60 transition-colors">Capabilities</a>
+                <span class="px-4 py-2 rounded-full cursor-default">Impact</span>
+            </nav>
+
+            <div class="flex items-center gap-2">
+                <a href="res_q_homepage.html" class="organic-chip inline-flex items-center gap-2 bg-[#DAF1DE] text-[#051F20] text-sm font-medium px-6 py-3 hover:bg-[#8EB69B] transition-all">
+                    Onboarding <span aria-hidden="true">&rarr;</span>
+                </a>
+                <a href="#capabilities" aria-label="Jump to the capabilities" class="organic-ring w-11 h-11 rounded-full border border-neutral-800 text-[#DAF1DE] flex items-center justify-center hover:border-neutral-600">
+                    <span aria-hidden="true">&#8599;</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Hero: the heading's lower lines sit in the void the media block's swept
+             bottom-left corner carves out, so type and picture interlock the way the
+             references do rather than sitting in two columns. -->
+        <section class="relative grid grid-cols-1 lg:grid-cols-12 gap-y-8 gap-x-4 items-end px-5 pt-10 pb-6">
+            <div class="lg:col-span-12 xl:col-span-6 relative z-10">
+                <span class="mb-5 flex items-center gap-2.5 text-[11px] font-medium uppercase tracking-[0.22em] text-[#8EB69B]">
+                    <span class="spark" aria-hidden="true"></span>
+                    AI-powered provision pipeline
+                </span>
+                <h1 class="font-display text-[3.5rem] sm:text-6xl lg:text-7xl xl:text-[5.75rem] font-medium leading-[0.98] tracking-[-0.02em]">
+                    Surplus<br>Matched.<br><span class="text-neutral-500">Delivered.</span>
+                </h1>
+                <p class="mt-8 max-w-lg text-base md:text-lg text-neutral-400 leading-relaxed">
+                    End-to-end Python machine learning pipelines transforming daily corporate food and life-essential surplus into automated relief networks for shelters and vulnerable communities.
+                </p>
+            </div>
+
+            <div class="lg:col-span-12 xl:col-span-6 relative h-[300px] sm:h-[360px] xl:h-[430px] xl:-ml-[17rem]">
+                <div class="media organic-block hero-sweep absolute inset-0 border border-neutral-800 overflow-hidden">
+                    <div class="dot-field absolute inset-0 opacity-20"></div>
+                </div>
+
+                <!-- Chips riding the media edge: one tucked into the corner, one hanging
+                     over the block's outer edge on purpose. No copy yet, so each chip
+                     holds the bare frame the skeleton uses for a line to come. -->
+                <div class="organic-chip absolute left-5 top-5 flex items-center gap-3 bg-[#051F20]/90 backdrop-blur-md border border-neutral-800 pl-3 pr-5 py-2.5">
+                    <span aria-hidden="true" class="w-7 h-7 rounded-full bg-[#DAF1DE]/20 border border-[#235347]/70"></span>
+                    <span class="block h-2.5 w-20 rounded-full bg-neutral-700/60"></span>
+                </div>
+                <div class="organic-chip absolute -bottom-4 right-6 flex items-center gap-3 bg-[#051F20]/90 backdrop-blur-md border border-neutral-800 p-2.5">
+                    <span class="flex -space-x-2">
+                        <span class="w-7 h-7 rounded-full bg-neutral-700/70 border border-[#051F20]"></span>
+                        <span class="w-7 h-7 rounded-full bg-neutral-600/70 border border-[#051F20]"></span>
+                        <span class="w-7 h-7 rounded-full bg-[#DAF1DE]/40 border border-[#051F20]"></span>
+                    </span>
+                    <span class="block h-2.5 w-24 rounded-full bg-neutral-700/60"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- THE PIPELINE SECTION — the six capabilities as one route the visitor walks.
+             The route walk is the treatment that was chosen; the other three that were
+             built to compare against (a live console, a loop diagram and scroll stages)
+             are gone with their script and their styles. Each capability's name and its
+             one-line description now exist once in the markup below, and the script
+             reads them back out of it rather than holding a second copy. -->
+        <section id="capabilities" class="relative px-5 pb-6">
+            <h2 class="sr-only">Capabilities</h2>
+
+        <div class="organic-block bg-[#051F20] border border-neutral-800 p-5 md:p-8">
+                <div id="routeStage" class="relative h-[200px] sm:h-[260px]">
+                    <svg id="routeSvg" viewBox="0 0 1000 260" preserveAspectRatio="none"
+                         class="absolute inset-0 w-full h-full" aria-hidden="true" focusable="false">
+                        <path id="routeLine" d="M 90 205 C 190 205 215 65 330 65 S 485 200 620 200 S 795 55 910 55"
+                              fill="none" stroke="#235347" stroke-width="2" stroke-linecap="round"
+                              class="route-line" vector-effect="non-scaling-stroke"></path>
+                        <path id="routeTrace" d="M 90 205 C 190 205 215 65 330 65 S 485 200 620 200 S 795 55 910 55"
+                              fill="none" stroke="#DAF1DE" stroke-width="2" stroke-linecap="round"
+                              class="route-trace" vector-effect="non-scaling-stroke"></path>
+                    </svg>
+
+                    <span id="routeMarker" class="route-marker" aria-hidden="true"></span>
+
+                    <!-- The six stops. The mark and the name are read straight out
+                         of this markup for the readout below, so a capability's name
+                         is written once in this file; only its description rides an
+                         attribute. -->
+                    <button type="button" data-stop aria-pressed="true"
+                            data-line="Tomorrow's yield, forecast from time, weather and history."
+                            class="route-stop">
+                        <span class="route-stop-mark">(a)</span>
+                        <span class="route-stop-name">Predictive Surplus</span>
+                    </button>
+                    <button type="button" data-stop aria-pressed="false"
+                            data-line="Nearest shelter by distance and urgency, matched automatically."
+                            class="route-stop">
+                        <span class="route-stop-mark">(b)</span>
+                        <span class="route-stop-name">Smart Matching</span>
+                    </button>
+                    <button type="button" data-stop aria-pressed="false"
+                            data-line="Perishables dispatched before their window closes."
+                            class="route-stop">
+                        <span class="route-stop-mark">(c)</span>
+                        <span class="route-stop-name">Live Routing</span>
+                    </button>
+                    <button type="button" data-stop aria-pressed="false"
+                            data-line="Beyond meals: hygiene kits, blankets, survival essentials."
+                            class="route-stop">
+                        <span class="route-stop-mark">(d)</span>
+                        <span class="route-stop-name">Essential Goods</span>
+                    </button>
+                    <button type="button" data-stop aria-pressed="false"
+                            data-line="Quality and compliance checked on every load, automatically."
+                            class="route-stop">
+                        <span class="route-stop-mark">(e)</span>
+                        <span class="route-stop-name">Safety Verification</span>
+                    </button>
+                    <button type="button" data-stop aria-pressed="false"
+                            data-line="Businesses and shelters on one distribution loop."
+                            class="route-stop">
+                        <span class="route-stop-mark">(f)</span>
+                        <span class="route-stop-name">Community Sync</span>
+                    </button>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-neutral-800 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                    <div>
+                        <span id="routeReadoutIndex" class="block text-xs font-medium tracking-[0.18em] text-[#8EB69B] mb-2">(a)</span>
+                        <h3 id="routeReadoutName" class="font-display text-2xl md:text-3xl leading-tight mb-2">Predictive Surplus</h3>
+                        <p id="routeReadoutLine" class="text-base text-neutral-400 max-w-xl leading-relaxed">Tomorrow's yield, forecast from time, weather and history.</p>
+                    </div>
+                    <span id="routeCount" class="text-xs font-medium uppercase tracking-[0.18em] text-neutral-500 shrink-0">1 / 6</span>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Footer: the same frame as everything else, so the canvas closes on a block
+             rather than on the page background. -->
+        <footer class="relative px-5 pb-5">
+            <div class="organic-block bg-[#051F20] border border-neutral-800 px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-neutral-500">
+                <div class="flex items-center gap-3">
+                    <span class="text-[#DAF1DE] font-semibold">RES-Q PLATFORM</span>
+                    <span>&mdash;</span>
+                    <span>AI FOR COMMUNITY SERVICES</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <span class="cursor-default">Pipeline</span>
+                    <a href="#capabilities" class="hover:text-[#DAF1DE] transition-colors">Documentation</a>
+                    <span class="cursor-default">GitHub Repository</span>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+    <script>
+        // The one piece of wiring this probe keeps: the brand lockup sends signed-in
+        // visitors to the dashboard for their role and everyone else to the landing page,
+        // exactly as the flat page's copy of this script does.
+        (function brandLink() {
+            var links = document.querySelectorAll('.brand-home');
+            if (!links.length) return;
+
+            var DASHBOARDS = {
+                donor: 'res_q_dashboard_donor.html',
+                recipient: 'res_q_dashboard_recipient.html'
+            };
+            var TOKEN_KEY = 'resqToken';
+            var ROLE_KEY = 'resqRole';
+
+            function dashboardFor(role) {
+                return DASHBOARDS[role] || '';
+            }
+            function readStore(key) {
+                try { return window.localStorage.getItem(key) || ''; } catch (err) { return ''; }
+            }
+            function setHome(href) {
+                Array.prototype.forEach.call(links, function (link) {
+                    link.setAttribute('href', href);
+                });
+            }
+
+            var token = readStore(TOKEN_KEY);
+
+            // Trust the stored session first so the click lands instantly...
+            setHome(token ? (dashboardFor(readStore(ROLE_KEY)) || 'index_organic.html') : 'index_organic.html');
+            if (!token) return;
+
+            // ...then let the backend settle the role and the session behind it.
+            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200) { setHome('index_organic.html'); return; }
+                    var role = (res.data.user && res.data.user.role) || '';
+                    try { window.localStorage.setItem(ROLE_KEY, role); } catch (err) { /* storage blocked */ }
+                    setHome(dashboardFor(role) || 'index_organic.html');
+                })
+                .catch(function () { setHome('index_organic.html'); });
+        })();
+
+        var REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        // ---------------------------------------------------------------------------
+        // A — the route walk. The stops and the marker are placed from the path's own
+        // geometry rather than from hand-tuned percentages, so the line and what sits
+        // on it cannot drift apart at any width. The marker walks the line between
+        // stops, and the accent trace fills in behind it, which is what makes the
+        // section read as a route being travelled rather than a decorated row.
+        // ---------------------------------------------------------------------------
+        (function routeWalk() {
+            var stage = document.getElementById('routeStage');
+            var svg = document.getElementById('routeSvg');
+            var line = document.getElementById('routeLine');
+            var trace = document.getElementById('routeTrace');
+            var marker = document.getElementById('routeMarker');
+            if (!stage || !svg || !line || !trace || !marker) return;
+
+            var stops = Array.prototype.slice.call(document.querySelectorAll('[data-stop]'));
+            if (!stops.length) return;
+
+            var readoutIndex = document.getElementById('routeReadoutIndex');
+            var readoutName = document.getElementById('routeReadoutName');
+            var readoutLine = document.getElementById('routeReadoutLine');
+            var count = document.getElementById('routeCount');
+
+            var VB_W = 1000, VB_H = 260;       // the svg's own coordinate space
+            var total = line.getTotalLength();
+            var current = 0;
+            var travelled = 0;                  // path length the marker has reached
+            var frame = null;
+            var timer = null;
+
+            function fraction(i) {
+                return stops.length > 1 ? i / (stops.length - 1) : 0;
+            }
+
+            function place() {
+                var rect = stage.getBoundingClientRect();
+                if (!rect.width) return;
+
+                stops.forEach(function (stop, i) {
+                    var point = line.getPointAtLength(total * fraction(i));
+                    stop.style.left = (point.x / VB_W * rect.width) + 'px';
+                    stop.style.top = (point.y / VB_H * rect.height) + 'px';
+                });
+
+                paint(travelled);
+            }
+
+            function paint(len) {
+                var rect = stage.getBoundingClientRect();
+                var point = line.getPointAtLength(len);
+                marker.style.left = (point.x / VB_W * rect.width) + 'px';
+                marker.style.top = (point.y / VB_H * rect.height) + 'px';
+                trace.style.strokeDasharray = len + ' ' + (total + 10);
+            }
+
+            function step() {
+                var target = total * fraction(current);
+                var diff = target - travelled;
+                if (Math.abs(diff) < 0.75) {
+                    travelled = target;
+                    paint(travelled);
+                    frame = null;
+                    return;
+                }
+                travelled += diff * 0.12;
+                paint(travelled);
+                frame = window.requestAnimationFrame(step);
+            }
+
+            function show(i) {
+                current = (i + stops.length) % stops.length;
+
+                stops.forEach(function (stop, n) {
+                    stop.setAttribute('aria-pressed', n === current ? 'true' : 'false');
+                });
+
+                var stop = stops[current];
+                // Read out of the stop's own markup, so a capability's name lives once
+                // in this file instead of also existing as an attribute that can drift
+                // away from the label it is meant to match.
+                readoutIndex.textContent = stop.querySelector('.route-stop-mark').textContent;
+                readoutName.textContent = stop.querySelector('.route-stop-name').textContent;
+                readoutLine.textContent = stop.getAttribute('data-line');
+                count.textContent = (current + 1) + ' / ' + stops.length;
+
+                if (REDUCE) {
+                    travelled = total * fraction(current);
+                    paint(travelled);
+                    return;
+                }
+                if (frame === null) frame = window.requestAnimationFrame(step);
+            }
+
+            function stopAuto() {
+                if (timer) {
+                    window.clearInterval(timer);
+                    timer = null;
+                }
+            }
+
+            stops.forEach(function (stop, i) {
+                stop.addEventListener('click', function () {
+                    stopAuto();
+                    show(i);
+                });
+            });
+
+            // Arrow keys walk the route once a stop has focus, which is the same
+            // gesture as a list of tabs.
+            stage.addEventListener('keydown', function (event) {
+                if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+                event.preventDefault();
+                stopAuto();
+                show(current + (event.key === 'ArrowRight' ? 1 : -1));
+                stops[current].focus();
+            });
+
+            stage.addEventListener('pointerdown', stopAuto);
+
+            if (!REDUCE) {
+                timer = window.setInterval(function () { show(current + 1); }, 4200);
+            }
+
+            window.addEventListener('resize', place);
+            place();
+            show(0);
+        })();
+
+    </script>
+</body>
+</html>

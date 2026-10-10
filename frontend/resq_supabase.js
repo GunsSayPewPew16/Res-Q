@@ -277,8 +277,8 @@
 
     function statusChip(status) {
         return status === 'claimed'
-            ? 'inline-flex items-center h-6 px-3 rounded-full border border-emerald-900/50 bg-emerald-950/60 font-mono text-[10px] uppercase tracking-widest text-emerald-400'
-            : 'inline-flex items-center h-6 px-3 rounded-full border border-orange-900/50 bg-orange-950/60 font-mono text-[10px] uppercase tracking-widest text-[#ff9b73]';
+            ? 'inline-flex items-center h-6 px-3 rounded-full border border-[#235347] bg-[#163832] text-[10px] uppercase tracking-[0.18em] text-[#8EB69B]'
+            : 'inline-flex items-center h-6 px-3 rounded-full border border-[#235347] bg-[#051F20] text-[10px] uppercase tracking-[0.18em] text-[#DAF1DE]';
     }
 
     function statusLabel(status) {
@@ -356,7 +356,7 @@
     // everybody, on a dark tint picked from the name so that two donors with two
     // posts do not read as one. None of this is anybody's text, so it is not
     // escaped — the name only picks a tint out of the list.
-    var AVATAR_TINTS = ['#222222', '#1f1f1f', '#211e26', '#1e2326', '#261f1e'];
+    var AVATAR_TINTS = ['#163832', '#1B473C', '#0F332C', '#235347', '#123A31'];
     function avatarMarkup(name) {
         var text = String(name || '');
         var seed = 0;
@@ -364,8 +364,8 @@
         return '<span class="feed-avatar" style="background-color:' +
                 AVATAR_TINTS[seed % AVATAR_TINTS.length] + '">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-                '<circle cx="12" cy="8.2" r="4.2" fill="#6b6b6b"></circle>' +
-                '<path d="M3.2 24a8.8 8.8 0 0 1 17.6 0z" fill="#6b6b6b"></path>' +
+                '<circle cx="12" cy="8.2" r="4.2" fill="#8EB69B"></circle>' +
+                '<path d="M3.2 24a8.8 8.8 0 0 1 17.6 0z" fill="#8EB69B"></path>' +
             '</svg>' +
         '</span>';
     }
@@ -393,43 +393,43 @@
                 '<div class="min-w-0 flex-1">' +
                     '<div class="flex items-start justify-between gap-3">' +
                         '<div class="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">' +
-                            '<span class="text-sm font-black text-[#f4f4f0] truncate">' +
+                            '<span class="text-sm font-medium text-[#DAF1DE] truncate">' +
                                 escapeHtml(row.donor_name) + '</span>' +
-                            '<span class="font-mono text-[11px] text-[#777] truncate">' +
+                            '<span class="text-[11px] text-[#8EB69B] truncate">' +
                                 escapeHtml(feedHandle(row.donor_name)) + ' \u00b7 ' +
                                 escapeHtml(feedWhen(row.created_at)) + '</span>' +
                         '</div>' +
                         '<span class="flex items-center gap-2 shrink-0">' +
                             (mine ? '<span class="inline-flex items-center h-6 px-3 ' +
-                                'rounded-full border border-neutral-800 bg-black/20 ' +
-                                'font-mono text-[10px] uppercase tracking-widest ' +
-                                'text-neutral-400">your post</span>' : '') +
-                            '<span class="font-mono text-[13px] text-[#777] select-none" ' +
+                                'rounded-full border border-[#235347] bg-[#051F20] ' +
+                                'text-[10px] uppercase tracking-[0.18em] ' +
+                                'text-[#8EB69B]">your post</span>' : '') +
+                            '<span class="text-[13px] text-[#8EB69B] select-none" ' +
                                 'aria-hidden="true">\u2298  \u22ef</span>' +
                         '</span>' +
                     '</div>' +
-                    '<p class="mt-3 text-[15px] font-black uppercase tracking-wide ' +
-                        (claimed ? 'text-neutral-400' : 'text-[#f4f4f0]') + '">' +
+                    '<p class="mt-3 font-display text-xl leading-snug ' +
+                        (claimed ? 'text-[#8EB69B]' : 'text-[#DAF1DE]') + '">' +
                         escapeHtml(row.item_name) + '</p>' +
                     '<p class="mt-2 text-[15px] leading-relaxed">' +
-                        '<span class="text-[#ff4500] font-bold">' +
+                        '<span class="text-[#DAF1DE] font-semibold">' +
                             escapeHtml(postNeeds(row)) + '</span>' +
-                        '<span class="text-[#f4f4f0]"> \u2014 ready for pickup at </span>' +
-                        '<span class="text-[#888]">' + escapeHtml(row.location) +
+                        '<span class="text-[#8EB69B]"> \u2014 ready for pickup at </span>' +
+                        '<span class="text-[#8EB69B]/80">' + escapeHtml(row.location) +
                         '</span>' +
                     '</p>' +
-                    '<div class="mt-4 pt-3 border-t border-[#222] flex flex-wrap ' +
+                    '<div class="mt-4 pt-3 border-t border-[#235347] flex flex-wrap ' +
                         'items-center gap-x-5 gap-y-3">' +
-                        '<span class="font-mono text-[11px] text-[#777]">\u23f1 ' +
+                        '<span class="text-[11px] text-[#8EB69B]">\u23f1 ' +
                             escapeHtml(formatWhen(row.created_at)) + '</span>' +
                         // The goods category the post is for, when it has one. It is what
                         // the *For You* tab filters on, so it is worth showing on the card
                         // the filter is choosing between.
                         (goodsType(row.goods_type)
                             ? '<span class="inline-flex items-center gap-1.5 h-6 px-3 ' +
-                                'rounded-full border border-neutral-800 bg-black/20 ' +
-                                'font-mono text-[10px] uppercase tracking-widest ' +
-                                'text-neutral-400"><span aria-hidden="true">' +
+                                'rounded-full border border-[#235347] bg-[#051F20] ' +
+                                'text-[10px] uppercase tracking-[0.18em] ' +
+                                'text-[#8EB69B]"><span aria-hidden="true">' +
                                 goodsType(row.goods_type).emoji + '</span>' +
                                 escapeHtml(goodsType(row.goods_type).label) + '</span>'
                             : '') +

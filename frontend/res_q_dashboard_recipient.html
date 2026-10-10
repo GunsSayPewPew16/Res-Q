@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Res-Q | Recipient Dashboard</title>
+    <!-- Crake is a commercial high-contrast serif by Narrow Type, so its webfonts are not
+         in this repository. The display stack asks for Crake first — an installed copy
+         wins, and a licensed woff2 dropped in beside these pages takes over with no other
+         edit — and falls back to Bodoni Moda, a free high-contrast serif of the same
+         family, so the screens can be judged before that licence is settled. Inter
+         carries the body, the labels and the data. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -11,81 +20,149 @@
             theme: {
                 extend: {
                     colors: {
-                        background: '#0c0c0c',
-                        cardbg: '#141414',
-                        cardhover: '#1c1c1c',
-                        accent: '#ff4500',
-                        cream: '#f4f4f0',
-                        muted: '#888888'
+                        background: '#051F20',
+                        cardbg: '#0B2B26',
+                        cardhover: '#163832',
+                        accent: '#DAF1DE',
+                        cream: '#DAF1DE',
+                        muted: '#8EB69B',
+
+                        /* The green ramp, named the way the palette names it: page, frame,
+                           raised, line, sage, mint. The markup mostly carries the raw values,
+                           so these exist for anything that would rather read by name.
+
+                           Under them, Tailwind's own neutral scale is redefined as the same
+                           ramp. The pieces drawn at runtime — a feed card, a status chip, the
+                           category menu — are written with neutral-*, and redefining the scale
+                           re-hues all of them in one place instead of in every string, while
+                           every /opacity and divide-* rule keeps working. 600 is the one tone
+                           not in the six swatches: it is the midpoint between line and sage,
+                           used only where something has to sit visibly above the surface. */
+                        ink: '#051F20',
+                        canvas: '#0B2B26',
+                        raised: '#163832',
+                        line: '#235347',
+                        sage: '#8EB69B',
+                        mint: '#DAF1DE',
+                        neutral: {
+                            100: '#DAF1DE',
+                            200: '#DAF1DE',
+                            300: '#DAF1DE',
+                            400: '#8EB69B',
+                            500: '#8EB69B',
+                            600: '#6E9A80',
+                            700: '#235347',
+                            800: '#235347',
+                            900: '#051F20',
+                            950: '#051F20'
+                        }
                     },
                     fontFamily: {
                         sans: ['Inter', 'system-ui', 'sans-serif'],
+                        display: ['Crake', 'Bodoni Moda', 'ui-serif', 'Didot', 'Georgia', 'serif']
                     }
                 }
             }
         }
     </script>
     <style>
-        /* Custom notched corners to mimic the Apptronik reference style */
-        .notched-card {
-            background-color: #141414;
-            border-radius: 1.5rem;
-            position: relative;
-            transition: all 0.3s ease;
-            clip-path: polygon(
-                0 0, 
-                calc(100% - 35px) 0, 
-                100% 35px, 
-                100% 100%, 
-                0 100%
-            );
+        /* THE DASHBOARD'S SHAPE LANGUAGE.
+
+           The old notched clip-paths are gone. A corner on this screen is a radius, and
+           every radius is derived from one number so the blocks stay concentric with the
+           canvas they sit in:
+
+           1. one canvas. The page is an inset rounded frame rather than a full-bleed
+              column, with a gutter between the frame and everything inside it.
+           2. nested radii. A block sitting in that gutter inherits the canvas radius minus
+              the gutter, so its corner stays concentric with the canvas corner instead of
+              crossing it. A block inside that block steps down again.
+           3. one hover gesture. A panel lifts two pixels and warms by one rung of the ramp —
+              never a colour inversion, which is what the old orange cards did. */
+
+        :root {
+            --canvas-r: clamp(1.5rem, 3.5vw, 2.75rem);
+            /* The gutter steps with the padding on <body>, so the nesting stays concentric
+               at every width: 0.75rem against the page's p-3, 1.25rem against its md:p-5. */
+            --gutter: 0.75rem;
+            --step: 0.75rem;
         }
-        .notched-card:hover {
-            background-color: #1c1c1c;
-            transform: translateY(-4px);
+        @media (min-width: 768px) {
+            :root { --gutter: 1.25rem; --step: 0.9rem; }
         }
 
-        /* Inverse notch variant */
-        .notched-card-alt {
-            background-color: #141414;
-            border-radius: 1.5rem;
-            position: relative;
-            transition: all 0.3s ease;
-            clip-path: polygon(
-                35px 0, 
-                100% 0, 
-                100% 100%, 
-                0 100%, 
-                0 35px
-            );
+        .organic-canvas { border-radius: var(--canvas-r); }
+        /* The max() floors matter at narrow widths: the canvas radius clamps down to 1.5rem
+           while the gutter only drops to 0.75rem, and without a floor the subtraction would
+           flatten a nested block to a near-square corner. */
+        .organic-block { border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter))); }
+        .organic-inner { border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step))); }
+        .organic-chip { border-radius: 9999px; }
+
+        /* A panel: an ink block with a line around it, on the canvas. */
+        .panel {
+            background-color: #051F20;
+            border: 1px solid #235347;
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+            transition: background-color 0.4s ease, border-color 0.4s ease, transform 0.4s ease;
         }
-        .notched-card-alt:hover {
-            background-color: #1c1c1c;
-            transform: translateY(-4px);
+        /* A block that sits one rung above the canvas rather than a panel on it. */
+        .panel-raised {
+            background-color: #163832;
+            border: 1px solid #235347;
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+        }
+        .panel-lift:hover {
+            background-color: #163832;
+            border-color: #8EB69B;
+            transform: translateY(-2px);
         }
 
-        /* A feed card: the same notched silhouette the rest of the site wears, held
-           still rather than lifting on hover — a board of cards should not move under
-           the cursor — with a claimed row settling back a shade instead. */
+        /* The light surface. One per screen, at most: it is the strongest thing on the page
+           and stops reading as an accent the moment there are two of them competing. */
+        .surface-light {
+            background-color: #DAF1DE;
+            color: #051F20;
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+        }
+
+        /* The rail's tabs. The item being read is the one lit shape in the rail; every
+           other one is its label and nothing else, which is what keeps a five-row rail
+           from reading as five buttons. */
+        .nav-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+            padding: 0.5rem 1.125rem;
+            font-size: 0.875rem;
+            color: #8EB69B;
+            border-radius: 9999px;
+            transition: color 0.3s ease, background-color 0.3s ease;
+        }
+        .nav-item:hover { color: #DAF1DE; }
+        .nav-item.is-on {
+            background-color: #DAF1DE;
+            color: #051F20;
+        }
+
+        /* A feed card: the board's own block, held still rather than lifting on hover — a
+           board of cards should not move under the cursor — with a claimed row settling a
+           rung down instead. */
         .feed-card {
-            background-color: #141414;
-            border: 1px solid #262626;
-            border-radius: 1.25rem;
+            background-color: #0B2B26;
+            border: 1px solid #235347;
+            border-radius: max(0.9rem, calc(var(--canvas-r) - var(--gutter) - 0.4rem));
             position: relative;
             transition: border-color 0.3s ease, background-color 0.3s ease;
-            clip-path: polygon(
-                0 0,
-                calc(100% - 26px) 0,
-                100% 26px,
-                100% 100%,
-                0 100%
-            );
         }
         .feed-card:hover {
-            border-color: #3a3a3a;
+            background-color: #163832;
+            border-color: #8EB69B;
         }
         .feed-card.is-claimed {
-            background-color: #101010;
+            background-color: #051F20;
+            border-color: #163832;
         }
 
         /* The feed's avatar: a circle holding the head-and-shoulders silhouette the
@@ -98,7 +175,7 @@
             width: 2.5rem;
             height: 2.5rem;
             border-radius: 9999px;
-            border: 1px solid #262626;
+            border: 1px solid #235347;
             overflow: hidden;
         }
         .feed-avatar svg {
@@ -107,89 +184,76 @@
             display: block;
         }
 
-        /* The board's tab bar, from the reference: the view being read in cream with
-           the accent rule under it, the others muted until they are pointed at. */
+        /* The board's tab bar: the view being read in mint with the rule under it, the
+           others sage until they are pointed at. */
         .feed-tab {
             position: relative;
             padding-bottom: 10px;
             font-size: 0.875rem;
-            font-weight: 900;
-            color: #777777;
+            font-weight: 500;
+            color: #8EB69B;
             transition: color 0.3s ease;
         }
-        .feed-tab:hover {
-            color: #f4f4f0;
-        }
-        .feed-tab.is-active {
-            color: #f4f4f0;
-        }
+        .feed-tab:hover { color: #DAF1DE; }
+        .feed-tab.is-active { color: #DAF1DE; }
         .feed-tab.is-active::after {
             content: '';
             position: absolute;
             left: 0;
             right: 0;
             bottom: 0;
-            height: 4px;
+            height: 2px;
             border-radius: 2px;
-            background-color: #ff4500;
+            background-color: #DAF1DE;
         }
 
-        /* The one action a post can carry wears the hero cards' own treatment: dark at
-           rest with the site's cream text, filled with the accent on hover or keyboard
-           focus, the text turning black with it. Declared the same way .deliver-card is,
-           so the two read as the same gesture. */
+        /* The one action a post can carry: a rung above the card at rest, filled with the
+           accent while hovered or keyboard-focused, the text turning to ink with it. */
         .claim-btn {
-            background-color: #141414;
-            border: 1px solid #262626;
-            color: #f4f4f0;
+            background-color: #163832;
+            border: 1px solid #235347;
+            color: #DAF1DE;
         }
         .claim-btn:hover,
         .claim-btn:focus-visible {
-            background-color: #ff4500;
-            border-color: #ff4500;
-            color: #000000;
+            background-color: #DAF1DE;
+            border-color: #DAF1DE;
+            color: #051F20;
         }
         .claim-btn:hover *,
         .claim-btn:focus-visible * {
-            color: #000000;
+            color: #051F20;
         }
 
-        /* Orange accent CTA card with notch */
-        .notched-orange {
-            background-color: #ff4500;
-            border-radius: 1.5rem;
-            clip-path: polygon(
-                0 0, 
-                100% 0, 
-                100% calc(100% - 35px), 
-                calc(100% - 35px) 100%, 
-                0 100%
-            );
-        }
-
-        /* The delivery card: the sibling silhouette at rest, and the landing page's
-           hero-card treatment while hovered or keyboard-focused — filled with the accent
-           orange and everything inside turned black. Declared after the notch rules above
-           so it wins the tie on specificity, the same way the hero cards do. */
-        .deliver-card {
-            background-color: #141414;
-        }
+        /* The delivery card: a panel at rest, and the accent-filled treatment while hovered
+           or keyboard-focused. */
+        .deliver-card { background-color: #051F20; }
         .deliver-card:hover,
         .deliver-card:focus-visible {
-            background-color: #ff4500;
+            background-color: #DAF1DE;
+            border-color: #DAF1DE;
         }
         .deliver-card:hover *,
         .deliver-card:focus-visible * {
-            color: #000000;
+            color: #051F20;
         }
         .deliver-card .deliver-chip {
-            background-color: rgba(255, 255, 255, 0.06);
-            border: 1px solid #262626;
+            background-color: #163832;
+            border: 1px solid #235347;
         }
         .deliver-card:hover .deliver-chip,
         .deliver-card:focus-visible .deliver-chip {
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: rgba(5, 31, 32, 0.14);
             border-color: transparent;
+        }
+
+        /* Decoration, kept as geometry: the brand's spark. */
+        .spark {
+            display: inline-block;
+            width: 0.9rem;
+            height: 0.9rem;
+            background: currentColor;
+            clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
         }
 
         /* Custom scrollbar for the long rails */
@@ -198,280 +262,380 @@
             height: 5px;
         }
         ::-webkit-scrollbar-track {
-            background: #0c0c0c;
+            background: #051F20;
         }
         ::-webkit-scrollbar-thumb {
-            background: #262626;
+            background: #235347;
             border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #ff4500;
+            background: #8EB69B;
         }
     </style>
     <!-- The shared Supabase client and the surplus_posts calls both dashboards make.
          It only defines window.ResQDB; the library itself is fetched on first use. -->
     <script src="resq_supabase.js"></script>
 </head>
-<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white min-h-screen flex flex-col">
+<body class="bg-[#051F20] text-[#DAF1DE] font-sans antialiased selection:bg-[#DAF1DE] selection:text-[#051F20] min-h-screen p-3 md:p-5">
 
-    <!-- RECIPIENT DASHBOARD: the layout skeleton. Every box is kept as a box; the only
-         copy is the navigation rail's own labels, so this is the arrangement alone.
-         Dashboard is the default screen and the rest of the rail swaps it for a
-         blank section screen until those sections have content. -->
+    <!-- RECIPIENT DASHBOARD. One inset canvas holds the top rail and the working area, the
+         same arrangement the donor dashboard uses: the rail runs across the top of it, so
+         every screen is full width and the sections are reached by tabs rather than by a
+         column that eats a sixth of the page. The only copy the layout itself carries is the
+         rail's labels and the section headings; the panels below are placeholders waiting for
+         their own content. -->
 
-    <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <a href="index.html" class="brand-home flex items-center space-x-3">
-                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
-                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-                <span class="hidden xl:inline text-xs font-mono text-neutral-400 ml-2">// RECIPIENT INTAKE &amp; DELIVERY</span>
-            </a>
-            <div class="flex items-center space-x-3">
-                <!-- The bell opens a small notification panel under itself instead of a
-                     browser alert. Nothing feeds the list yet, so it is left empty on
-                     purpose: the panel carries its own frame and nothing else. -->
-                <div id="notifyWrap" class="relative">
-                    <button type="button" id="notifyButton" onclick="toggleHeaderPanel(this)" aria-label="System notifications" aria-expanded="false" aria-controls="notifyPanel" class="p-2.5 rounded-xl bg-[#141414] border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-all relative">
-                        <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ff4500]"></span>
-                        <span aria-hidden="true">🔔</span>
-                    </button>
+    <div class="organic-canvas bg-[#0B2B26] border border-[#235347] min-h-[calc(100vh-1.5rem)] md:min-h-[calc(100vh-2.5rem)] flex flex-col">
 
-                    <!-- Hangs off the bell's right edge and opens towards the left, the way
-                         the bell's own panel does on YouTube. -->
-                    <div id="notifyPanel" data-header-panel role="dialog" aria-label="Notifications" class="hidden absolute right-0 top-full mt-6 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
-                        <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
-                            <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Notifications</span>
-                            <span class="font-mono text-[10px] text-neutral-600">00</span>
-                        </div>
-                        <div class="p-4">
-                            <div class="h-32 rounded-xl bg-neutral-800/50 border border-neutral-800 flex items-center justify-center">
-                                <span class="font-mono text-[10px] uppercase tracking-widest text-neutral-600">No notifications yet</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="accountWrap" class="relative">
-                    <button type="button" id="accountButton" onclick="toggleHeaderPanel(this)" aria-haspopup="true" aria-expanded="false" aria-controls="accountPanel" class="flex items-center space-x-3 bg-[#141414] border border-neutral-800 rounded-full px-4 py-1.5 cursor-pointer hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700">
-                        <span id="userInitials" class="w-7 h-7 rounded-full bg-[#ff4500] flex items-center justify-center font-bold text-xs text-black font-mono">R</span>
-                        <span id="userName" class="text-xs font-mono text-neutral-300 hidden md:inline">SIGNED IN</span>
-                    </button>
+        <!-- TOP RAIL: the brand, the section tabs, and the account — one row, with the tabs
+             wrapping onto their own line on a narrow screen rather than scrolling out of
+             reach. The tabs name this role's own work — the deliveries coming in and the
+             status they have reached — so a recipient's rail never borrows the donor's
+             sections. Every tab carries the section it opens in data-view, so the mapping from
+             rail to screen lives in one table in the script below. -->
+        <header class="sticky top-0 z-50 bg-[#0B2B26]/95 backdrop-blur-md border-b border-[#235347]"
+                style="border-top-left-radius: var(--canvas-r); border-top-right-radius: var(--canvas-r);">
+            <div class="w-full px-4 md:px-6 py-3 flex flex-wrap items-center gap-3">
 
-                    <!-- The account pill opens the account menu: the one action an account
-                         really has, signing out, plus a temporary switch to the other
-                         dashboard so both roles can be previewed from one sign-in. -->
-                    <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-6 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
-                        <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
-                            <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Account</span>
-                            <span class="font-mono text-[10px] text-neutral-600">02</span>
-                        </div>
-                        <div class="p-4 space-y-3">
-                            <button type="button" onclick="logOut()" class="w-full px-4 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all">Log out</button>
-                            <!-- TEMPORARY: a preview convenience, not part of the product.
-                                 Demo mode only, and the backend says so if asked otherwise. -->
-                            <button type="button" onclick="switchDashboard()" class="w-full px-4 py-3 rounded-xl border border-neutral-800 text-neutral-400 text-xs font-black uppercase tracking-widest hover:border-neutral-600 hover:text-neutral-200 transition-all">Switch to donor dashboard <span class="text-neutral-600">(temp)</span></button>
-                            <span id="accountNote" class="block font-mono text-[10px] text-neutral-600"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                <a href="index.html" class="brand-home organic-chip flex items-center gap-2.5 px-3.5 py-2 bg-[#051F20] border border-[#235347] hover:border-[#8EB69B] transition-colors">
+                    <span class="spark text-[#DAF1DE]" aria-hidden="true"></span>
+                    <span class="font-display text-xl leading-none">Res-Q</span>
+                    <span class="hidden xl:inline text-[11px] text-[#8EB69B] ml-0.5">Recipient</span>
+                </a>
 
-        </div>
-    </header>
-
-    <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-10">
-
-        <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-            <!-- Left rail: the four section rows carry their labels, then the received
-                 deliveries slot; the pipeline status stays a bare pulse. Every item but
-                 Dashboard swaps the working area for that section's blank screen.
-                 Dashboard and Feed are the two rows every dashboard carries; the two
-                 section rows under them name this role's own work — the deliveries
-                 coming in and the status they have reached — so a recipient's rail never
-                 borrows the donor's sections. -->
-            <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
-                <nav class="space-y-2" aria-label="Dashboard sections">
-                    <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-[#ff4500] border border-[#ff4500] text-[11px] font-mono uppercase text-black transition-all">Dashboard</a>
-                    <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Feed</a>
-                    <a href="#" data-view="incoming-deliveries" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Incoming Deliveries</a>
-                    <a href="#" data-view="delivery-status" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Delivery Status</a>
+                <nav aria-label="Dashboard sections" class="order-last lg:order-none w-full lg:w-auto flex items-center gap-1 p-1 bg-[#051F20] border border-[#235347] organic-chip overflow-x-auto">
+                    <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item is-on">Dashboard</a>
+                    <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item">Feed</a>
+                    <a href="#" data-view="incoming-deliveries" onclick="openSection(this); return false;" class="nav-item">Incoming Deliveries</a>
+                    <a href="#" data-view="delivery-status" onclick="openSection(this); return false;" class="nav-item">Delivery Status</a>
+                    <button type="button" id="receivedDeliveries" data-view="received-deliveries" onclick="openSection(this)" class="nav-item">Received Deliveries</button>
                 </nav>
 
-                <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <button type="button" id="receivedDeliveries" data-view="received-deliveries" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
-                        <span class="text-[11px] font-mono uppercase text-neutral-400">Received Deliveries</span>
-                    </button>
-                    <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    </div>
-                </div>
-            </aside>
+                <div class="ml-auto flex items-center gap-2">
+                    <!-- The bell opens a small notification panel under itself instead of a
+                         browser alert. Nothing feeds the list yet, so it is left empty on
+                         purpose: the panel carries its own frame and nothing else. -->
+                    <div id="notifyWrap" class="relative">
+                        <button type="button" id="notifyButton" onclick="toggleHeaderPanel(this)" aria-label="System notifications" aria-expanded="false" aria-controls="notifyPanel" class="w-11 h-11 organic-chip bg-[#051F20] border border-[#235347] text-[#8EB69B] hover:text-[#DAF1DE] hover:border-[#8EB69B] transition-all relative flex items-center justify-center">
+                            <span class="absolute top-3 right-3 w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
+                            <span aria-hidden="true">🔔</span>
+                        </button>
 
-            <!-- Working area: the dashboard itself. Dashboard is the default rail item,
-                 so this is what shows on load. -->
-            <div id="viewDashboard" class="lg:col-span-10 space-y-6">
-
-                <!-- Metric row -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="notched-card p-6 flex flex-col justify-between h-40">
-                        <span class="self-start block h-6 w-20 rounded-full bg-orange-950/50 border border-orange-900/50"></span>
-                        <div class="mt-4 flex-1 rounded-xl bg-neutral-800/50"></div>
-                    </div>
-
-                    <div class="notched-card p-6 flex flex-col justify-between h-40">
-                        <span class="self-start block h-6 w-20 rounded-full bg-emerald-950/50 border border-emerald-900/50"></span>
-                        <div class="mt-4 flex-1 rounded-xl bg-neutral-800/50"></div>
-                    </div>
-
-                    <!-- The delivery card is the one part of the skeleton that acts: it
-                         opens the map overlay where the pin is placed and fine-tuned. It
-                         rests dark on the same notched silhouette as its two neighbours
-                         and fills with the accent orange while hovered, the way the
-                         landing page's capability cards do. -->
-                    <button type="button" id="deliverCard" onclick="openDeliveryPicker()" class="notched-card deliver-card p-6 flex flex-col items-start justify-between h-40 w-full text-left text-[#f4f4f0] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40">
-                        <span aria-hidden="true" class="deliver-chip w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-300">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.686-7-11a7 7 0 1 1 14 0c0 5.314-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
-                        </span>
-                        <span class="text-sm font-black uppercase tracking-widest leading-none">confirm delivery location</span>
-                    </button>
-                </div>
-
-                <!-- Map + intake request box, then the queue rail -->
-                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-
-                    <div class="xl:col-span-8 space-y-6">
-
-                        <!-- Routing map panel -->
-                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
-                            <div class="w-full h-72 rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
-                        </div>
-
-                        <!-- Quick intake request panel -->
-                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative">
-                            <div class="border-b border-neutral-800 pb-4 mb-6"></div>
-                            <div class="min-h-[240px] rounded-xl bg-neutral-800/50"></div>
-                        </div>
-
-                    </div>
-
-                    <!-- Queue rail -->
-                    <div class="xl:col-span-4 space-y-6">
-
-                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
-                            <div class="flex items-center justify-between pb-4 mb-6 border-b border-neutral-800">
-                                <span class="w-3 h-3 rounded-full bg-[#ff4500]"></span>
+                        <!-- Hangs off the bell's right edge and opens towards the left, the way
+                             the bell's own panel does on YouTube. -->
+                        <div id="notifyPanel" data-header-panel role="dialog" aria-label="Notifications" class="hidden absolute right-0 top-full mt-4 w-80 max-w-[calc(100vw-2rem)] overflow-hidden organic-inner border border-[#235347] bg-[#051F20] shadow-2xl shadow-black/60">
+                            <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-[#235347]">
+                                <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">Notifications</span>
+                                <span class="text-[10px] text-[#8EB69B]">00</span>
                             </div>
-
-                            <div class="space-y-4">
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-emerald-900/50 bg-emerald-950/60"></span>
-                                </div>
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-orange-900/50 bg-orange-950/60"></span>
-                                </div>
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-neutral-700 bg-neutral-800"></span>
+                            <div class="p-4">
+                                <div class="h-32 organic-inner bg-[#0B2B26] border border-[#235347] flex items-center justify-center">
+                                    <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">No notifications yet</span>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="notched-card-alt p-6 border border-neutral-800">
-                            <div class="space-y-3">
-                                <div class="bg-neutral-800/50 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
-                                <div class="bg-neutral-800/50 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
-                            </div>
-                        </div>
-
                     </div>
 
+                    <div id="accountWrap" class="relative">
+                        <button type="button" id="accountButton" onclick="toggleHeaderPanel(this)" aria-haspopup="true" aria-expanded="false" aria-controls="accountPanel" class="flex items-center gap-3 bg-[#051F20] border border-[#235347] organic-chip pl-1.5 pr-4 py-1.5 cursor-pointer hover:border-[#8EB69B] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8EB69B]">
+                            <span id="userInitials" class="w-7 h-7 organic-chip bg-[#DAF1DE] flex items-center justify-center font-medium text-xs text-[#051F20]">R</span>
+                            <span id="userName" class="text-xs text-[#8EB69B] hidden md:inline max-w-[12rem] truncate">SIGNED IN</span>
+                        </button>
+
+                        <!-- The account pill opens the account menu: the one action an account
+                             really has, signing out, plus a temporary switch to the other
+                             dashboard so both roles can be previewed from one sign-in. -->
+                        <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-4 w-72 max-w-[calc(100vw-2rem)] overflow-hidden organic-inner border border-[#235347] bg-[#051F20] shadow-2xl shadow-black/60">
+                            <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-[#235347]">
+                                <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">Account</span>
+                                <span class="text-[10px] text-[#8EB69B]">02</span>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <button type="button" onclick="logOut()" class="w-full px-4 py-3 organic-chip bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all">Log out</button>
+                                <!-- TEMPORARY: a preview convenience, not part of the product.
+                                     Demo mode only, and the backend says so if asked otherwise. -->
+                                <button type="button" onclick="switchDashboard()" class="w-full px-4 py-3 organic-chip border border-[#235347] text-[#8EB69B] text-sm hover:border-[#8EB69B] hover:text-[#DAF1DE] transition-all">Switch to donor dashboard <span class="text-[#8EB69B]/60">(temp)</span></button>
+                                <span id="accountNote" class="block text-[10px] text-[#8EB69B]/70"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
             </div>
+        </header>
 
-            <!-- Feed: the live board. Every surplus post in the shared Supabase table,
-                 newest first, each one carrying the single action a recipient has on
-                 it — claiming it. A post a donor logs anywhere arrives here over
-                 Supabase Realtime while this screen is open, and a claim made by
-                 another recipient flips the card in place rather than leaving a
-                 button that no longer works. -->
-            <div id="viewFeed" class="hidden lg:col-span-10">
-                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
-                    <!-- The board's tab bar, from the reference: the view being read in cream
-                         under an accent rule, the others muted. All three views are real
-                         filters over the rows already read — the whole board, just what is
-                         still there to take, or the posts tagged with the goods this
-                         account asked for in its goods profile, which is what *For You*
-                         means — so switching is instant and the chip at the right keeps
+        <main class="flex-1 w-full max-w-[1500px] mx-auto px-4 md:px-8 py-6 md:py-8">
+
+            <!-- Dashboard: the default tab, and what the rail shows on load. -->
+            <div id="viewDashboard" class="space-y-6 md:space-y-8">
+
+                <!-- Title row: the screen's own name, and the way into the board. -->
+                <div class="flex flex-wrap items-end justify-between gap-4">
+                    <div class="space-y-2">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Recipient workspace</span>
+                        <h1 class="font-display text-4xl md:text-5xl leading-none">Dashboard</h1>
+                    </div>
+                    <button type="button" onclick="openNavSection('feed')" class="organic-chip inline-flex items-center gap-2 px-5 py-3 bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-colors">
+                        <span aria-hidden="true" class="text-base leading-none">+</span> Browse the board
+                    </button>
+                </div>
+
+                <!-- The recipient's own figures: what has been claimed, what is on its way and
+                     what has arrived. Nothing reads them yet, so the values are held open as
+                     placeholder bars rather than invented numbers. -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-stretch">
+
+                    <div class="lg:col-span-8 panel p-6 md:p-7 flex flex-col justify-between gap-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                            <div class="space-y-3">
+                                <span class="block text-xs text-[#8EB69B]">Orders claimed</span>
+                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                            </div>
+                            <div class="space-y-3">
+                                <span class="block text-xs text-[#8EB69B]">Deliveries in progress</span>
+                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                            </div>
+                            <div class="space-y-3">
+                                <span class="block text-xs text-[#8EB69B]">Deliveries completed</span>
+                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                            </div>
+                        </div>
+
+                        <!-- The last weeks read as a scale rather than as figures: one segment per
+                             week, the two most recent settled in the accent. -->
+                        <div class="flex items-center gap-2">
+                            <span class="h-1 flex-1 organic-chip bg-[#235347]"></span>
+                            <span class="h-1 flex-1 organic-chip bg-[#235347]"></span>
+                            <span class="h-1 flex-1 organic-chip bg-[#8EB69B]"></span>
+                            <span class="h-1 flex-1 organic-chip bg-[#DAF1DE]"></span>
+                        </div>
+                    </div>
+
+                    <!-- The delivery card is the one panel here that acts: it opens the map overlay
+                         where the pin is placed and fine-tuned. It rests as a panel and fills with
+                         the accent while hovered. -->
+                    <button type="button" id="deliverCard" onclick="openDeliveryPicker()" class="lg:col-span-4 panel deliver-card p-6 flex flex-col items-start justify-between gap-6 min-h-[200px] w-full text-left text-[#DAF1DE] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8EB69B]">
+                        <span aria-hidden="true" class="deliver-chip w-10 h-10 organic-chip flex items-center justify-center text-[#8EB69B] transition-colors duration-300">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.686-7-11a7 7 0 1 1 14 0c0 5.314-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+                        </span>
+                        <span class="space-y-2">
+                            <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Delivery</span>
+                            <span class="block font-display text-2xl leading-tight">Confirm delivery location</span>
+                        </span>
+                    </button>
+
+                </div>
+
+                <!-- The filter row, then the one light surface on the screen. The three labels are
+                     the box's own filters — labels only for now, with no field behind them — and
+                     the box under them is the working board: what is still on its way, with the
+                     selected order's details sitting inside it as a dark inset. -->
+                <div class="space-y-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center gap-2 text-sm text-[#8EB69B] mr-1">Active filters
+                            <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 organic-chip border border-[#235347] text-[10px] leading-none">i</span>
+                        </span>
+                        <span class="organic-chip px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">All categories</span>
+                        <span class="organic-chip px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">All locations</span>
+                        <span class="organic-chip px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">Next 7 days</span>
+                    </div>
+
+                    <div class="surface-light p-5 md:p-7">
+                        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+                            <div class="xl:col-span-7 flex flex-col">
+                                <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#051F20]/15">
+                                    <h2 class="font-display text-2xl leading-none">Pending orders <span class="text-[#051F20]/45 text-lg">(0)</span></h2>
+                                    <span id="pendingState" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-[#051F20]/8 border border-[#051F20]/15 text-[#051F20]/70">idle</span>
+                                </div>
+
+                                <!-- The board itself: one row per order still on its way, and nothing
+                                     at all until the first claim is made. -->
+                                <div id="pendingOrdersList" class="flex-1 pt-5 space-y-3">
+                                    <span class="block text-sm text-[#051F20]/55">No orders waiting.</span>
+                                </div>
+
+                                <div class="mt-5 organic-inner border border-dashed border-[#051F20]/30 flex items-center justify-center gap-2 py-5 text-sm text-[#051F20]/70">
+                                    <span aria-hidden="true" class="text-base leading-none">+</span> Add order
+                                </div>
+                            </div>
+
+                            <div class="xl:col-span-5 organic-inner bg-[#051F20] text-[#DAF1DE] p-5 md:p-6 border border-[#235347] flex flex-col gap-4">
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Order details</span>
+                                    <span class="organic-chip px-3 py-1 text-[10px] border border-[#235347] text-[#8EB69B]">none</span>
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-3">
+                                    <span class="panel-raised h-20"></span>
+                                    <span class="panel-raised h-20"></span>
+                                    <span class="panel-raised h-20"></span>
+                                </div>
+
+                                <div class="mt-auto pt-4 border-t border-[#235347] space-y-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
+                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="h-1.5 w-24 organic-chip bg-[#235347]"></span>
+                                        <span class="h-3.5 w-24 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Where the deliveries are going: the routing map, with the queue rail beside it. -->
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6">
+
+                    <div class="xl:col-span-8 panel p-5 md:p-6">
+                        <div class="w-full h-72 organic-inner border border-[#235347] bg-[#0B2B26]"></div>
+                    </div>
+
+                    <div class="xl:col-span-4 panel p-5 md:p-6 space-y-3">
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
+                    </div>
+
+                </div>
+
+                <!-- What has already arrived: one card per finished order, oldest first. Empty
+                     until a delivery lands, so the cards hold their shape and nothing else. -->
+                <section class="space-y-4">
+                    <div class="flex flex-wrap items-end justify-between gap-4">
+                        <h2 class="font-display text-2xl md:text-3xl leading-none">Latest completed orders</h2>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[#8EB69B]">Sort by</span>
+                            <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">Newest <span aria-hidden="true" class="text-[8px]">&#9660;</span></span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                        <article class="panel panel-lift p-5 flex flex-col gap-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="h-3 w-28 organic-chip bg-[#235347]"></span>
+                                <span class="w-8 h-8 organic-chip panel-raised"></span>
+                            </div>
+                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
+                            <div class="pt-3 border-t border-[#235347] space-y-2">
+                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
+                                <span class="block h-2 w-2/3 organic-chip bg-[#163832]"></span>
+                            </div>
+                        </article>
+
+                        <article class="panel panel-lift p-5 flex flex-col gap-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="h-3 w-32 organic-chip bg-[#235347]"></span>
+                                <span class="w-8 h-8 organic-chip panel-raised"></span>
+                            </div>
+                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
+                            <div class="pt-3 border-t border-[#235347] space-y-2">
+                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
+                                <span class="block h-2 w-1/2 organic-chip bg-[#163832]"></span>
+                            </div>
+                        </article>
+
+                        <article class="panel panel-lift p-5 flex flex-col gap-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="h-3 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="w-8 h-8 organic-chip panel-raised"></span>
+                            </div>
+                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
+                            <div class="pt-3 border-t border-[#235347] space-y-2">
+                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
+                                <span class="block h-2 w-3/4 organic-chip bg-[#163832]"></span>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- Feed: the live board. Every surplus post in the shared Supabase table, newest
+                 first, each one carrying the single action a recipient has on it — claiming it.
+                 A post a donor logs anywhere arrives here over Supabase Realtime while this
+                 screen is open, and a claim made by another recipient flips the card in place
+                 rather than leaving a button that no longer works. -->
+            <div id="viewFeed" class="hidden">
+                <div class="panel p-5 md:p-7">
+                    <!-- The board's tab bar: the view being read in mint under its rule, the
+                         others sage. All three views are real filters over the rows already read
+                         — the whole board, just what is still there to take, or the posts tagged
+                         with the goods this account asked for in its goods profile, which is what
+                         *For You* means — so switching is instant and the chip at the right keeps
                          counting the whole board either way. The board's name moves to a
                          screen-reader heading under the tabs. -->
-                    <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
+                    <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-6 border-b border-[#235347]">
                         <div class="flex items-center gap-6" role="tablist" aria-label="Board views">
                             <span class="sr-only">Live surplus feed</span>
                             <button type="button" id="feedTabAll" role="tab" aria-selected="true" onclick="setFeedTab('all')" class="feed-tab is-active">All posts</button>
                             <button type="button" id="feedTabOpen" role="tab" aria-selected="false" onclick="setFeedTab('open')" class="feed-tab">Open</button>
                             <button type="button" id="feedTabForYou" role="tab" aria-selected="false" onclick="setFeedTab('foryou')" class="feed-tab">For You</button>
                         </div>
-                        <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
+                        <span id="feedState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] bg-[#051F20] organic-chip px-2.5 py-1">idle</span>
                     </div>
-                    <div id="feedList" class="bg-black/20 rounded-2xl border border-neutral-800 p-4 space-y-3 min-h-[240px]">
-                        <span class="block font-mono text-[11px] text-neutral-500">Waiting for the first post.</span>
+                    <div id="feedList" class="bg-[#0B2B26] organic-inner border border-[#235347] p-4 space-y-3 min-h-[240px]">
+                        <span class="block text-[11px] text-[#8EB69B]">Waiting for the first post.</span>
                     </div>
                 </div>
             </div>
 
-            <!-- The remaining section screens: picking any other rail item wipes
-                 the dashboard and opens this blank frame, which carries the tone and
-                 nothing else until that section has content of its own. -->
-            <div id="viewBlank" class="hidden lg:col-span-10">
-                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
-                    <div class="w-full min-h-[520px] rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
+            <!-- The remaining section screens: picking any other rail tab wipes the working
+                 area and opens this blank frame, which carries the tone and nothing else until
+                 that section has content of its own. -->
+            <div id="viewBlank" class="hidden">
+                <div class="panel p-6">
+                    <div class="w-full min-h-[520px] organic-inner border border-[#235347] bg-[#0B2B26]"></div>
                 </div>
             </div>
 
-        </div>
+        </main>
 
-    </main>
+        <footer class="w-full max-w-[1500px] mx-auto px-4 md:px-8 pb-8">
+            <div class="border-t border-[#235347] pt-6 text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]/70">Res-Q platform — AI for community services — Recipient</div>
+        </footer>
 
-    <footer class="max-w-7xl mx-auto px-6 pb-10 w-full">
-        <div class="border-t border-neutral-800 pt-6 font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES — RECIPIENT</div>
-    </footer>
+    </div>
 
-    <!-- Delivery location overlay: an almost full-screen map. It opens on the address
-         the account onboarded with, an address from the bar drops the pin, and moving
-         the pin names the address under it. Leaflet is loaded from a CDN on first open
-         so the dashboards stay light. -->
-    <div id="deliverOverlay" class="hidden fixed inset-0 z-[90] bg-[#0c0c0c]/85 backdrop-blur-sm p-3 sm:p-6" onclick="closeDeliveryBackdrop(event)">
-        <div class="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-3xl border border-neutral-800 bg-[#141414]" role="dialog" aria-modal="true" aria-labelledby="deliverTitle">
+    <!-- Delivery location overlay: an almost full-screen map. It opens on the address the
+         account onboarded with, an address from the bar drops the pin, and moving the pin
+         names the address under it. Leaflet is loaded from a CDN on first open so the
+         dashboards stay light. -->
+    <div id="deliverOverlay" class="hidden fixed inset-0 z-[90] bg-[#051F20]/85 backdrop-blur-sm p-3 sm:p-6" onclick="closeDeliveryBackdrop(event)">
+        <div class="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden organic-block border border-[#235347] bg-[#0B2B26]" role="dialog" aria-modal="true" aria-labelledby="deliverTitle">
 
-            <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-neutral-800">
-                <span id="deliverTitle" class="text-xs font-mono uppercase tracking-widest text-[#ff4500]">// CONFIRM DELIVERY LOCATION</span>
-                <button type="button" onclick="closeDeliveryPicker()" aria-label="Close the map" class="w-9 h-9 rounded-full border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600 transition-all">&#10005;</button>
+            <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-[#235347]">
+                <span id="deliverTitle" class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Confirm delivery location</span>
+                <button type="button" onclick="closeDeliveryPicker()" aria-label="Close the map" class="w-9 h-9 organic-chip border border-[#235347] text-[#8EB69B] hover:text-[#DAF1DE] hover:border-[#8EB69B] transition-all">&#10005;</button>
             </div>
 
-            <div class="px-5 py-4 border-b border-neutral-800">
-                <label for="deliverSearch" class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Delivery address</label>
+            <div class="px-5 py-4 border-b border-[#235347]">
+                <label for="deliverSearch" class="block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] mb-2">Delivery address</label>
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <input id="deliverSearch" type="text" autocomplete="off" placeholder="Type an address, then press Find" class="flex-1 bg-[#0c0c0c] border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
-                    <button type="button" onclick="findDeliveryAddress()" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all">Find</button>
+                    <input id="deliverSearch" type="text" autocomplete="off" placeholder="Type an address, then press Find" class="flex-1 bg-[#051F20] border border-[#235347] organic-inner px-4 py-3 text-sm text-[#DAF1DE] placeholder-[#8EB69B] focus:outline-none focus:border-[#8EB69B] transition-all">
+                    <button type="button" onclick="findDeliveryAddress()" class="px-6 py-3 organic-chip bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all">Find</button>
                 </div>
-                <p class="text-[10px] font-mono text-neutral-600 mt-2">Pick a match to drop the pin, then drag it &#8212; the address follows the pin.</p>
+                <p class="text-[10px] text-[#8EB69B] mt-2">Pick a match to drop the pin, then drag it &#8212; the address follows the pin.</p>
                 <div id="deliverResults" class="hidden space-y-2 mt-3 max-h-40 overflow-y-auto"></div>
             </div>
 
-            <div class="relative flex-1 min-h-[280px] bg-[#0c0c0c]">
+            <div class="relative flex-1 min-h-[280px] bg-[#051F20]">
                 <div id="deliverMap" class="absolute inset-0"></div>
-                <div id="deliverNotice" class="hidden absolute inset-x-0 bottom-0 m-4 rounded-2xl border border-orange-900/50 bg-[#141414]/95 px-4 py-3">
-                    <span class="block text-[10px] font-mono uppercase tracking-widest text-[#ff9b73] mb-1">// MAP UNAVAILABLE</span>
-                    <span id="deliverNoticeText" class="block text-xs text-neutral-400 leading-relaxed"></span>
+                <div id="deliverNotice" class="hidden absolute inset-x-0 bottom-0 m-4 organic-inner border border-[#235347] bg-[#0B2B26]/95 px-4 py-3">
+                    <span class="block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] mb-1">Map unavailable</span>
+                    <span id="deliverNoticeText" class="block text-xs text-[#8EB69B] leading-relaxed"></span>
                 </div>
             </div>
 
-            <div class="px-5 py-4 border-t border-neutral-800 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-                <div id="deliverReadout" class="font-mono text-[11px] text-neutral-400 leading-relaxed whitespace-pre-line">No pin yet &#8212; search an address or tap the map.</div>
+            <div class="px-5 py-4 border-t border-[#235347] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+                <div id="deliverReadout" class="text-[11px] text-[#8EB69B] leading-relaxed whitespace-pre-line">No pin yet &#8212; search an address or tap the map.</div>
                 <div class="flex items-center gap-4 shrink-0">
-                    <span id="deliverSaveState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500"></span>
-                    <button type="button" id="deliverConfirm" onclick="confirmDeliveryLocation()" disabled class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Confirm location</button>
+                    <span id="deliverSaveState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]"></span>
+                    <button type="button" id="deliverConfirm" onclick="confirmDeliveryLocation()" disabled class="px-6 py-3 organic-chip bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Confirm location</button>
                 </div>
             </div>
 
@@ -576,43 +740,30 @@
         })();
 
         // ---------------------------------------------------------------------------
-        // Navigation rail: Dashboard is the default and the only lit item on load.
-        // The selected item fills with the site's accent orange and its label turns
-        // black, the way the cards on the landing page invert when they are hovered;
-        // every other item keeps the dark tone with a neutral label. Picking any item
-        // other than Dashboard wipes the dashboard and opens that section's own screen,
-        // which is a blank frame for now; picking Dashboard brings it back.
+        // Navigation rail: Dashboard is the default and the only lit tab on load. The tab
+        // being read is the one lit shape in the rail — filled with the accent, its label
+        // turned to ink — and every other tab is its label and nothing else, which is what
+        // keeps a five-row rail from reading as five buttons. Picking any tab wipes the
+        // working area and opens that section's own screen, which is a blank frame for the
+        // sections that have no content yet; picking Dashboard brings it back.
         // ---------------------------------------------------------------------------
         function setActiveNav(element) {
             document.querySelectorAll('.nav-item').forEach(function (item) {
-                var on = item === element;
-                item.classList.toggle('bg-[#ff4500]', on);
-                item.classList.toggle('border-[#ff4500]', on);
-                item.classList.toggle('bg-neutral-800/30', !on);
-                item.classList.toggle('border-neutral-800/60', !on);
-                item.classList.toggle('hover:border-neutral-700', !on);
-                item.classList.toggle('text-black', on);
-                item.classList.toggle('text-neutral-400', !on);
+                item.classList.toggle('is-on', item === element);
             });
-            var received = document.getElementById('receivedDeliveries');
-            var label = received ? received.querySelector('span') : null;
-            var picked = element === received;
-            if (received) {
-                received.classList.toggle('bg-[#ff4500]', picked);
-                received.classList.toggle('border-[#ff4500]', picked);
-                received.classList.toggle('bg-neutral-800/50', !picked);
-                received.classList.toggle('border-neutral-800', !picked);
-                received.classList.toggle('hover:border-neutral-700', !picked);
-            }
-            if (label) {
-                label.classList.toggle('text-black', picked);
-                label.classList.toggle('text-neutral-400', !picked);
-            }
         }
 
         function openSection(element) {
             setActiveNav(element);
             showView(element.getAttribute('data-view'));
+        }
+
+        // The one action a screen's title row offers — read the board — reaches its screen
+        // through the rail, so the tab's own state stays the single source of truth for
+        // which section is open.
+        function openNavSection(name) {
+            var tab = document.querySelector('.nav-item[data-view="' + name + '"]');
+            if (tab) { openSection(tab); }
         }
 
         // Each labelled section owns a screen. Dashboard and the surplus feed have
@@ -708,7 +859,7 @@
             var note = document.getElementById('accountNote');
             if (!note) { return; }
             note.textContent = message;
-            note.className = 'block font-mono text-[10px] ' + (tone || 'text-neutral-600');
+            note.className = 'block text-[10px] ' + (tone || 'text-neutral-600');
         }
 
         function logOut() {
@@ -963,7 +1114,7 @@
             var badge = deliverEl('deliverSaveState');
             if (!badge) { return; }
             badge.textContent = message;
-            badge.className = 'font-mono text-[10px] uppercase tracking-widest '
+            badge.className = 'text-[10px] uppercase tracking-widest '
                 + (tone || 'text-neutral-500');
         }
 
@@ -976,7 +1127,7 @@
                 && Math.abs(savedLocation.lat - deliverPinAt.lat) < 0.000001
                 && Math.abs(savedLocation.lng - deliverPinAt.lng) < 0.000001;
             if (confirmed) {
-                setSaveState('Saved to your account', 'text-[#ff9b73]');
+                setSaveState('Saved to your account', 'text-[#8EB69B]');
             } else {
                 setSaveState('Not saved yet');
             }
@@ -1059,7 +1210,7 @@
             results.forEach(function (result) {
                 var button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'block w-full text-left px-4 py-3 rounded-xl border border-neutral-800 bg-[#0c0c0c] hover:border-[#ff4500] text-xs text-neutral-300 transition-all';
+                button.className = 'block w-full text-left px-4 py-3 rounded-xl border border-[#235347] bg-[#051F20] hover:border-[#8EB69B] text-xs text-neutral-300 transition-all';
                 button.textContent = result.display_name || query;
                 button.onclick = function () {
                     clearDeliveryResults();
@@ -1326,9 +1477,9 @@
         var feedPoll = null;
         var feedUnwatch = null;
 
-        var CHIP_IDLE = 'text-neutral-500 bg-black/20';
-        var CHIP_BUSY = 'text-[#ff9b73] bg-orange-950/60';
-        var CHIP_DONE = 'text-emerald-400 bg-emerald-950/60';
+        var CHIP_IDLE = 'text-neutral-500 bg-[#051F20]';
+        var CHIP_BUSY = 'text-[#DAF1DE] bg-[#235347]';
+        var CHIP_DONE = 'text-[#DAF1DE] bg-[#163832]';
 
         function resqDb() {
             return window.ResQDB || null;
@@ -1338,7 +1489,7 @@
             var chip = document.getElementById(id);
             if (!chip) { return; }
             chip.textContent = message;
-            chip.className = 'font-mono text-[10px] uppercase tracking-widest rounded-full px-2 py-1 '
+            chip.className = 'text-[10px] uppercase tracking-[0.2em] rounded-full px-2.5 py-1 '
                 + (tone || CHIP_IDLE);
         }
 
@@ -1429,13 +1580,13 @@
             if (!list) { return; }
             if (!rows) {
                 feedRows = [];
-                list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
+                list.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
                     + feedText(message) + '</span>';
                 return;
             }
             feedRows = rows;
             if (!rows.length) {
-                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                list.innerHTML = '<span class="block text-[11px] text-neutral-500">'
                     + 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.'
                     + '</span>';
                 return;
@@ -1458,7 +1609,7 @@
                     ? feedRows.filter(function (row) { return goods.indexOf(row.goods_type) !== -1; })
                     : feedRows);
             if (!rows.length) {
-                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                list.innerHTML = '<span class="block text-[11px] text-neutral-500">'
                     + feedEmpty()
                     + '</span>';
                 return;
