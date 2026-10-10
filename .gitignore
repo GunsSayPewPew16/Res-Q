@@ -10,3 +10,6 @@ __pycache__/
 
 # Local preview runner workspace (logs and notes, not part of the site)
 .freebuff/
+
+# macOS folder metadata
+.DS_Store
