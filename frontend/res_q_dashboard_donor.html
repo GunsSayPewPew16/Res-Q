@@ -4565,6 +4565,11 @@
             renderPendingDetail();
             renderPendingFigures();
             renderClaimants();
+            // The map under the board is watched from here as well as from the section's own
+            // loader: the pending orders are read on the dashboard's own read and on every
+            // change to the board, and whichever of those got here first is the one that
+            // should be able to ask for the route.
+            watchOrderRoute();
             paintOrderRoute();
         }
 
@@ -4867,20 +4872,52 @@
         var pickupPoints = {};         // one address lookup per pickup address
         var roadRoutes = {};           // one OSRM answer per pair of pins
 
+        // Whether the panel is in front of the donor already, measured the way the observer
+        // measures it: the viewport, with the same 200px of room around it.
+        function orderRouteInView(panel) {
+            var box = panel.getBoundingClientRect();
+            return box.top < window.innerHeight + 200 && box.bottom > -200;
+        }
+
         function watchOrderRoute() {
             if (orderRouteWatched) { return; }
             var panel = pendingEl('orderRoutePanel');
             if (!panel) { return; }
             orderRouteWatched = true;
             if (!window.IntersectionObserver) { loadOrderRouteMap(); return; }
+            // The same question asked the other two ways, so the route cannot be left
+            // waiting on one mechanism: the observer answers as the panel comes into view,
+            // the scroll listener answers when the page moves and the panel is on screen
+            // (the one case an observer is not needed for but is the first to be missed),
+            // and the check under it answers when the panel is already there.
+            var onScroll = function () {
+                if (!orderRouteInView(panel)) { return; }
+                window.removeEventListener('scroll', onScroll);
+                approach.disconnect();
+                loadOrderRouteMap();
+            };
             var approach = new window.IntersectionObserver(function (entries) {
                 entries.forEach(function (entry) {
                     if (!entry.isIntersecting) { return; }
+                    window.removeEventListener('scroll', onScroll);
                     approach.disconnect();
                     loadOrderRouteMap();
                 });
             }, { rootMargin: '200px 0px' });
             approach.observe(panel);
+            window.addEventListener('scroll', onScroll, { passive: true });
+            // An observer answers when the panel *comes* into view, and a panel that is
+            // already in front of the donor when this is called is the same question with
+            // no scroll left to make: the panel sits directly under the board, so the
+            // pending orders can be on screen without the observer having fired yet. The
+            // state is read here as well, and the map is asked for straight away — the
+            // other half of the same rule, and what keeps the route from waiting on a
+            // scroll that has already happened.
+            if (orderRouteInView(panel)) {
+                window.removeEventListener('scroll', onScroll);
+                approach.disconnect();
+                loadOrderRouteMap();
+            }
         }
 
         function loadOrderRouteMap() {
