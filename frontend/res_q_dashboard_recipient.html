@@ -1289,6 +1289,20 @@
             list.innerHTML = rows.map(feedCard).join('');
         }
 
+        // What the allocator did with the item, once its answer reached the board: the
+        // shelter it picked and the score it was picked on. A post written before the
+        // match columns existed, or one whose submission never got an answer, simply has
+        // no line — the card reads exactly as it did before.
+        function pickLine(row) {
+            var shelter = row.matched_shelter ? String(row.matched_shelter).trim() : '';
+            if (!shelter) { return ''; }
+            var score = Number(row.match_score);
+            var scored = row.match_score !== null && row.match_score !== undefined
+                && row.match_score !== '' && isFinite(score);
+            return '<span class="block mt-1 text-neutral-500">PICKED ' + feedText(shelter)
+                + (scored ? ' \u00b7 ' + score.toFixed(2) : '') + '</span>';
+        }
+
         // One card per post: what it is and how much, who is offering it and where
         // from, the status, and — while it is still open — the claim button. A
         // claimed post keeps its card and loses its button, so the board reads as a
@@ -1316,6 +1330,7 @@
                         '<span class="block mt-1">AT ' + feedText(row.location) + '</span>' +
                         '<span class="block mt-1">LOGGED ' + feedText(db.formatWhen(row.created_at)) +
                         '</span>' +
+                        pickLine(row) +
                     '</div>' +
                     (claimed ? ''
                         : '<button type="button" data-claim="' + feedText(row.id) + '" ' +

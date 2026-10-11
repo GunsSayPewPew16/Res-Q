@@ -1356,6 +1356,10 @@
                 return 'Supabase answered, but surplus_posts is not in the project: run '
                     + 'supabase/migrations/20261008000000_create_surplus_posts.sql first.';
             }
+            if (error && error.missingColumn) {
+                return 'Supabase answered, but surplus_posts carries no match columns yet: run '
+                    + 'supabase/migrations/20261009000000_add_match_to_surplus_posts.sql first.';
+            }
             return 'Supabase did not accept that: '
                 + ((error && error.message) || 'the request did not go through') + '.';
         }
@@ -1380,8 +1384,9 @@
         }
 
         // The matched shelter, on the panel under the form. A miss or a refusal lands in
-        // the same place, because "nobody needs this today" is an answer too.
-        function renderSurplusMatch(res) {
+        // the same place, because "nobody needs this today" is an answer too. The pick
+        // note is what the board did with the answer, appended to the meta line.
+        function renderSurplusMatch(res, pickNote) {
             var panel = document.getElementById('surplusMatch');
             var name = document.getElementById('surplusMatchName');
             var score = document.getElementById('surplusMatchScore');
@@ -1405,7 +1410,8 @@
                 + (body.category ? ' \u00b7 ' + String(body.category).replace(/_/g, ' ') : '')
                 + (body.shelters_considered === undefined ? ''
                     : ' \u00b7 ' + body.shelters_considered + ' shelter'
-                      + (body.shelters_considered === 1 ? '' : 's') + ' considered');
+                      + (body.shelters_considered === 1 ? '' : 's') + ' considered')
+                + (pickNote || '');
         }
 
         function clearSurplusMatch() {
@@ -1445,13 +1451,16 @@
             clearSurplusMatch();
 
             // The two answers are independent: the feed write is the Supabase half and
-            // the match is the backend allocator's, and either can fail on its own.
-            var feed = logSurplusPost({
+            // the match is the backend allocator's, and either can fail on its own. The
+            // write keeps a promise of its own as well, because the row it answers with
+            // is what the allocator's pick gets written back onto.
+            var feedWrite = logSurplusPost({
                 donorName: donorName(),
                 itemName: item,
                 quantity: quantity,
                 location: location
-            }).then(function (res) {
+            });
+            var feed = feedWrite.then(function (res) {
                 if (res.noClient) {
                     setChip('surplusFormState', 'no client', CHIP_BUSY);
                     setSurplusNote('The Supabase client is not on this page. Check the connection and reload.',
@@ -1483,12 +1492,51 @@
             });
 
             var match = requestSurplusMatch(item, quantity, location).then(function (res) {
-                renderSurplusMatch(res);
+                return recordPick(feedWrite, res);
             });
 
             Promise.all([feed, match]).then(function () {
                 surplusSubmitting = false;
                 if (button) { button.disabled = false; }
+            });
+        }
+
+        // The allocator's answer, written onto the post the feed has just taken, so the
+        // recipient board says who is coming for the goods instead of leaving the pick on
+        // this screen. Neither half needs the other: a pick with no row, or a row with no
+        // pick, is still a logged item.
+        function recordPick(feedWrite, res) {
+            var chosen = (res && res.data && res.data.match) || null;
+            if (!chosen) {
+                renderSurplusMatch(res, '');
+                return;
+            }
+            var db = resqDb();
+            if (!db || typeof db.matchPost !== 'function') {
+                renderSurplusMatch(res, ' \u00b7 the feed kept no pick');
+                return;
+            }
+            return feedWrite.then(function (written) {
+                if (!written || !written.ok || !written.data || !written.data.id) {
+                    renderSurplusMatch(res, ' \u00b7 the feed kept no pick');
+                    return;
+                }
+                return db.matchPost(written.data.id, chosen).then(function (saved) {
+                    if (!saved.ok) {
+                        if (saved.error && saved.error.missingColumn) {
+                            setSurplusNote('The item is on the feed; the pick itself needs '
+                                + 'supabase/migrations/20261009000000_add_match_to_surplus_posts.sql'
+                                + ' run first.', 'text-[#ff9b73]');
+                        }
+                        renderSurplusMatch(res, ' \u00b7 the feed kept no pick');
+                        return;
+                    }
+                    renderSurplusMatch(res, saved.data
+                        ? ' \u00b7 pick saved to the feed'
+                        : ' \u00b7 claimed before the pick landed');
+                });
+            }).catch(function () {
+                renderSurplusMatch(res, ' \u00b7 the feed kept no pick');
             });
         }
 
@@ -1532,6 +1580,7 @@
                 return;
             }
             list.innerHTML = rows.map(function (row) {
+                var pick = pickText(row);
                 return '<div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 ' +
                         'hover:border-neutral-700 transition-all">' +
                     '<div class="flex flex-wrap items-start justify-between gap-3">' +
@@ -1545,8 +1594,25 @@
                     '<div class="mt-1 font-mono text-[10px] text-neutral-600">' +
                         surplusText(row.location) + ' &#183; logged ' +
                         surplusText(db.formatWhen(row.created_at)) + '</div>' +
+                    (pick
+                        ? '<div class="mt-1 font-mono text-[10px] text-neutral-500">' +
+                          surplusText(pick) + '</div>'
+                        : '') +
                     '</div>';
             }).join('');
+        }
+
+        // What the allocator did with the item, once its answer reached the board: the
+        // shelter it was picked for and the score it was picked on. A post written before
+        // the match columns existed, or one whose submission never got an answer, simply
+        // carries no line — the card reads exactly as it did before.
+        function pickText(row) {
+            var shelter = row.matched_shelter ? String(row.matched_shelter).trim() : '';
+            if (!shelter) { return ''; }
+            var score = Number(row.match_score);
+            var scored = row.match_score !== null && row.match_score !== undefined
+                && row.match_score !== '' && isFinite(score);
+            return 'PICKED ' + shelter + (scored ? ' \u00b7 ' + score.toFixed(2) : '');
         }
 
         // The screen is live while it is open: a subscription covers every claim as it

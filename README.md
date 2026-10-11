@@ -100,8 +100,9 @@ the matching logic, and invites visitors into the flow above.
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
 | `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, the *Log surplus* form that posts to the surplus board, the *Surplus Received* section that reads the donor's own rows back, and the delivery-location card |
 | `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail; its *Feed* section is the live surplus board with a claim button on every open post |
-| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, and formats a post in the site's tone |
+| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts, claims, and writes the allocator's pick back onto a row, streams changes, and formats a post in the site's tone |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
+| `supabase/migrations/20261009000000_add_match_to_surplus_posts.sql` | The three columns that carry the allocator's pick, and the same update guard widened by exactly those — run once, after the first one |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
 visitor's role when signed in, and to the landing page otherwise. Each page works
@@ -192,11 +193,17 @@ is logged rather than waiting for a page to be reloaded.
 | `location` | `text` | Where it can be collected from |
 | `status` | `text` | `pending` or `claimed`, defaulting to `pending` |
 | `created_at` | `timestamptz` | Defaulting to `now()`; the board reads newest-first |
+| `matched_shelter` | `text` | The shelter the allocator picked for the item, written back onto the post by the page that submitted it |
+| `match_score` | `numeric` | The score that pick was made on — the prototype's weighted total |
+| `match_distance_km` | `numeric` | The road distance the score was measured over |
 
-Apply it once against the project: paste
-`supabase/migrations/20261008000000_create_surplus_posts.sql` into **SQL Editor →
+Apply them once against the project, in order: paste
+`supabase/migrations/20261008000000_create_surplus_posts.sql` and then
+`supabase/migrations/20261009000000_add_match_to_surplus_posts.sql` into **SQL Editor →
 New query → Run** in the Supabase dashboard, or point the Supabase CLI at the project
-and run `supabase db push`. The file is written to be safe to run more than once.
+and run `supabase db push`. Both files are written to be safe to run more than once, and
+a project that has run only the first keeps working exactly as it did: the board simply
+shows no pick, and the form says which file to run when a pick cannot be written.
 
 Two screens use it, and both are on a dashboard rather than behind the API:
 
@@ -204,10 +211,17 @@ Two screens use it, and both are on a dashboard rather than behind the API:
   location, with the pickup address prefilled from the account's own confirmed
   location, and *Submit to feed* inserts the row. Nothing is optimistic: the chip
   beside the heading reads *logged* only once the database has answered with the row
-  it wrote, and a refusal is shown with its reason instead of a success message.
+  it wrote, and a refusal is shown with its reason instead of a success message. The
+  same click asks the backend's allocator which shelter should take the item, and the
+  answer is written back onto that row — shelter, score and road distance — so the pick
+  outlives the donor's browser instead of being a message only they ever saw. The panel
+  under the form says what the board did with it: *pick saved to the feed*, or that the
+  pick did not land and why.
 - **The board itself** — the recipient's *Feed*, and the donor's *Surplus Received*,
   which is the same table read back through that donor's own name. Each post carries
-  its item, quantity, donor, pickup location, age and status. An open post has one
+  its item, quantity, donor, pickup location, age and status, and — once the allocator
+  has answered the submission — the shelter it picked, on the card as `PICKED <shelter>
+  · <score>`. An open post has one
   action, **Claim**, which writes `status = 'claimed'`; the card then keeps its place
   with a claimed chip and no button, so the board reads as a record of what was
   offered rather than quietly emptying. A claim only ever matches a post that is still
@@ -224,12 +238,13 @@ later. The subscription and the timer both stop when the section is left.
 The pages hold the project's **publishable** key, which is the key meant to sit in a
 page: it can only ever act as the anonymous role, and what that role may do is decided
 by the table's row level security policies. Those policies are exactly the three the
-dashboard needs — anybody may read the board, add a post, and set a status — and
-nothing else: no deletes, and no access to anything but this table. Because Res-Q runs
-its own sign-in rather than Supabase Auth, a post is attributed to the name on the
-donor's own profile rather than to a Supabase user, and the table's update trigger
-refuses any change other than a status, so a claimed row cannot be rewritten into a
-different one. The publishable key is safe to be seen; the secret key is never used by
+dashboard needs — anybody may read the board, add a post, set a status, and (while the
+post is still open) record the allocator's pick — and nothing else: no deletes, and no
+access to anything but this table. Because Res-Q runs its own sign-in rather than
+Supabase Auth, a post is attributed to the name on the donor's own profile rather than
+to a Supabase user, and the table's update trigger refuses any change other than a
+status and those pick columns, so a claimed row cannot be rewritten into a different one
+and a claimed post keeps the pick it was claimed with. The publishable key is safe to be seen; the secret key is never used by
 the pages and is not in this repository. This is still a public board, though — a
 deployment that has to know *who* posted would move the writes behind the backend,
 where the secret key can be held and a rate limit put in front of it.
@@ -253,10 +268,12 @@ Opening the pages straight from disk works for the layouts, but the forms cannot
 save anything, because there is no server to talk to.
 
 The surplus board needs one step of its own, done once against your Supabase project:
-apply `supabase/migrations/20261008000000_create_surplus_posts.sql`, as described
-under [The surplus board](#the-surplus-board-supabase). Until it is applied, the donor's
-form and both boards say so plainly — *surplus_posts is not in the project* — rather
-than failing quietly. That board is read and written from the browser, so nothing about
+apply `supabase/migrations/20261008000000_create_surplus_posts.sql` and then
+`supabase/migrations/20261009000000_add_match_to_surplus_posts.sql`, as described
+under [The surplus board](#the-surplus-board-supabase). Until the first is applied, the
+donor's form and both boards say so plainly — *surplus_posts is not in the project* —
+rather than failing quietly; until the second is, the item is still logged and matched,
+and only the pick fails to reach the board. That board is read and written from the browser, so nothing about
 it lives in the backend's database and it behaves the same in demo mode as it does with
 persistence on.
 

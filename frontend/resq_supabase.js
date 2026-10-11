@@ -3,9 +3,10 @@
  *
  * A donor logs a surplus item and a recipient claims it, and the row that
  * carries that between them lives in Supabase rather than in the local
- * backend: `supabase_posts` is the one table both dashboards talk to directly,
+ * backend: `surplus_posts` is the one table both dashboards talk to directly,
  * which is also what lets a post reach every open dashboard the moment it is
- * written.
+ * written. The allocator's pick for the item rides on that same row, written
+ * back by the page that submitted it.
  *
  * The key below is the project's *publishable* key. It is the key that is meant
  * to sit in a page: it can only ever act as the anonymous role, so what it may
@@ -83,22 +84,34 @@
     // -------------------------------------------------------------------------
     // Errors, said in the page's own terms
     // -------------------------------------------------------------------------
-    // The one failure worth naming precisely is the table not being there yet:
-    // it is the difference between "Supabase is unreachable" and "the migration
-    // has not been run", and the dashboard can point at the second one.
+    // The two failures worth naming precisely are a migration that has not been run and
+    // a project that cannot be reached at all. A missing column is read first because
+    // PostgREST describes it in the missing table's own words ("could not find the 'x'
+    // column of 'surplus_posts' in the schema cache"), so the column's shape has to
+    // settle which of the two it is.
     function describe(error) {
         var code = (error && (error.code || error.status)) || '';
         var message = (error && (error.message || error.error_description || error.hint || '')) || '';
+        if (String(code) === 'PGRST204' || String(code) === '42703'
+            || /could not find the '[^']+' column/i.test(message)) {
+            return {
+                missingTable: false,
+                missingColumn: true,
+                message: 'the match columns are not in the project yet'
+            };
+        }
         if (String(code) === 'PGRST205' || String(code) === '42P01'
             || /could not find the table|schema cache/i.test(message)) {
             return {
                 missingTable: true,
+                missingColumn: false,
                 message: 'the surplus_posts table is not in the project yet'
             };
         }
         if (!message && error && error.name) { message = error.name; }
         return {
             missingTable: false,
+            missingColumn: false,
             message: String(message || 'the request to Supabase did not go through')
         };
     }
@@ -151,6 +164,25 @@
                 quantity: post.quantity,
                 location: post.location
             }).select().single());
+        });
+    }
+
+    // The allocator's pick is written onto the row the feed has just taken, so the board
+    // can say who is coming for the goods. It walks the same open rows a claim walks: a
+    // post somebody has already claimed is left untouched, and a pick that arrives too
+    // late answers with no row rather than rewriting what the claim recorded.
+    function matchPost(id, match) {
+        return withClient(function (db) {
+            return reply(db.from(TABLE)
+                .update({
+                    matched_shelter: match.shelter_name || null,
+                    match_score: (typeof match.match_score === 'number') ? match.match_score : null,
+                    match_distance_km: (typeof match.distance_km === 'number') ? match.distance_km : null
+                })
+                .eq('id', id)
+                .eq('status', 'pending')
+                .select()
+                .maybeSingle());
         });
     }
 
@@ -251,6 +283,7 @@
         describe: describe,
         listPosts: listPosts,
         createPost: createPost,
+        matchPost: matchPost,
         claimPost: claimPost,
         watchPosts: watchPosts,
         escapeHtml: escapeHtml,
