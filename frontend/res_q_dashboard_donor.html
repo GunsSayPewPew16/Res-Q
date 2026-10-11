@@ -1503,8 +1503,9 @@
         // the sky is the weather endpoint's own label for the address the account holds, and
         // the conditions panel carries the reading itself — the temperature right now, the
         // day's own summary, where it was read and who read it. The rhythm the model leans on
-        // is named for what it actually is: the days this kitchen has logged, when the
-        // backend could read them, and the model's own assumption when it could not.
+        // is named for what it actually is: the days this kitchen has logged — all of them,
+        // with the window this run read from them when the two differ — and the model's own
+        // assumption when the backend could not read the log at all.
         function renderForecast(forecast, weather, location, history) {
             var headline = document.getElementById('forecastHeadline');
             var story = document.getElementById('forecastStory');
@@ -1520,8 +1521,11 @@
             var kg = Number(forecast.predicted_surplus_kg);
             var mae = Number(forecast.mae_kg);
             var where = shortPlace(location && location.address) || 'your delivery address';
-            var rhythm = history && history.days
-                ? 'your own last ' + history.days + ' logged days'
+            var rhythm = history && history.logged_days
+                ? 'your own ' + history.logged_days + ' logged days'
+                  + (history.read_days && history.read_days < history.logged_days
+                      ? ', the most recent ' + history.read_days + ' of them read'
+                      : '')
                 : 'your kitchen\'s recent rhythm';
             var logging = ' Log anything above ' + (kg * 0.4).toFixed(1)
                 + ' kg on the board \u2014 smaller amounts travel better merged into the next pickup.';

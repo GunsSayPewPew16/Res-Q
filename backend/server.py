@@ -753,6 +753,13 @@ class ResQHandler(SimpleHTTPRequestHandler):
         account that has logged nothing, nothing is filled and the model's own defaults
         stand — which is exactly what they are a fallback for, rather than the answer every
         kitchen gets.
+
+        The answer names **two** figures rather than one, because on a kitchen with more
+        than six weeks behind it they are not the same number: `logged_days` is the whole
+        log the account holds, and `read_days` is the window of it these features were
+        actually read from. A caller that writes the kitchen up — the analyser banner is
+        one — can then say which it means instead of reporting the window as if it were
+        everything the kitchen had ever logged.
         """
         signed_in, days = self.signed_in_history()
         if not signed_in or not days:
@@ -770,7 +777,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if not filled:
             return None
         return {
-            "days": len(recent),
+            "logged_days": len(days),
+            "read_days": len(recent),
             "first_date": recent[0]["date"],
             "last_date": recent[-1]["date"],
             "derived": derived,
