@@ -1,10 +1,21 @@
-# The Res-Q API is standard-library Python — nothing in backend/ imports a third-party
-# package. The one dependency is the server a host runs it on: Gunicorn, which speaks WSGI
-# to the adapter in wsgi.py.
+# What a host installs before it runs this API.
 #
 #     pip install -r requirements.txt
 #     gunicorn -c gunicorn_config.py wsgi:application
 #
-# Render's build step runs the install line above, from this folder (see render.yaml and
-# the README's deployment section).
+# Two things, and they are the whole list:
+
+# The server a host runs the API on, which speaks WSGI to the adapter in wsgi.py. The API
+# itself is standard-library Python, so nothing else is imported to serve the site, the
+# accounts, the matching or the live weather.
 gunicorn==23.0.0
+
+# The surplus calculator. `backend/surplus.py` imports these two inside its functions so
+# the rest of the backend runs without them — a local run that has not installed them
+# still serves everything else, and the forecast answers 503 with this install line — but
+# a deployment that left them out would put the site's central feature behind a 503, which
+# is why they are here. Lower bounds rather than exact pins: the host resolves the newest
+# version that has a wheel for the Python it built with, and a build from source on a
+# machine with no compiler is the one failure worth avoiding.
+pandas>=2.2
+scikit-learn>=1.5

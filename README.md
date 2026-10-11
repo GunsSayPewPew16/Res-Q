@@ -395,7 +395,7 @@ gunicorn -c gunicorn_config.py wsgi:application   # $PORT when set, else 127.0.0
 | File | What it is for |
 | --- | --- |
 | `render.yaml` | The Blueprint: one Python web service, with its build command, start command, health check and environment |
-| `backend/requirements.txt` | The one dependency there is — Gunicorn; nothing in `backend/` imports anything else |
+| `backend/requirements.txt` | Gunicorn, and the surplus calculator's pandas and scikit-learn — a deployment that left those out would answer `503` on the analyser |
 | `backend/gunicorn_config.py` | The server's settings, each one with the reason it holds the value it does |
 | `backend/wsgi.py` | The API as a WSGI application, and the startup a worker does before its first request |
 | `backend/.python-version` | The Python version the host builds with |
@@ -518,12 +518,14 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/wsgi.py` | The same handler as a WSGI application, which is how a host runs it; see [Deployment](#deployment) |
 
 The server itself still uses only the standard library, so nothing has to be
-installed for the site, the accounts and the matching to work — the one dependency in
-`requirements.txt` is the server a host runs it on, not anything the API imports. The live
-weather wants nothing installed either — `weather.py` calls Open-Meteo with `urllib` —
-while the surplus forecast additionally wants pandas and scikit-learn: `surplus.py` imports
-them inside its functions so the rest of the backend runs without them, and the endpoint
-answers `503` with install instructions when they are missing.
+installed for the site, the accounts and the matching to work: `requirements.txt` names
+Gunicorn, which is the server a host runs it on, and pandas and scikit-learn, which only
+the surplus calculator wants. The live weather wants nothing installed either —
+`weather.py` calls Open-Meteo with `urllib` — and `surplus.py` imports its two inside its
+functions, so a local run that has not installed them still serves everything else and the
+forecast answers `503` with the install line in the message. A hosted build installs all
+three, because a deployment whose analyser answered `503` would be missing the site's
+central feature.
 
 Run by hand the backend listens on `127.0.0.1:8080`; under a host it listens on the
 address the host asks for — `$PORT`, on `0.0.0.0` — and either can be overridden with
