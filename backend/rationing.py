@@ -806,9 +806,10 @@ def gather_claims(caller, conn=None):
 
     The pass reads every claim on the board rather than only the caller's own, because a
     share is a fraction of what all of a post's claimants took; the caller's own rows are
-    the ones that come back as allocations. The fixture's claimed post is added only when
-    the caller is the fixture's own recipient, which is what keeps a deployment with real
-    claims from having demo claimants' shares mixed into its own.
+    the ones that come back as allocations. Each fixture is added only for the accounts it
+    was written about — the claimed post for its own shelter and kitchen, and the Miami
+    kitchen's three open deliveries for that kitchen and its shelters — which is what keeps
+    a deployment with real claims from having demo claimants' shares mixed into its own.
     """
     claims = []
     for record in stored_records(conn):
@@ -820,4 +821,11 @@ def gather_claims(caller, conn=None):
     # is the account that reads the whole split.
     if seed.is_fixture_recipient(caller, conn) or seed.is_fixture_donor(caller, conn):
         claims.extend(seed.claim_fixture(conn))
+    # The Miami kitchen's own book: three items of its open on the board, each reached for
+    # by two or three of its shelters, so a donor's Ongoing Deliveries screen has real
+    # splits on a deployment nobody has used yet. Read for the kitchen whose items they are
+    # and for each shelter on them, and for nobody else — a run with claims of its own never
+    # has the fixture's shelters mixed into its queue.
+    if seed.is_miami_kitchen(caller, conn) or seed.is_miami_shelter(caller, conn):
+        claims.extend(seed.fixture_deliveries(conn))
     return claims

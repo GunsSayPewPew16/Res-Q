@@ -41,6 +41,7 @@ from config import (
     DEMO_DONOR_HISTORY_DAYS,
     DEMO_ORDER_SEQ,
     DEMO_ORDERS,
+    FINISHED_ORDER_STATUS,
     LIVE_ORDER_STATUSES,
     METRIC_DECIMALS,
     SEED_HISTORY_DAYS,
@@ -173,6 +174,112 @@ TEST_RECIPIENT_CLAIM = {
     "days_since_last_delivery": 12,
     "claimed_hours_ago": 6.0,
 }
+
+# The kitchen the Miami book belongs to: Ortega Deli, one of the five short-log donors,
+# named here because its finished deliveries and its open ones are the fixture's own.
+TEST_KITCHEN_EMAIL = "luis@resq.test"
+
+# The three shelters Ortega Deli's deliveries run to. A donor's dashboard reads its
+# finished orders and its open deliveries off the books, and books with nothing in them
+# read as a kitchen that has never sent anything — these are the accounts on the other end
+# of the Miami kitchen's, each with a confirmed pin of its own so an order can carry both
+# ends. The pins are placed at their own measured distances from the deli's pin, the way
+# the fixture's claimants are placed from their kitchen's, rather than geocoded: a fixture
+# that moved with an address lookup would not be a fixture.
+#
+# Their needs are the two categories that kitchen produces, because a shelter nothing can
+# be delivered to is not the other end of a delivery.
+TEST_SHELTERS = (
+    {"first_name": "Ana", "last_name": "Cruz", "business_name": "Biscayne Bay Shelter",
+     "email": "ana@resq.test", "street": "1450 NE 2nd Avenue", "city": "Miami",
+     "province": "Florida", "postal": "33132",
+     "needs": ("prepared_meals", "bakery_items"), "delivery_days": ("mon", "thu"),
+     "occupancy": 180, "distance_km": 2.4, "bearing": 20},
+    {"first_name": "Ines", "last_name": "Robles", "business_name": "Overtown Community Kitchen",
+     "email": "ines@resq.test", "street": "750 NW 3rd Avenue", "city": "Miami",
+     "province": "Florida", "postal": "33136",
+     "needs": ("prepared_meals", "bakery_items"), "delivery_days": ("tue", "fri"),
+     "occupancy": 240, "distance_km": 1.6, "bearing": 200},
+    {"first_name": "Tomas", "last_name": "Padilla", "business_name": "Little Havana Food Pantry",
+     "email": "tomas@resq.test", "street": "1200 SW 8th Street", "city": "Miami",
+     "province": "Florida", "postal": "33135",
+     "needs": ("bakery_items", "prepared_meals"), "delivery_days": ("wed", "sat"),
+     "occupancy": 90, "distance_km": 3.1, "bearing": 250},
+)
+
+# The five deliveries the Miami kitchen has already run, **oldest first**: which shelter
+# each went to, under which category, and how long ago it finished — the last is what the
+# finished-orders cards date a card by, and what makes "latest" mean anything. Oldest first
+# because that is the order they happened in, which is the order every other order is filed
+# in: a live one is appended when it is proposed, so the books read as a timeline and their
+# newest-first answer is a reading of that order rather than a second one. A finished
+# delivery is an order rather than a post or a claim, because that is what a delivery that
+# has gone out *is*; each pair appears under one category only, so a second seeding cannot
+# write the same history twice.
+TEST_ORTEGA_ORDERS = (
+    {"shelter": "ines@resq.test", "category": "prepared_meals",
+     "scheduled_for": "fri", "created_days_ago": 27.0, "finished_days_ago": 26.5},
+    {"shelter": "ana@resq.test", "category": "bakery_items",
+     "scheduled_for": "mon", "created_days_ago": 19.0, "finished_days_ago": 18.6},
+    {"shelter": "tomas@resq.test", "category": "prepared_meals",
+     "scheduled_for": "sun", "created_days_ago": 12.0, "finished_days_ago": 11.6},
+    {"shelter": "ines@resq.test", "category": "bakery_items",
+     "scheduled_for": "tue", "created_days_ago": 6.5, "finished_days_ago": 6.1},
+    {"shelter": "ana@resq.test", "category": "prepared_meals",
+     "scheduled_for": "thu", "created_days_ago": 3.0, "finished_days_ago": 2.6},
+)
+
+# The three items the Miami kitchen has on the board right now, each reached for by two or
+# three shelters. This is what "more than one shelter wanted it" looks like on the books,
+# and what the rationing pass splits: every claimant is one of the shelters above, so the
+# donor's Ongoing Deliveries screen lists real shelters with real rations rather than
+# invented ones. The items are written the way a deli actually logs surplus — trays,
+# baskets and crates rather than a weight — because reading that text is the first thing
+# the pass does. The hours are hours before now, so the fixture keeps its shape whenever
+# the server is up.
+TEST_ORTEGA_DELIVERIES = (
+    {
+        "id": "6d2f0c94-1a3b-4e57-8c21-9f4b7a5e0d18",
+        "item_name": "Chef's specials and this morning's loaves",
+        "quantity": "4 trays of prepared meals and 2 baskets of bread",
+        "goods_type": "prepared_meals",
+        "posted_hours_ago": 7.0,
+        "claimants": (
+            {"shelter": "ana@resq.test", "claimed_hours_ago": 5.5,
+             "households_waiting": 180, "days_since_last_delivery": 11},
+            {"shelter": "ines@resq.test", "claimed_hours_ago": 3.0,
+             "households_waiting": 240, "days_since_last_delivery": 6},
+            {"shelter": "tomas@resq.test", "claimed_hours_ago": 1.5,
+             "households_waiting": 90, "days_since_last_delivery": 2},
+        ),
+    },
+    {
+        "id": "b48a1e77-2c69-4b0f-a5d3-7e1c9a6f3b52",
+        "item_name": "Pastry counter and cold sandwiches",
+        "quantity": "3 trays of sandwiches and 2 boxes of Danishes",
+        "goods_type": "bakery_items",
+        "posted_hours_ago": 21.0,
+        "claimants": (
+            {"shelter": "ines@resq.test", "claimed_hours_ago": 18.0,
+             "households_waiting": 240, "days_since_last_delivery": 6},
+            {"shelter": "tomas@resq.test", "claimed_hours_ago": 12.0,
+             "households_waiting": 90, "days_since_last_delivery": 2},
+        ),
+    },
+    {
+        "id": "e07c5b31-9f84-4d2a-b6c8-3a5e1d9f7c40",
+        "item_name": "Deli counter clear-out",
+        "quantity": "2 crates of salad bowls and a tray of roast chicken",
+        "goods_type": "prepared_meals",
+        "posted_hours_ago": 30.0,
+        "claimants": (
+            {"shelter": "ana@resq.test", "claimed_hours_ago": 28.0,
+             "households_waiting": 180, "days_since_last_delivery": 11},
+            {"shelter": "ines@resq.test", "claimed_hours_ago": 25.5,
+             "households_waiting": 240, "days_since_last_delivery": 6},
+        ),
+    },
+)
 
 # The other two shelters on the post. They exist only for this one claim, to give the split
 # something to split: each sits its own distance from the donor's pin — measured from that
@@ -688,6 +795,156 @@ def donor_log_entries(donor, days):
     return entries
 
 
+def fixture_shelters():
+    """The three shelters on Ortega Deli's books, each with its pin placed off the deli's."""
+    donor = next(donor for donor in TEST_DONORS if donor["email"] == TEST_KITCHEN_EMAIL)
+    shelters = []
+    for spec in TEST_SHELTERS:
+        lat, lng = offset_point(donor["lat"], donor["lng"],
+                                spec["distance_km"], spec["bearing"])
+        shelters.append(dict(spec, lat=lat, lng=lng))
+    return shelters
+
+
+def is_miami_kitchen(caller, conn=None):
+    """Whether this account is the fixture's Miami kitchen, Ortega Deli.
+
+    Its three open deliveries are demo data with demo shelters on them, so a rationing
+    pass reads them only for an account they were written for: that kitchen's own, or one
+    of the shelters that claimed them. Anybody else's pass reads the claims the board
+    really has, which is what keeps the fixture out of a run that has claims of its own.
+    """
+    email = clean_email((caller or {}).get("email"))
+    if not email or email != clean_email(TEST_KITCHEN_EMAIL):
+        return False
+    return test_account(email, conn) is not None
+
+
+def is_miami_shelter(caller, conn=None):
+    """Whether this account is one of the three shelters on the fixture kitchen's books.
+
+    A shelter that is one of them reads the same three deliveries the kitchen does — the
+    pass needs every claimant of a post to split it — and its own ration is what comes
+    back, because a pass narrows its answer to the account that asked.
+    """
+    email = clean_email((caller or {}).get("email"))
+    if not email:
+        return False
+    if not any(clean_email(spec["email"]) == email for spec in TEST_SHELTERS):
+        return False
+    return test_account(email, conn) is not None
+
+
+def fixture_deliveries(conn=None, now=None):
+    """The fixture's three open deliveries, as the claims a rationing pass reads.
+
+    Each is one of Ortega Deli's items with the two or three shelters that reached for it,
+    written in exactly the shape a recorded claim is read in — which is what makes the
+    donor's Ongoing Deliveries screen a reading of the pass rather than of itself. Returns
+    an empty list when the kitchen or the shelters are not there, which is every run that
+    seeded nothing.
+    """
+    donor = test_account(TEST_KITCHEN_EMAIL, conn)
+    if donor is None:
+        return []
+    donor_lat = donor.get("delivery_lat")
+    donor_lng = donor.get("delivery_lng")
+    if donor_lat is None or donor_lng is None:
+        return []
+
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    claims = []
+    for spec in TEST_ORTEGA_DELIVERIES:
+        post = {
+            "id": spec["id"],
+            "donor_name": donor.get("business_name"),
+            "item_name": spec["item_name"],
+            "quantity": spec["quantity"],
+            "location": donor.get("delivery_address") or account_address(donor),
+            "goods_type": spec["goods_type"],
+            "created_at": fixture_time(spec["posted_hours_ago"], now),
+        }
+        for claimant in spec["claimants"]:
+            shelter = test_account(claimant["shelter"], conn)
+            if shelter is None:
+                continue
+            claims.append(fixture_claim(post, shelter, claimant, donor_lat, donor_lng, now))
+    return claims
+
+
+def seed_ortega_orders(conn=None, now=None):
+    """Put the Miami kitchen's five finished deliveries on the books, unless they are there.
+
+    Returns the ids it wrote, oldest first. A pair already carrying a finished order under
+    the same category is left alone, so a second seeding adds nothing: a kitchen's history
+    is a record, and a record does not change because a seed ran again.
+    """
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    donor = test_account(TEST_KITCHEN_EMAIL, conn)
+    if donor is None:
+        return []
+
+    written = []
+    for spec in TEST_ORTEGA_ORDERS:
+        recipient = test_account(spec["shelter"], conn)
+        if recipient is None:
+            continue
+        category = spec["category"]
+        created_at = (now - datetime.timedelta(days=spec["created_days_ago"])) \
+            .strftime("%Y-%m-%d %H:%M:%S")
+        completed_at = (now - datetime.timedelta(days=spec["finished_days_ago"])) \
+            .strftime("%Y-%m-%d %H:%M:%S")
+        distance = round(haversine_km(
+            float(donor["delivery_lat"]), float(donor["delivery_lng"]),
+            float(recipient["delivery_lat"]), float(recipient["delivery_lng"]),
+        ), METRIC_DECIMALS)
+
+        if conn is None:
+            pair = {account_key(donor), account_key(recipient)}
+            already = any(
+                entry["order"]["category"] == category
+                and entry["order"]["status"] == FINISHED_ORDER_STATUS
+                and demo_order_pair(entry) == pair
+                for entry in DEMO_ORDERS
+            )
+            if already:
+                continue
+            stored = order_row(next(DEMO_ORDER_SEQ), donor, recipient, category,
+                               spec["scheduled_for"], distance, created_at,
+                               status=FINISHED_ORDER_STATUS, completed_at=completed_at)
+            order = order_payload(stored, donor, recipient)
+            remember_demo_order(order, donor, recipient)
+            written.append(order["id"])
+            continue
+
+        existing = conn.execute(
+            "SELECT id FROM orders WHERE donor_id = ? AND recipient_id = ?"
+            " AND category = ? AND status = ?",
+            (donor["id"], recipient["id"], category, FINISHED_ORDER_STATUS),
+        ).fetchone()
+        if existing:
+            continue
+        cursor = conn.execute(
+            """INSERT INTO orders (
+                   donor_id, recipient_id, category, status, scheduled_for,
+                   pickup_address, pickup_lat, pickup_lng,
+                   dropoff_address, dropoff_lat, dropoff_lng, distance_km,
+                   created_at, completed_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                donor["id"], recipient["id"], category, FINISHED_ORDER_STATUS,
+                spec["scheduled_for"],
+                donor.get("delivery_address"), donor["delivery_lat"], donor["delivery_lng"],
+                recipient.get("delivery_address"), recipient["delivery_lat"],
+                recipient["delivery_lng"],
+                distance, created_at, completed_at,
+            ),
+        )
+        conn.commit()
+        written.append(cursor.lastrowid)
+    return written
+
+
 def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
     """Create the fixture's accounts, their logs and their one delivery, as far as they are
     not there already.
@@ -743,9 +1000,24 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
         # report adds up to the accounts that are there.
         skipped.append(TEST_RECIPIENT["email"])
 
+    # The Miami kitchen's own books: the three shelters its deliveries run to, and the five
+    # deliveries that have already gone out to them. Written last, because the orders need
+    # both a kitchen and a shelter to run between.
+    shelters_created = []
+    for shelter in fixture_shelters():
+        account = (remember_recipient(shelter) if conn is None
+                   else store_recipient(conn, shelter))
+        if account is None:
+            skipped.append(shelter["email"])
+        else:
+            shelters_created.append(shelter["email"])
+
     return {
         "created": created,
         "recipient_created": TEST_RECIPIENT["email"] if recipient else None,
+        "shelters_created": shelters_created,
+        "orders_written": seed_ortega_orders(conn),
+        "orders_for": TEST_KITCHEN_EMAIL,
         "skipped": skipped,
         "days_written": days_written,
         "log_written": log_written,

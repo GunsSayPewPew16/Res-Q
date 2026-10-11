@@ -2249,6 +2249,18 @@ def prepare_state():
             % seed_report["log_written"],
             flush=True,
         )
+    if seed_report["shelters_created"]:
+        print(
+            "  Miami book: %d shelters created for %s"
+            % (len(seed_report["shelters_created"]), seed_report["orders_for"]),
+            flush=True,
+        )
+    if seed_report["orders_written"]:
+        print(
+            "  deliveries: %d finished orders written for %s"
+            % (len(seed_report["orders_written"]), seed_report["orders_for"]),
+            flush=True,
+        )
     if seed_report["delivery"] is not None:
         print(
             "  delivery: order %s accepted, %s to %s"

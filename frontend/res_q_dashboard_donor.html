@@ -763,53 +763,22 @@
 
                 </div>
 
-                <!-- What has already gone out: one card per finished order, oldest first. Empty
-                     until an order finishes, so the cards hold their shape and nothing else. -->
+                <!-- What has already gone out: one card per finished delivery, read from the
+                     books' own completed orders, newest first — the five the Miami kitchen has
+                     run among them. Empty until an order finishes, which is why the frame
+                     opens on a line saying so rather than on invented cards. -->
                 <section class="space-y-4">
                     <div class="flex flex-wrap items-end justify-between gap-4">
                         <h2 class="font-display text-2xl md:text-3xl leading-none">Latest completed orders</h2>
                         <div class="flex items-center gap-3">
+                            <span id="completedState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] bg-[#051F20] organic-chip px-2.5 py-1">idle</span>
                             <span class="text-xs text-[#8EB69B]">Sort by</span>
                             <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">Newest <span aria-hidden="true" class="text-[8px]">&#9660;</span></span>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                        <article class="panel panel-lift p-5 flex flex-col gap-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <span class="h-3 w-28 organic-chip bg-[#235347]"></span>
-                                <span class="w-8 h-8 organic-chip panel-raised"></span>
-                            </div>
-                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
-                            <div class="pt-3 border-t border-[#235347] space-y-2">
-                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
-                                <span class="block h-2 w-2/3 organic-chip bg-[#163832]"></span>
-                            </div>
-                        </article>
-
-                        <article class="panel panel-lift p-5 flex flex-col gap-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <span class="h-3 w-32 organic-chip bg-[#235347]"></span>
-                                <span class="w-8 h-8 organic-chip panel-raised"></span>
-                            </div>
-                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
-                            <div class="pt-3 border-t border-[#235347] space-y-2">
-                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
-                                <span class="block h-2 w-1/2 organic-chip bg-[#163832]"></span>
-                            </div>
-                        </article>
-
-                        <article class="panel panel-lift p-5 flex flex-col gap-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <span class="h-3 w-24 organic-chip bg-[#235347]"></span>
-                                <span class="w-8 h-8 organic-chip panel-raised"></span>
-                            </div>
-                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
-                            <div class="pt-3 border-t border-[#235347] space-y-2">
-                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
-                                <span class="block h-2 w-3/4 organic-chip bg-[#163832]"></span>
-                            </div>
-                        </article>
+                    <div id="completedOrdersList" class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                        <span class="col-span-full block text-sm text-[#8EB69B]">No delivery has finished yet. One appears here the moment it has.</span>
                     </div>
                 </section>
 
@@ -1923,6 +1892,9 @@
             // donor — a map that was built while it was off screen was built at no size.
             watchOrderRoute();
             if (orderRouteMap) { orderRouteMap.resize(); paintOrderRoute(); }
+            // The finished deliveries are the books' own rows rather than the board's, so
+            // they are read from the API beside the board rather than watched on it.
+            loadCompletedOrders();
             if (!db) { return; }
             if (!ordersWatch) {
                 ordersWatch = db.watchPosts(function () { refreshMySurplus(); });
@@ -1951,6 +1923,131 @@
                 ordersClaimWatch();
                 ordersClaimWatch = null;
             }
+        }
+
+        // ---------------------------------------------------------------------------
+        // Finished deliveries: the orders that have already gone out, read from the books
+        // (`GET /api/orders`, narrowed to this side and to the finished ones). They are the
+        // cards under the working board, newest first, which is the only order the heading's
+        // own "sort by newest" claims. A delivery that has not finished is not a card here:
+        // it is still on the board above, or in the ongoing deliveries beside it.
+        // ---------------------------------------------------------------------------
+        var COMPLETED_SHOWN = 6;
+        var completedData = null;
+
+        function completedList() {
+            return document.getElementById('completedOrdersList');
+        }
+
+        function completedWhen(order) {
+            var db = resqDb();
+            var stamp = order.completed_at || order.created_at;
+            var text = db ? db.formatWhen(stamp) : String(stamp || '');
+            // A finished delivery reads better as a date than as an age: "12 d ago" is right
+            // for a board a minute old, and a delivery that went out a fortnight ago is a
+            // line on a record.
+            var when = new Date(stamp);
+            if (!isNaN(when.getTime())) {
+                text = when.toLocaleDateString('en-US',
+                    { day: 'numeric', month: 'short', year: 'numeric' });
+            }
+            return text;
+        }
+
+        function completedCard(order) {
+            var db = resqDb();
+            var type = db ? db.goodsType(order.category) : null;
+            var to = order.recipient || {};
+            return '<article class="panel panel-lift p-5 flex flex-col gap-4">' +
+                '<div class="flex items-start justify-between gap-3">' +
+                    '<span class="inline-flex items-center gap-1.5 h-6 px-3 organic-chip ' +
+                        'bg-[#051F20] border border-[#235347] text-[10px] uppercase ' +
+                        'tracking-[0.18em] text-[#8EB69B]">' +
+                        (type ? '<span aria-hidden="true">' + type.emoji + '</span>' + type.label
+                              : 'uncategorised') +
+                    '</span>' +
+                    '<span class="w-8 h-8 organic-chip panel-raised flex items-center justify-center ' +
+                        'text-[10px] text-[#DAF1DE]" aria-hidden="true">' +
+                        initialsOf(to.name || '') +
+                    '</span>' +
+                '</div>' +
+                '<span class="flex items-center gap-2 text-xs text-[#8EB69B]">' +
+                    '<span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed' +
+                '</span>' +
+                '<div class="pt-3 border-t border-[#235347] space-y-2">' +
+                    '<span class="block text-sm text-[#DAF1DE]">' +
+                        surplusText(to.name || 'a shelter') + '</span>' +
+                    '<span class="block text-[11px] text-[#8EB69B]">' +
+                        surplusText(completedWhen(order)) +
+                        (order.distance_km !== null && order.distance_km !== undefined
+                            ? ' &#183; ' + surplusText(order.distance_km) + ' km' : '') +
+                        (to.address ? ' &#183; ' + surplusText(to.address) : '') +
+                    '</span>' +
+                '</div>' +
+            '</article>';
+        }
+
+        function renderCompletedOrders(orders, message) {
+            var list = completedList();
+            if (!list) { return; }
+            if (!orders) {
+                list.innerHTML = '<span class="col-span-full block text-sm text-[#8EB69B]">'
+                    + surplusText(message) + '</span>';
+                return;
+            }
+            if (!orders.length) {
+                list.innerHTML = '<span class="col-span-full block text-sm text-[#8EB69B]">'
+                    + 'No delivery has finished yet. One appears here the moment it has.'
+                    + '</span>';
+                return;
+            }
+            list.innerHTML = orders.map(completedCard).join('');
+        }
+
+        function loadCompletedOrders() {
+            var token = readStore(TOKEN_KEY);
+            if (!token || !completedList()) { return null; }
+            setChip('completedState', 'reading\u2026', CHIP_BUSY);
+            return fetch(apiUrl('/api/orders'), {
+                headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200 || !res.data) {
+                        setChip('completedState', 'unreachable', CHIP_BUSY);
+                        renderCompletedOrders(null,
+                            'The finished deliveries could not be read. Open the dashboard again to retry.');
+                        return;
+                    }
+                    var orders = res.data.orders || [];
+                    var finished = orders.filter(function (order) {
+                        return order.viewer_side === 'donor' && order.status === 'completed';
+                    });
+                    // Newest first by the moment each one finished, which is the order the
+                    // heading's own "sort by newest" claims: the API answers newest first
+                    // already, and reading the date here keeps that true whatever order a
+                    // mode happened to hand them over in.
+                    finished.sort(function (left, right) {
+                        var one = String(left.completed_at || left.created_at || '');
+                        var two = String(right.completed_at || right.created_at || '');
+                        if (one === two) { return Number(right.id) - Number(left.id); }
+                        return one < two ? 1 : -1;
+                    });
+                    completedData = finished;
+                    setChip('completedState',
+                        finished.length ? finished.length + ' completed' : 'none yet',
+                        finished.length ? CHIP_DONE : CHIP_IDLE);
+                    renderCompletedOrders(finished.slice(0, COMPLETED_SHOWN), '');
+                })
+                .catch(function () {
+                    setChip('completedState', 'unreachable', CHIP_BUSY);
+                    renderCompletedOrders(null,
+                        'The finished deliveries could not be read. Open the dashboard again to retry.');
+                });
         }
 
         // ---------------------------------------------------------------------------

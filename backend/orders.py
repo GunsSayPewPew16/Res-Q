@@ -14,14 +14,20 @@ from config import DEMO_ORDERS, METRIC_DECIMALS
 from helpers import account_key, display_name
 
 
-def order_row(order_id, donor, recipient, category, scheduled_for, distance_km, created_at):
-    """One order in the shape it is stored in, so both modes hand back the same thing."""
+def order_row(order_id, donor, recipient, category, scheduled_for, distance_km, created_at,
+              status="proposed", completed_at=None):
+    """One order in the shape it is stored in, so both modes hand back the same thing.
+
+    A proposed order is the default and the only status a live one reaches; the two
+    keyword arguments are what a *finished* delivery is written with — a status, and the
+    moment it finished — and are how the fixture's completed history is filed.
+    """
     return {
         "id": order_id,
         "donor_id": donor["id"],
         "recipient_id": recipient["id"],
         "category": category,
-        "status": "proposed",
+        "status": status,
         "scheduled_for": scheduled_for,
         "pickup_address": donor.get("delivery_address"),
         "pickup_lat": donor.get("delivery_lat"),
@@ -31,6 +37,7 @@ def order_row(order_id, donor, recipient, category, scheduled_for, distance_km, 
         "dropoff_lng": recipient.get("delivery_lng"),
         "distance_km": distance_km,
         "created_at": created_at,
+        "completed_at": completed_at,
     }
 
 
@@ -55,6 +62,9 @@ def order_payload(order, donor, recipient, viewer_side=None):
         "distance_km": (round(float(distance), METRIC_DECIMALS)
                         if distance is not None else None),
         "created_at": order["created_at"],
+        # Present and null on an order still on its way; a moment on one that has finished,
+        # which is the date the dashboard's finished cards read a card by.
+        "completed_at": order.get("completed_at"),
         "donor": {
             "user_id": order["donor_id"],
             "name": display_name(donor),
