@@ -1,8 +1,11 @@
-"""Res-Q backend test donors.
+"""Res-Q backend test accounts.
 
 Five kitchens with six weeks of surplus history each, so the calculator the analyser
 screen is built on can be exercised against a real past instead of its own defaults: what
 each kitchen served, what the sky over it was, and how much surplus came out of the day.
+Beside them sits the other end of a delivery — one recipient with a confirmed pin of its
+own, and one delivery already on the books between it and a kitchen, so the recipient's
+console has an order to read and a route to draw rather than an empty frame.
 
 The fixture is built to be *readable*, not just plentiful:
 
@@ -28,13 +31,24 @@ import json
 import random
 
 from accounts import seed_donor_metrics
-from config import DEMO_ACCOUNTS, SEED_HISTORY_DAYS
-from helpers import clean_email
+from config import (
+    DEMO_ACCOUNTS,
+    DEMO_ORDER_SEQ,
+    DEMO_ORDERS,
+    LIVE_ORDER_STATUSES,
+    METRIC_DECIMALS,
+    SEED_HISTORY_DAYS,
+)
+from geo import haversine_km
+from helpers import account_key, clean_email
 from history import write_history
+from orders import demo_order_pair, order_payload, order_row, remember_demo_order
 from security import hash_password
 from weather import WeatherUnavailable, fetch_archive
 
-TEST_DONOR_PASSWORD = "ResqDemo1!"
+# One password for every fixture account, donors and the recipient alike: these are demo
+# accounts, and the README names them so anyone can sign in and look around.
+TEST_PASSWORD = "ResqDemo1!"
 
 # The fixture's own five kitchens. The coordinates are pinned rather than geocoded: they
 # are what the archive is asked about and what a delivery pin would be confirmed at, and
@@ -78,10 +92,36 @@ SURPLUS_PER_CUSTOMER = 0.15
 SURPLUS_NOISE_KG = 2.5
 
 
-def donor_address(donor):
-    """A donor's one-line address, the way the delivery card writes one."""
+# The other side of the board: the one recipient in the fixture, with a confirmed pin of
+# its own downtown and a couple of days it will take a delivery on. Its needs are the two
+# of the six categories a recipient may ask for that a kitchen in the fixture also
+# produces, which is what makes the seeded delivery a real pair rather than two pins with
+# nothing in common.
+TEST_RECIPIENT = {
+    "first_name": "Noor", "last_name": "Abadi", "business_name": "Fort York Food Bank",
+    "email": "noor@resq.test", "street": "40 Fort York Boulevard", "city": "Toronto",
+    "province": "Ontario", "postal": "M5V 3Z3",
+    "needs": ("packaged_goods", "fresh_produce"),
+    "delivery_days": ("tue", "thu"),
+    "lat": 43.6386, "lng": -79.4005,
+}
+
+# The delivery already on the books when the server comes up: the bakery two and a half
+# kilometres from the food bank, its packaged goods, on one of the days the food bank
+# asked for. It is *accepted* rather than proposed, because it stands for a delivery that
+# has been agreed — which is the state a recipient's console draws the route for.
+TEST_DELIVERY = {
+    "donor_email": "dana@resq.test",
+    "category": "packaged_goods",
+    "scheduled_for": "thu",
+}
+
+
+def account_address(person):
+    """One account's address on a single line, the way the delivery card writes one."""
     return ", ".join(part for part in
-                     (donor["street"], donor["city"], donor["province"], donor["postal"]) if part)
+                     (person["street"], person["city"], person["province"], person["postal"])
+                     if part)
 
 
 def archived_weather(donor, start, end):
@@ -189,7 +229,7 @@ def donor_profile(donor, metrics=None):
         "firm_type": donor.get("firm_type"),
         "delivery_days": [],
         "surplus_types": list(donor["surplus_types"]),
-        "delivery_address": donor_address(donor),
+        "delivery_address": account_address(donor),
         "delivery_lat": donor["lat"],
         "delivery_lng": donor["lng"],
         "delivery_confirmed_at": datetime.datetime.now(
@@ -200,25 +240,73 @@ def donor_profile(donor, metrics=None):
     return profile
 
 
-def remember_donor(donor, metrics=None):
-    """Put a test donor in the demo account store under its email, once."""
-    key = clean_email(donor["email"])
+def recipient_profile(recipient):
+    """The account dict the fixture's recipient signs in as, in the shape the dashboards read.
+
+    A *working* recipient rather than one to be walked through onboarding: the goods it
+    asks for, the days it will take a delivery on, and a confirmed pin at its own address,
+    which is the pin a delivery is run against. It carries none of the impact figures,
+    because those are the donor's own record and a recipient has no such record.
+    """
+    return {
+        "id": 0,
+        "role": "recipient",
+        "first_name": recipient["first_name"],
+        "last_name": recipient["last_name"],
+        "business_name": recipient["business_name"],
+        "email": recipient["email"],
+        "phone": None,
+        "dial_code": None,
+        "street": recipient["street"],
+        "sub_locality": None,
+        "locality": None,
+        "province": recipient["province"],
+        "city": recipient["city"],
+        "postal": recipient["postal"],
+        "firm_type": None,
+        "delivery_days": list(recipient["delivery_days"]),
+        "surplus_types": list(recipient["needs"]),
+        "delivery_address": account_address(recipient),
+        "delivery_lat": recipient["lat"],
+        "delivery_lng": recipient["lng"],
+        "delivery_confirmed_at": datetime.datetime.now(
+            datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "demo": True,
+    }
+
+
+def remember_profile(profile):
+    """Put one fixture account in the demo account store under its email, once."""
+    key = clean_email(profile["email"])
     if key in DEMO_ACCOUNTS:
         return None
-    profile = donor_profile(donor, metrics)
     DEMO_ACCOUNTS[key] = profile
     return profile
 
 
-def store_donor(conn, donor, metrics=None):
-    """Write a test donor into the users table, unless that email is already registered."""
+def remember_donor(donor, metrics=None):
+    """The same for a test donor."""
+    return remember_profile(donor_profile(donor, metrics))
+
+
+def remember_recipient(recipient):
+    """The same for the fixture's recipient."""
+    return remember_profile(recipient_profile(recipient))
+
+
+def store_profile(conn, profile):
+    """Write one fixture account into the users table, unless that email is registered.
+
+    The row is built from the profile the account signs in with, so a stored account and a
+    demo one answer with the same things. The last three columns are the donor's impact
+    figures, which are NULL on the recipient: it has no such record.
+    """
     existing = conn.execute(
-        "SELECT id FROM users WHERE email = ?", (donor["email"],)
+        "SELECT id FROM users WHERE email = ?", (profile["email"],)
     ).fetchone()
     if existing:
         return None
-    digest, salt = hash_password(TEST_DONOR_PASSWORD)
-    profile = donor_profile(donor, metrics)
+    digest, salt = hash_password(TEST_PASSWORD)
     cursor = conn.execute(
         """INSERT INTO users (
                role, first_name, last_name, business_name, email, phone, dial_code,
@@ -228,31 +316,31 @@ def store_donor(conn, donor, metrics=None):
                surplus_saved, meals_served, orders_completed
            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            "donor",
-            donor["first_name"],
-            donor["last_name"],
-            donor["business_name"],
-            donor["email"],
-            None,
-            None,
-            donor["street"],
-            None,
-            None,
-            donor["province"],
-            donor["city"],
-            donor["postal"],
+            profile["role"],
+            profile["first_name"],
+            profile["last_name"],
+            profile.get("business_name"),
+            profile["email"],
+            profile.get("phone"),
+            profile.get("dial_code"),
+            profile.get("street"),
+            profile.get("sub_locality"),
+            profile.get("locality"),
+            profile.get("province"),
+            profile.get("city"),
+            profile.get("postal"),
             digest,
             salt,
-            donor.get("firm_type"),
-            json.dumps(profile["delivery_days"]),
-            json.dumps(profile["surplus_types"]),
-            profile["delivery_address"],
-            profile["delivery_lat"],
-            profile["delivery_lng"],
-            profile["delivery_confirmed_at"],
-            profile["surplus_saved"],
-            profile["meals_served"],
-            profile["orders_completed"],
+            profile.get("firm_type"),
+            json.dumps(profile.get("delivery_days") or []),
+            json.dumps(profile.get("surplus_types") or []),
+            profile.get("delivery_address"),
+            profile.get("delivery_lat"),
+            profile.get("delivery_lng"),
+            profile.get("delivery_confirmed_at"),
+            profile.get("surplus_saved"),
+            profile.get("meals_served"),
+            profile.get("orders_completed"),
         ),
     )
     conn.commit()
@@ -261,13 +349,107 @@ def store_donor(conn, donor, metrics=None):
     return stored
 
 
-def seed_test_donors(conn=None, days=SEED_HISTORY_DAYS, today=None):
-    """Create the five test donors and their logs, as far as they are not there already.
+def store_donor(conn, donor, metrics=None):
+    """Write a test donor into the users table, unless that email is already registered."""
+    return store_profile(conn, donor_profile(donor, metrics))
 
-    Returns what it did: which donors were created, which were already registered, how
-    many days were written and where the weather came from. Called once at startup in demo
-    mode and with `RESQ_SEED=on` in persistent mode, and safe to call again — a donor that
-    exists is skipped and a day already logged is left alone.
+
+def store_recipient(conn, recipient):
+    """The same for the fixture's recipient."""
+    return store_profile(conn, recipient_profile(recipient))
+
+
+def test_account(email, conn=None):
+    """One fixture account by email: out of the demo store, or out of the users table."""
+    key = clean_email(email)
+    if conn is None:
+        return DEMO_ACCOUNTS.get(key)
+    row = conn.execute("SELECT * FROM users WHERE email = ?", (key,)).fetchone()
+    return dict(row) if row else None
+
+
+def seed_delivery(conn=None):
+    """Put the one agreed delivery on the books, unless it is already there.
+
+    Returns the order's id, or None when that pair and category already had a live one, or
+    when either side of it is not in the fixture. Both ends are found by email — from the
+    demo store or from the users table — which is the same way a signed-in account finds
+    its own deliveries, so a delivery seeded here is one the recipient really can read.
+    """
+    donor = test_account(TEST_DELIVERY["donor_email"], conn)
+    recipient = test_account(TEST_RECIPIENT["email"], conn)
+    if donor is None or recipient is None:
+        return None
+
+    category = TEST_DELIVERY["category"]
+    if conn is None:
+        pair = {account_key(donor), account_key(recipient)}
+        for entry in DEMO_ORDERS:
+            if (entry["order"]["category"] == category
+                    and entry["order"]["status"] in LIVE_ORDER_STATUSES
+                    and demo_order_pair(entry) == pair):
+                return None
+    else:
+        existing = conn.execute(
+            "SELECT id FROM orders WHERE donor_id = ? AND recipient_id = ? AND category = ?"
+            " AND status IN (%s)" % ", ".join("?" * len(LIVE_ORDER_STATUSES)),
+            (donor["id"], recipient["id"], category) + LIVE_ORDER_STATUSES,
+        ).fetchone()
+        if existing:
+            return None
+
+    distance = round(haversine_km(
+        float(donor["delivery_lat"]), float(donor["delivery_lng"]),
+        float(recipient["delivery_lat"]), float(recipient["delivery_lng"]),
+    ), METRIC_DECIMALS)
+    created_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    if conn is None:
+        stored = order_row(
+            next(DEMO_ORDER_SEQ), donor, recipient, category,
+            TEST_DELIVERY["scheduled_for"], distance, created_at,
+        )
+        # Agreed rather than proposed: the fixture stands for a delivery that has been
+        # settled between the two, which is the state a console draws a route for.
+        stored["status"] = "accepted"
+        order = order_payload(stored, donor, recipient)
+        remember_demo_order(order, donor, recipient)
+        return order["id"]
+
+    cursor = conn.execute(
+        """INSERT INTO orders (
+               donor_id, recipient_id, category, status, scheduled_for,
+               pickup_address, pickup_lat, pickup_lng,
+               dropoff_address, dropoff_lat, dropoff_lng, distance_km, created_at
+           ) VALUES (?, ?, ?, 'accepted', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            donor["id"],
+            recipient["id"],
+            category,
+            TEST_DELIVERY["scheduled_for"],
+            donor.get("delivery_address"),
+            donor["delivery_lat"],
+            donor["delivery_lng"],
+            recipient.get("delivery_address"),
+            recipient["delivery_lat"],
+            recipient["delivery_lng"],
+            distance,
+            created_at,
+        ),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
+    """Create the fixture's accounts, their logs and their one delivery, as far as they are
+    not there already.
+
+    Returns what it did: which accounts were created, which were already registered, how
+    many days were written, where the weather came from and whether the agreed delivery
+    had to be written. Called once at startup in demo mode and with `RESQ_SEED=on` in
+    persistent mode, and safe to call again — an account that exists is skipped, a day
+    already logged is left alone, and a delivery already on the books is not doubled.
     """
     today = today or datetime.date.today()
     created = []
@@ -293,23 +475,37 @@ def seed_test_donors(conn=None, days=SEED_HISTORY_DAYS, today=None):
         created.append(donor["email"])
         days_written += write_history(rows, account, conn)
 
+    # The other side of the board, and the one delivery between the two. The recipient is
+    # written after the donors: the delivery needs a kitchen to run from, and that kitchen
+    # is one of them.
+    recipient = (remember_recipient(TEST_RECIPIENT) if conn is None
+                 else store_recipient(conn, TEST_RECIPIENT))
+    if recipient is None:
+        # Already registered, counted the way a donor already registered is counted, so the
+        # report adds up to the accounts that are there.
+        skipped.append(TEST_RECIPIENT["email"])
+
     return {
         "created": created,
+        "recipient_created": TEST_RECIPIENT["email"] if recipient else None,
         "skipped": skipped,
         "days_written": days_written,
+        "delivery": seed_delivery(conn),
+        "delivery_from": TEST_DELIVERY["donor_email"],
+        "delivery_to": TEST_RECIPIENT["email"],
         "weather_from_archive": archived,
         "weather_from_pattern": patterned,
-        "password": TEST_DONOR_PASSWORD,
+        "password": TEST_PASSWORD,
     }
 
 
-def describe_test_donors():
-    """The test donors as the README lists them: who they are and where they are."""
+def describe_test_accounts():
+    """The fixture accounts as the README lists them: who they are and where they are."""
     return [
         {
             "email": donor["email"],
             "business": donor["business_name"],
-            "address": donor_address(donor),
+            "address": account_address(donor),
             "customers_per_day": donor["customers"],
         }
         for donor in TEST_DONORS

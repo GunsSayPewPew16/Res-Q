@@ -38,7 +38,13 @@ DEMO_ACCOUNTS = {}
 
 # Demo orders belong to a session token the way the sessions themselves do, and go when
 # the process does. The counter hands out ids that look like the persistent ones.
-DEMO_ORDERS = {}
+# The delivery orders a demo run is holding, newest last. One list for the process rather
+# than one per session: an order belongs to the two accounts on it, not to whichever of
+# them happened to propose it, so the other side has to be able to read it back. In demo
+# mode every account carries id 0 — there is no table to tell two of them apart by — so
+# each stored order records the contact of each side beside the ids, which is what those
+# two accounts are found by. With persistence on the same rows are the table's own.
+DEMO_ORDERS = []
 
 DEMO_ORDER_SEQ = count(1)
 

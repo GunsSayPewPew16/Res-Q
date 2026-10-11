@@ -116,6 +116,7 @@ from db import connect, init_db, users_by_ids
 from geo import bounding_box, haversine_km, offset_point
 from history import as_day, features_from_history, history_summary, read_history
 from helpers import (
+    account_key,
     clean_email,
     clean_id,
     clean_phone,
@@ -128,8 +129,14 @@ from helpers import (
     query_number,
 )
 from matching import routing_problem, shared_categories
-from orders import order_row
-from seed import seed_test_donors
+from orders import (
+    demo_order_pair,
+    demo_order_side,
+    order_payload,
+    order_row,
+    remember_demo_order,
+)
+from seed import seed_test_accounts
 from security import hash_password, verify_password
 from surplus import forecast_surplus, train_surplus_model
 from weather import WeatherUnavailable, fetch_outlook, fetch_weather
@@ -1066,7 +1073,17 @@ class ResQHandler(SimpleHTTPRequestHandler):
                         "code": "no_session",
                     },
                 )
-            orders = list(reversed(DEMO_ORDERS.get(token, [])))
+            # An order belongs to the two accounts on it, not to the session that proposed
+            # it, so it is found by those accounts rather than by the token that created it.
+            mine = account_key(DEMO_SESSIONS[token])
+            orders = []
+            for entry in reversed(DEMO_ORDERS):
+                side = demo_order_side(entry, mine)
+                if side is None:
+                    continue
+                order = dict(entry["order"])
+                order["viewer_side"] = side
+                orders.append(order)
             return self.send_json(
                 200, {"ok": True, "demo": True, "count": len(orders), "orders": orders}
             )
@@ -1091,8 +1108,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                            + [order["recipient_id"] for order in rows])
             people = users_by_ids(conn, account_ids)
             orders = [
-                self.order_payload(dict(order), people.get(order["donor_id"]),
-                                   people.get(order["recipient_id"]))
+                order_payload(dict(order), people.get(order["donor_id"]),
+                              people.get(order["recipient_id"]),
+                              "donor" if order["donor_id"] == me["id"] else "recipient")
                 for order in rows
             ]
 
@@ -1257,12 +1275,15 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 ).fetchone()
             open_order = open_row["id"] if open_row else None
         else:
+            # The same pair and category, judged by the two accounts rather than by the
+            # ids they would carry in a table: every demo account's id is 0, so a pair of
+            # them is nothing to compare against.
+            pair = {account_key(me), account_key(peer)}
             open_order = next(
-                (order["id"] for order in DEMO_ORDERS.get(token, [])
-                 if order["category"] == category
-                 and order["status"] in LIVE_ORDER_STATUSES
-                 and {order["donor"]["user_id"], order["recipient"]["user_id"]}
-                 == {me["id"], peer["id"]}),
+                (entry["order"]["id"] for entry in DEMO_ORDERS
+                 if entry["order"]["category"] == category
+                 and entry["order"]["status"] in LIVE_ORDER_STATUSES
+                 and demo_order_pair(entry) == pair),
                 None,
             )
         if open_order is not None:
@@ -1280,8 +1301,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 next(DEMO_ORDER_SEQ), donor, recipient, category, scheduled_for, distance,
                 datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             )
-            order = self.order_payload(stored, donor, recipient)
-            DEMO_ORDERS.setdefault(token, []).append(order)
+            order = order_payload(
+                stored, donor, recipient,
+                "donor" if me.get("role") == "donor" else "recipient",
+            )
+            remember_demo_order(order, donor, recipient)
             return self.send_json(201, {"ok": True, "demo": True, "order": order})
 
         with connect() as conn:
@@ -1309,35 +1333,15 @@ class ResQHandler(SimpleHTTPRequestHandler):
             conn.commit()
             stored = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
         return self.send_json(
-            201, {"ok": True, "order": self.order_payload(dict(stored), donor, recipient)}
+            201,
+            {
+                "ok": True,
+                "order": order_payload(
+                    dict(stored), donor, recipient,
+                    "donor" if me.get("role") == "donor" else "recipient",
+                ),
+            },
         )
-
-    def order_payload(self, order, donor, recipient):
-        """One order as a dashboard reads it: who is on each side, and where."""
-        distance = order.get("distance_km")
-        return {
-            "id": order["id"],
-            "status": order["status"],
-            "category": order["category"],
-            "scheduled_for": order["scheduled_for"],
-            "distance_km": (round(float(distance), METRIC_DECIMALS)
-                            if distance is not None else None),
-            "created_at": order["created_at"],
-            "donor": {
-                "user_id": order["donor_id"],
-                "name": display_name(donor),
-                "address": order["pickup_address"],
-                "lat": order["pickup_lat"],
-                "lng": order["pickup_lng"],
-            },
-            "recipient": {
-                "user_id": order["recipient_id"],
-                "name": display_name(recipient),
-                "address": order["dropoff_address"],
-                "lat": order["dropoff_lat"],
-                "lng": order["dropoff_lng"],
-            },
-        }
 
     # ------------------------------------------------------------------ dev helper
     def api_switch_role(self):
@@ -1601,24 +1605,37 @@ def prepare_state():
     # to the tables, which is why the connection is opened only for it.
     if PERSIST:
         with connect() as seeded:
-            seed_report = seed_test_donors(seeded)
+            seed_report = seed_test_accounts(seeded)
     else:
-        seed_report = seed_test_donors()
+        seed_report = seed_test_accounts()
     print(
-        "Test donors: %d created, %d already there, %d days logged"
-        % (len(seed_report["created"]), len(seed_report["skipped"]),
-           seed_report["days_written"]),
+        "Test accounts: %d donors, %d recipient created, %d already there,"
+        " %d days logged"
+        % (len(seed_report["created"]),
+           1 if seed_report["recipient_created"] else 0,
+           len(seed_report["skipped"]), seed_report["days_written"]),
         flush=True,
     )
-    if seed_report["created"]:
+    if seed_report["weather_from_archive"] or seed_report["weather_from_pattern"]:
         print(
             "  weather: %d donors from the Open-Meteo archive, %d from the fallback"
             " pattern" % (seed_report["weather_from_archive"],
                           seed_report["weather_from_pattern"]),
             flush=True,
         )
+    if seed_report["delivery"] is not None:
         print(
-            "  sign in as " + ", ".join(seed_report["created"]) + " with the password "
+            "  delivery: order %s accepted, %s to %s"
+            % (seed_report["delivery"], seed_report["delivery_from"],
+               seed_report["delivery_to"]),
+            flush=True,
+        )
+    accounts = list(seed_report["created"])
+    if seed_report["recipient_created"]:
+        accounts.append(seed_report["recipient_created"])
+    if accounts:
+        print(
+            "  sign in as " + ", ".join(accounts) + " with the password "
             + seed_report["password"],
             flush=True,
         )

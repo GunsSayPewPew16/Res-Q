@@ -62,7 +62,10 @@ role chosen at the start.
    roles now share, and the donor's *Surplus Analyser*, all described under
    [The surplus board](#the-surplus-board-supabase) —
    while the boxes around them — the working board, the orders that have finished,
-   the routing map — still hold no data of their own. Each page owns its own rail,
+   the donor's routing map — still hold no data of their own. The recipient's own
+   routing card is the fifth wired part: its *Delivery status* section draws the
+   delivery that account is waiting on, and it is described under
+   [The delivery map](#the-delivery-map) too. Each page owns its own rail,
    markup and slots included, so relabelling one role's sections cannot move the
    other's: the rail runs **across the top** of the page as a row of tabs rather than
    down the side, and every tab names the section it opens in `data-view`, so the
@@ -178,6 +181,28 @@ account that a later routing pass would read: the pair of coordinates saved with
 enough to drop a pin for either side of a delivery. Saving it leaves the address the
 account originally onboarded with untouched, so the two never overwrite each other.
 
+### The route the recipient is waiting on
+
+The recipient's **Delivery status** card carries the same map, in its own panel rather
+than an overlay: same painted tiles, same ink teardrop at the pickup, with the drop-off
+drawn as an open mint ring instead of a second teardrop, so the two ends of one delivery
+are told apart at a glance. It reads `GET /api/orders`, takes the newest order the
+signed-in account is the **recipient** side of — `viewer_side` says which end the caller
+is on, because a demo account carries no id of its own to compare — and draws the drive
+between the two pins **the order itself carries**, so the route is the delivery that was
+agreed rather than a fresh look at the two profiles. The chip in the card's corner names
+what is on the books: an order agreed reads `confirmed`, one only proposed reads
+`proposed`, each with the distance between the pins and the day it is booked for.
+
+The road comes from [OSRM](https://project-osrm.org)'s keyless demo router, the one free
+service that answers with a real drive rather than a straight line, and the legend under
+the map says where the line came from — the kilometrage and minutes by road, OSRM, and
+the tiles' own credit — instead of leaving MapLibre's attribution strip to run under the
+card's chip. Until a delivery is on the books the card keeps its drawn shape and says
+so, and if the router cannot be read the two pins are still joined, by the direct line
+between them, with the legend saying that is what it drew: a route the router did not
+draw is not passed off as one it did.
+
 The map is [MapLibre GL](https://maplibre.org) drawing **OpenFreeMap** vector tiles —
 OpenStreetMap data, painted by a style that lives in the page rather than recoloured
 afterwards: the ground is the ramp's sage, every road is one warm-white thread whose
@@ -196,8 +221,9 @@ Both OSM services are shared public infrastructure, so the overlay stays a good
 citizen: lookups run once per search and once per settled pin movement rather than on
 every keystroke (Nominatim's policy forbids type-ahead against their public instance,
 and the reverse lookup is debounced behind the drag and asked for no more than two
-attempts at one spot), the map keeps the attribution
-MapLibre draws for the tiles, and heavy or automated use would need a self-hosted tile
+attempts at one spot), the overlay keeps the attribution
+MapLibre draws for the tiles — as the route card credits the same tiles in the legend's
+own line — and heavy or automated use would need a self-hosted tile
 server or a commercial provider rather than these endpoints.
 
 If the library, the tiles or a lookup cannot be reached, the overlay says which one
@@ -343,10 +369,12 @@ python3 backend/server.py                   # demo mode: nothing is stored
 RESQ_PERSIST=on python3 backend/server.py   # persistent: accounts go to backend/resq.db
 ```
 
-Demo mode seeds five test donors with six weeks of logs each on startup — see
-[the logged days](#the-logged-days) for who they are and their password — so the analyser
-has a real past to forecast from the moment the server is up. `RESQ_SEED=off` starts
-without them, and with persistence on they are written only when `RESQ_SEED=on` asks.
+Demo mode seeds five test donors with six weeks of logs each, one recipient and the one
+delivery between them on startup — see [the logged days](#the-logged-days) for who they
+are and their password — so the analyser has a real past to forecast from and the
+recipient's console has a route to draw from the moment the server is up. `RESQ_SEED=off`
+starts without them, and with persistence on they are written only when `RESQ_SEED=on`
+asks.
 
 To run it the way a host will, see [Deployment](#deployment):
 `gunicorn -c gunicorn_config.py wsgi:application` from `backend/` is the same API behind
@@ -423,7 +451,8 @@ file and are filled in on the service's **Environment** page:
 | `RESQ_PERSIST` / `RESQ_DB` | Set to `on`, with `RESQ_DB` on a mounted disk, to store accounts in SQLite. Left off, as committed, the deployment runs in demo mode. |
 
 `RESQ_SEED=on` — also in the file — is what makes a fresh deployment useful immediately:
-the worker creates the five test donors and their six weeks of logged days as it starts, and
+the worker creates the five test donors, their six weeks of logged days and the one agreed
+delivery as it starts, and
 prints their addresses and shared password to the service log. The archive weather read is
 made once per donor at that moment, so the first boot takes a few seconds longer than the
 ones after it.
@@ -510,10 +539,10 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/geo.py` | Haversine distance, the bounding-box pre-filter, the demo offset point |
 | `backend/accounts.py` | The donor impact figures (seed/fill), demo account and demo peer stores |
 | `backend/matching.py` | What makes two accounts deliverable: shared categories, confirmed pins |
-| `backend/orders.py` | The order's stored shape, shared by both modes |
+| `backend/orders.py` | The order's stored shape and the shape a dashboard reads it back in, shared by both modes, and the two keys a demo run files an order's sides under |
 | `backend/surplus.py` | The surplus calculator: the regression pipeline, trained once and cached, forecasting per request |
 | `backend/history.py` | The logged days — one row per kitchen per day — and the features the model reads out of them |
-| `backend/seed.py` | The five test donors and their six weeks of logs, with the weather taken from Open-Meteo's archive |
+| `backend/seed.py` | The five test donors, the one recipient and the agreed delivery between them, with the donors' six weeks of logs and the weather taken from Open-Meteo's archive |
 | `backend/weather.py` | The live conditions at a point — now, day by day for the week ahead, and the days behind it — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
 | `backend/wsgi.py` | The same handler as a WSGI application, which is how a host runs it; see [Deployment](#deployment) |
 
@@ -656,6 +685,25 @@ uninvited. `RESQ_SEED=off` turns it back off in demo mode. Each donor arrives wo
 goods profile, a confirmed pin at its own address and its impact figures, because a test
 account that has to be walked through onboarding first is not one.
 
+**One recipient and one delivery ship beside them**, so the recipient's console has a
+delivery to read rather than an empty frame:
+
+| Sign in as | Organisation | Where | Takes deliveries on |
+| --- | --- | --- | --- |
+| `noor@resq.test` | Fort York Food Bank | 40 Fort York Blvd, Toronto | Tue, Thu |
+
+The same password signs it in and the same switches create it. It arrives the same way a
+donor does — a goods profile, a confirmed pin at its own address, no impact figures, since
+those are the kitchen's own. The delivery already on the books is Whitfield Bakery's
+packaged goods, 2.21 km from the food bank, booked for one of the two days the food bank
+asked for, and it is **agreed rather than proposed**, because a delivery nobody has
+settled is not one a route would be drawn for. Both ends are filed under the account on
+them rather than under the session that wrote it, so the food bank reads its own delivery
+back the way any other order would be read — which is what the *Delivery status* card
+opens on, described under [The delivery map](#the-delivery-map). Seeding again adds
+nothing: an account that exists is skipped, a day already logged is left alone, and the
+delivery is not doubled.
+
 The **weather in those logs is real**: each donor's days carry the conditions Open-Meteo's
 archive actually recorded at that donor's coordinates, so the history is a record rather
 than an invention. If the archive cannot be reached the days fall back to a deterministic
@@ -701,7 +749,7 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `POST` | `/api/profile` | Save the goods profile — establishment type and up to 2 surplus categories for donors, up to 2 delivery days and up to 2 required goods for recipients. Answers beyond the limit are rejected with `400`. The page sends the visitor to the dashboard for their role once this returns 200 |
 | `POST` | `/api/delivery-location` | Save the delivery location the dashboard pin points at, from an `address` plus `lat`/`lng`. Needs a bearer token (`401`), and answers `400` for an empty address, coordinates that are not numbers or are off the globe, or a malformed body. Overwrites any earlier confirmation and only ever writes the caller's own row; the refreshed user comes back in the response |
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
-| `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first |
+| `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 | `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the six-week window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
@@ -736,10 +784,14 @@ bearing from the caller's own pin, with every donor category covered by a recipi
 and every recipient need by a donor, so the pipeline can be walked through wherever the
 pin was dropped. They carry `"demo": true` in the response and are never written
 anywhere. Demo orders live on the session token, the way the demo sessions themselves
-do, and go when the process does.
+do, and go when the process does — except the one the fixture seeds, which is filed by
+its two accounts so the recipient can read it back without a second store to keep.
 
-Nothing calls either endpoint yet: wiring the rails and the impact panel to
-`/api/matches` and `/api/orders` is the next piece of work on the pages.
+`GET /api/orders` is what the recipient dashboard's *Delivery status* card reads: it
+takes the newest order the caller is the recipient side of and draws the drive between
+its two pins, described under [The delivery map](#the-delivery-map). Nothing calls
+`/api/matches` from a page yet: wiring the rails and the donor's impact panel to it is
+the next piece of work.
 
 How the pieces connect:
 
@@ -844,8 +896,10 @@ is needed twice; flip `RESQ_PERSIST=on` for the real thing.
 What it deliberately lacks: email verification, password reset, rate limiting and
 account recovery. The accounts' database is a local file, so taking this live would
 mean moving to a managed database and giving the auth a real review. The matching
-pipeline is real on the backend now — `/api/matches` and `/api/orders` — but no page
-calls it yet, so what the marketing page shows remains illustrative, and the donor's
+pipeline is real on the backend now — `/api/matches` and `/api/orders` — and the
+recipient's dashboard reads its own deliveries from the second of those and draws the
+route between their two pins; nothing calls `/api/matches` from a page yet, so what the
+marketing page shows remains illustrative, and the donor's
 impact figures are still placeholders rather than a count of the deliveries that ran.
 
 The surplus board is further along than the rest: its table is a real Postgres one in
@@ -856,7 +910,8 @@ anything that had to belong to a particular account would need those writes move
 behind the backend first.
 
 The dashboards are part wired, part skeleton: the rails name their sections and switch
-between them, four parts are wired end to end — the delivery card, the donor's *Log
+between them, five parts are wired end to end — the delivery card, the recipient's
+route card, the donor's *Log
 surplus* compose box on its feed screen, and the three screens that read the surplus board — and the boxes, metric
 row and queue rail around them still hold no data of their own. The map needs no key,
 so it works as soon as the server is running: pick a spot, confirm it, and the address

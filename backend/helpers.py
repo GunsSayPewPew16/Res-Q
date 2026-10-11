@@ -49,6 +49,30 @@ def decode_list(value):
         return []
     return [item for item in parsed if isinstance(item, str)]
 
+def contact_key(user):
+    """The contact a demo account is filed and found under: its email, or failing that its phone.
+
+    Demo users all carry id 0 — there is no table to key them by — so a contact is what a
+    process without a database has to file anything of an account's under, whether that is
+    a kitchen's logged days or the deliveries it is one side of. Email wins over phone so
+    an account that has both keeps one key rather than two.
+    """
+    if not user:
+        return None
+    return clean_email(user.get("email")) or clean_phone(user.get("phone")) or None
+
+
+def account_key(user):
+    """What tells one account apart from another inside a demo run: its contact, or its id.
+
+    A demo account is its contact, because every one of them carries id 0 — there is no
+    table handing out distinct ones. The fabricated peers a demo match ranks against have
+    no contact at all, so their id is the only thing left to tell them apart by, and it is
+    what this falls back to.
+    """
+    return contact_key(user) or ("#" + str((user or {}).get("id")))
+
+
 def origin_allowed(origin):
     """Whether this Origin may read the API, by the allowlist in config.
 

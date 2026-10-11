@@ -273,8 +273,10 @@
         /* The map sizes itself from its container's box, and that container is stretched over
            the overlay's map area by `absolute inset-0`. MapLibre's own stylesheet arrives
            after this one and sets `.maplibregl-map { position: relative }`, which would drop
-           the stretch and collapse the map to nothing — an id rule keeps it winning. */
-        #deliverMap {
+           the stretch and collapse the map to nothing — an id rule keeps it winning. The
+           route card's map is pinned to its card the same way, for the same reason. */
+        #deliverMap,
+        #routeMap {
             position: absolute;
             inset: 0;
         }
@@ -356,6 +358,24 @@
             height: 7px;
             border-radius: 9999px;
             background-color: #DAF1DE;
+        }
+
+        /* The drop-off end of a route: an open ring rather than a second teardrop, so the
+           two ends of one delivery are told apart at a glance — the tip is where the food
+           is picked up, the ring is where it is going. */
+        .resq-ring-icon {
+            background: transparent;
+            border: 0;
+            width: 26px;
+            height: 26px;
+        }
+        .resq-ring {
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            background-color: rgba(218, 241, 222, 0.20);
+            border: 3px solid #DAF1DE;
+            box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
         }
 
         /* Custom scrollbar for the long rails */
@@ -860,10 +880,13 @@
                             </div>
                         </article>
 
-                        <!-- Route-map card: one dark block with a drawn route, a pickup
-                             marker, a drop-off ring, and a label chip resting on the road. -->
+                        <!-- Route-map card: the delivery this account is waiting on, drawn on
+                             the same map the delivery card opens — the donor's pickup, this
+                             account's own drop-off, and the drive between them. Until a
+                             delivery is on the books the card keeps its drawn shape, which
+                             is a picture of a route rather than a reading of one. -->
                         <article class="relative panel-raised p-0 overflow-hidden md:col-span-1 xl:col-span-3 min-h-[300px]">
-                            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 300 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                            <svg id="routeRest" class="absolute inset-0 w-full h-full" viewBox="0 0 300 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
                                 <g stroke="#235347" stroke-opacity="0.55" fill="none">
                                     <path d="M0 60 H300" /><path d="M0 130 H300" /><path d="M0 210 H300" /><path d="M0 280 H300" />
                                     <path d="M55 0 V320" /><path d="M140 0 V320" /><path d="M235 0 V320" />
@@ -875,19 +898,39 @@
                                 <circle cx="50" cy="260" r="7" fill="#0B2B26" stroke="#DAF1DE" stroke-width="2"/>
                                 <circle cx="150" cy="150" r="3" fill="#DAF1DE"/>
                             </svg>
-                            <div class="absolute top-3 right-3 w-8 h-8 organic-chip bg-[#051F20]/85 border border-[#235347] flex items-center justify-center text-[#8EB69B]">
-                                <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20 20 4M4 20l.35-4.35M4 20l4.35-.35M20 4l-4.35.35M20 4l-.35 4.35"/></svg>
+
+                            <!-- The live map mounts here, and only when there is a delivery to
+                                 draw: an empty map of nowhere is not a reading either. -->
+                            <div id="routeMap" class="absolute inset-0 hidden"></div>
+
+                            <!-- What the card is showing, in the corner the drawn card kept
+                                 for its one chip: the delivery's state, its distance and the
+                                 day it is booked for. -->
+                            <div class="absolute top-3 right-3 organic-chip inline-flex items-center gap-2 px-3 py-2 bg-[#051F20]/90 border border-[#235347]">
+                                <span id="routeChipDot" class="w-1.5 h-1.5 rounded-full bg-[#235347]"></span>
+                                <span id="routeChipText" class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">no delivery yet</span>
                             </div>
-                            <div class="absolute bottom-4 left-4 space-y-2">
-                                <span class="organic-chip inline-flex items-center gap-2 px-3 py-2 bg-[#051F20]/90 border border-[#235347]">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span>
-                                    <span class="h-2 w-16 organic-chip bg-[#235347]"></span>
-                                </span>
-                                <div class="organic-inner bg-[#051F20]/90 border border-[#235347] px-3 py-2 w-36 space-y-1.5">
-                                    <span class="block h-2 w-24 organic-chip bg-[#235347]"></span>
-                                    <span class="block h-1.5 w-20 organic-chip bg-[#163832] border border-[#235347]"></span>
+
+                            <!-- Both ends of the route, named, with the line under them saying
+                                 where the route itself came from. -->
+                            <div id="routeLegend" class="absolute bottom-4 left-4 right-4 hidden">
+                                <div class="organic-inner bg-[#051F20]/90 border border-[#235347] px-3 py-2 space-y-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE] shrink-0"></span>
+                                        <span id="routeFrom" class="text-[11px] leading-snug text-[#DAF1DE] truncate"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full border border-[#8EB69B] shrink-0"></span>
+                                        <span id="routeTo" class="text-[11px] leading-snug text-[#8EB69B] truncate"></span>
+                                    </div>
+                                    <!-- Where the route itself came from, inside the panel
+                                         rather than on the map: a pale line over pale
+                                         tiles is a line nobody can read. -->
+                                    <p id="routeNote" class="text-[10px] text-[#8EB69B]/80 leading-relaxed pt-2 border-t border-[#235347]"></p>
                                 </div>
                             </div>
+
+                            <p id="routeRestNote" class="absolute bottom-4 left-4 right-4 text-[11px] text-[#8EB69B] leading-relaxed">No delivery on the books yet. The route appears here once a delivery is confirmed.</p>
                         </article>
                     </div>
 
@@ -1172,6 +1215,9 @@
                 if (view) { view.classList.toggle('hidden', id !== wanted); }
             });
             if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
+            // The route map is read when its own screen opens rather than at load: the
+            // card is not on screen until then, and a map built off screen has no size.
+            if (wanted === 'viewDeliveryStatus') { openDeliveryStatus(); }
         }
 
         // ---------------------------------------------------------------------------
@@ -1945,12 +1991,17 @@
             placeStartingPin();
         }
 
-        // MapLibre comes from a CDN the first time the map opens — its stylesheet and its
+        // MapLibre comes from a CDN the first time a map is opened — its stylesheet and its
         // script, since the pin and the controls are laid out by that stylesheet. The tiles
         // are OpenFreeMap's keyless vector endpoint, so nothing here needs an account or a
-        // token.
-        function loadMaplibre() {
-            if (maplibreOnPage) { initDeliveryMap(); return; }
+        // token. Two maps hang off this page — the one behind the delivery card and the one
+        // in the Delivery Status card — so the load is shared: whoever asks first fetches
+        // it, and everyone waiting is told when it is here.
+        var maplibreWaiters = [];
+
+        function withMaplibre(onReady, onFail) {
+            if (maplibreOnPage) { onReady(); return; }
+            maplibreWaiters.push({ ready: onReady, fail: onFail });
             if (maplibreRequested) { return; }
             maplibreRequested = true;
             var css = document.createElement('link');
@@ -1963,13 +2014,329 @@
             script.onload = function () {
                 maplibreOnPage = true;
                 hideDeliverNotice();
-                initDeliveryMap();
+                flushMaplibreWaiters('ready');
             };
             script.onerror = function () {
                 maplibreRequested = false;
-                showDeliverNotice('The map library could not be loaded. Check the connection and try again.');
+                flushMaplibreWaiters('fail');
             };
             document.head.appendChild(script);
+        }
+
+        function flushMaplibreWaiters(outcome) {
+            var waiting = maplibreWaiters.splice(0, maplibreWaiters.length);
+            waiting.forEach(function (waiter) {
+                if (outcome === 'ready') {
+                    waiter.ready();
+                } else if (waiter.fail) {
+                    waiter.fail();
+                } else {
+                    showDeliverNotice('The map library could not be loaded. Check the connection and try again.');
+                }
+            });
+        }
+
+        function loadMaplibre() { withMaplibre(initDeliveryMap); }
+
+        // ---------------------------------------------------------------------------
+        // The route map: the one delivery this account is expecting, drawn between the two
+        // pins the order itself carries. It is the same map the delivery card opens — same
+        // painted tiles, same teardrop at the pickup, the ring standing in for the drop-off
+        // — mounted into the Delivery Status card instead of the overlay, because a console
+        // reads the route beside the delivery rather than instead of the page.
+        //
+        // The road itself comes from OSRM's keyless demo router, which is the one free
+        // service that answers with a real drive rather than a straight line. If it cannot
+        // be read the two pins are still joined, by the direct line between them, and the
+        // card says so: a route the router did not draw is not passed off as one it did.
+        // ---------------------------------------------------------------------------
+        var ORDERS_URL = apiUrl('/api/orders');
+        var ROUTE_URL = 'https://router.project-osrm.org/route/v1/driving/';
+
+        var routeMap = null;
+        var routePickup = null;
+        var routeDropoff = null;
+        var routeOrder = null;
+        var routeReading = false;
+
+        function routeEl(id) { return document.getElementById(id); }
+
+        function setRouteChip(text, live) {
+            var label = routeEl('routeChipText');
+            var dot = routeEl('routeChipDot');
+            if (label) { label.textContent = text; }
+            if (dot) {
+                dot.className = 'w-1.5 h-1.5 rounded-full ' + (live ? 'bg-[#DAF1DE]' : 'bg-[#235347]');
+            }
+        }
+
+        function setRouteNote(text) {
+            var note = routeEl('routeNote');
+            if (note) { note.textContent = text || ''; }
+        }
+
+        function pointOf(end) {
+            if (!end || end.lat === null || end.lat === undefined
+                || end.lng === null || end.lng === undefined) {
+                return null;
+            }
+            var lat = Number(end.lat);
+            var lng = Number(end.lng);
+            if (isNaN(lat) || isNaN(lng)) { return null; }
+            return { lat: lat, lng: lng };
+        }
+
+        // Which deliveries are this account's to receive. The backend says which side of each
+        // order the caller is on, because a demo account carries no id of its own to compare.
+        function incomingOrders(orders) {
+            return (orders || []).filter(function (order) {
+                return order && order.viewer_side === 'recipient';
+            });
+        }
+
+        // The section's own loader. It reads once — the newest delivery is the one a console
+        // is about — and mounting waits for the section to be on screen, since a map built
+        // inside a hidden box is a map of nothing.
+        function openDeliveryStatus() {
+            if (!routeOrder) { loadRouteOrder(); return; }
+            if (!routeMap) { mountRouteMap(routeOrder); return; }
+            if (routeMap) { window.setTimeout(function () { routeMap.resize(); }, 0); }
+        }
+
+        function loadRouteOrder() {
+            var token = readStore(TOKEN_KEY);
+            if (!token || routeReading) { return; }
+            routeReading = true;
+            setRouteChip('reading the books', false);
+            // Handed back so the caller can wait for the card to have been filled in.
+            return fetch(ORDERS_URL, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    routeReading = false;
+                    if (res.status !== 200 || !res.data) {
+                        setRouteChip('unreachable', false);
+                        setRouteNote('The delivery list could not be read. Open the section again to retry.');
+                        return;
+                    }
+                    var order = incomingOrders(res.data.orders)[0];
+                    if (!order) {
+                        setRouteChip('no delivery yet', false);
+                        return;
+                    }
+                    routeOrder = order;
+                    paintRouteSummary(order);
+                    mountRouteMap(order);
+                })
+                .catch(function () {
+                    routeReading = false;
+                    setRouteChip('unreachable', false);
+                    setRouteNote('The delivery list could not be read. Open the section again to retry.');
+                });
+        }
+
+        function paintRouteSummary(order) {
+            var from = order.donor || {};
+            var to = order.recipient || {};
+            var fromText = routeEl('routeFrom');
+            var toText = routeEl('routeTo');
+            // One line each, with the whole address on the element's own title: the card is
+            // a map first, and a two-line address block would take a third of it.
+            if (fromText) {
+                fromText.textContent = 'Picked up at ' + (from.name || 'the donor')
+                    + (from.address ? ' \u00b7 ' + from.address : '');
+                fromText.title = fromText.textContent;
+            }
+            if (toText) {
+                toText.textContent = 'Delivered to ' + (to.name || 'you')
+                    + (to.address ? ' \u00b7 ' + to.address : '');
+                toText.title = toText.textContent;
+            }
+            var label = order.status === 'accepted' ? 'confirmed' : (order.status || 'proposed');
+            if (order.distance_km !== null && order.distance_km !== undefined) {
+                label += ' \u00b7 ' + order.distance_km + ' km';
+            }
+            if (order.scheduled_for) { label += ' \u00b7 ' + order.scheduled_for; }
+            setRouteChip(label, true);
+        }
+
+        // The drop-off end: an open ring, made here rather than fetched, so it is the
+        // palette's own mark the way the teardrop at the other end is.
+        function dropoffRingElement() {
+            var ring = document.createElement('div');
+            ring.className = 'resq-ring-icon';
+            ring.innerHTML = '<div class="resq-ring"></div>';
+            return ring;
+        }
+
+        function mountRouteMap(order) {
+            var container = routeEl('routeMap');
+            if (!container || !order) { return; }
+            if (routeMap) {
+                drawRoute(order);
+                window.setTimeout(function () { routeMap.resize(); }, 0);
+                return;
+            }
+            withMaplibre(function () {
+                try {
+                    container.classList.remove('hidden');
+                    routeMap = new window.maplibregl.Map({
+                        container: container,
+                        style: MAP_STYLE,
+                        center: [0, 0],
+                        zoom: 2,
+                        attributionControl: false,
+                        // The same snapping the delivery card uses: a transition that cannot
+                        // run leaves the view stuck halfway, and a route wants no animation.
+                        fadeDuration: 0
+                    });
+                } catch (err) {
+                    routeMap = null;
+                    container.classList.add('hidden');
+                    setRouteNote('The map could not start in this page: '
+                        + (err && err.message ? err.message : err));
+                    return;
+                }
+                // No attribution control here, unlike the delivery card's own map: this
+                // card has a chip along its top and its legend along its bottom, and
+                // MapLibre's strip ran under one of them whichever corner it took. The
+                // credit is the legend's own line instead — inside the panel, where it is
+                // as readable as the rest of the card — which is what `MAP_CREDIT_TEXT`
+                // below is for.
+                showRouteSurface();
+                drawRoute(order);
+                routeMap.resize();
+            }, function () {
+                showRouteSurface();
+                setRouteNote('The map library could not be loaded. Check the connection and try again.');
+            });
+        }
+
+        // The drawn shape goes, the legend arrives: the card is a reading from here on.
+        function showRouteSurface() {
+            var rest = routeEl('routeRest');
+            var legend = routeEl('routeLegend');
+            var restNote = routeEl('routeRestNote');
+            if (rest) { rest.classList.add('hidden'); }
+            if (restNote) { restNote.classList.add('hidden'); }
+            if (legend) { legend.classList.remove('hidden'); }
+        }
+
+        // Who the tiles and the road are credited to, as the card's own line rather than a
+        // control on the map. The tiles are OpenFreeMap's copy of OpenStreetMap data, and
+        // the road is OSRM's, so both are named wherever the route line is described.
+        var MAP_CREDIT_TEXT = '\u00a9 OpenStreetMap contributors \u00b7 tiles \u00a9 OpenFreeMap';
+
+        function drawRoute(order) {
+            var from = pointOf(order.donor);
+            var to = pointOf(order.recipient);
+            if (!from || !to) {
+                setRouteNote('This delivery is missing one of its two pins, so there is no '
+                    + 'route to draw. ' + MAP_CREDIT_TEXT);
+                return;
+            }
+            routePins(from, to);
+            fitRoute(from, to);
+            // The road itself is awaited so a caller — a reload after a connection comes
+            // back, or a test — can tell when the line on the map is the finished one.
+            return fetchRoadRoute(from, to).then(function (route) {
+                if (!routeMap) { return; }
+                putRoute(route ? route.coordinates
+                               : [[from.lng, from.lat], [to.lng, to.lat]]);
+                fitRoute(from, to);
+                if (route) {
+                    setRouteNote('Road route \u00b7 '
+                        + (route.metres / 1000).toFixed(1) + ' km by road \u00b7 about '
+                        + Math.max(1, Math.round(route.seconds / 60)) + ' min \u00b7 OSRM '
+                        + '\u00b7 ' + MAP_CREDIT_TEXT);
+                } else {
+                    setRouteNote('Shown as the direct line between the two pins \u2014 the road '
+                        + 'router could not be read. ' + MAP_CREDIT_TEXT);
+                }
+            });
+        }
+
+        function routePins(from, to) {
+            if (!routePickup) {
+                routePickup = new window.maplibregl.Marker(
+                    { element: deliveryPinElement(), anchor: 'bottom' });
+            }
+            routePickup.setLngLat([from.lng, from.lat]).addTo(routeMap);
+            if (!routeDropoff) {
+                routeDropoff = new window.maplibregl.Marker(
+                    { element: dropoffRingElement(), anchor: 'center' });
+            }
+            routeDropoff.setLngLat([to.lng, to.lat]).addTo(routeMap);
+        }
+
+        function fitRoute(from, to) {
+            var bounds = new window.maplibregl.LngLatBounds(
+                [from.lng, from.lat], [from.lng, from.lat]);
+            bounds.extend([to.lng, to.lat]);
+            // Snapping rather than animating, and padded per side: the chip sits along the
+            // top of the card and the legend along the bottom, and a route that ran under
+            // either of them would be a route nobody could follow. The top padding clears
+            // the chip *and* the teardrop's own height, since the pickup pin stands up from
+            // the coordinate that padding measures.
+            routeMap.fitBounds(bounds, {
+                padding: { top: 118, bottom: 132, left: 48, right: 48 },
+                duration: 0
+            });
+        }
+
+        // The drive between the two pins, from OSRM's demo router: keyless, and the only
+        // free service that answers with a road rather than a distance. Anything it cannot
+        // answer is `null`, which the caller draws as the direct line.
+        function fetchRoadRoute(from, to) {
+            var url = ROUTE_URL + from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat
+                + '?overview=full&geometries=geojson';
+            return fetch(url, { headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    if (response.status !== 200) { return null; }
+                    return response.json().catch(function () { return null; });
+                })
+                .then(function (data) {
+                    var route = data && data.routes && data.routes[0];
+                    if (!route || !route.geometry || !route.geometry.coordinates) {
+                        return null;
+                    }
+                    return {
+                        coordinates: route.geometry.coordinates,
+                        metres: route.distance,
+                        seconds: route.duration
+                    };
+                })
+                .catch(function () { return null; });
+        }
+
+        // The line itself: a wide casing with the route drawn over it, which is how the
+        // drawn card told a road from the ground behind it, in the same two colour steps.
+        function putRoute(coordinates) {
+            var shape = {
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates: coordinates }
+            };
+            var source = routeMap.getSource('delivery-route');
+            if (source) { source.setData(shape); return; }
+            routeMap.addSource('delivery-route', { type: 'geojson', data: shape });
+            routeMap.addLayer({
+                id: 'delivery-route-case',
+                type: 'line',
+                source: 'delivery-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#235347', 'line-width': 9, 'line-opacity': 0.5 }
+            });
+            routeMap.addLayer({
+                id: 'delivery-route',
+                type: 'line',
+                source: 'delivery-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#DAF1DE', 'line-width': 2.5 }
+            });
         }
 
         function openDeliveryPicker() {

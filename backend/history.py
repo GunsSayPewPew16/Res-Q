@@ -16,19 +16,18 @@ every lookup is by date, so a gap in the log is a gap rather than a shift.
 import datetime
 
 from config import DEMO_HISTORY, HISTORY_FIELDS
-from helpers import clean_email, clean_phone
+from helpers import contact_key
 from surplus import ROLLING_WINDOW_DAYS
 
 
 def demo_history_key(user):
     """The key a demo account's rows are filed under: its email, or failing that its phone.
 
-    Demo users all carry id 0 — there is no table to key them by — so a contact is what a
-    process without a database can file a kitchen's days under.
+    The same key the rest of the demo stores file an account's own things by — its logged
+    days, and the deliveries it is one side of — which is what lets a second process-less
+    store be read by the same account without a second notion of who that account is.
     """
-    if not user:
-        return None
-    return clean_email(user.get("email")) or clean_phone(user.get("phone")) or None
+    return contact_key(user)
 
 
 def read_history(user, conn=None):
