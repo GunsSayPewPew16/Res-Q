@@ -3,9 +3,10 @@
 One row per kitchen per day: what that kitchen served, what the sky over it was, and how
 much surplus came out of the day. It is the donor's own log — the record a device never
 has to keep twice, because the same rows are what the analyser's model reads its past
-from. The three surplus lags and the expected customer count a forecast needs are
-*derived* from these rows, so the model's own defaults are what a kitchen with no history
-falls back to rather than what every kitchen is answered with.
+from and, across every kitchen, what it is *fitted* to. The three surplus lags and the
+expected customer count a forecast needs are *derived* from these rows, so the model's
+own defaults are what a kitchen with no history falls back to rather than what every
+kitchen is answered with.
 
 Rows are read oldest first, because that is the order they happened in and the order the
 derivation walks them in; the API answers newest first, the way every other list here
@@ -46,6 +47,40 @@ def read_history(user, conn=None):
         "SELECT %s FROM surplus_history WHERE user_id = ? ORDER BY date"
         % ", ".join(HISTORY_FIELDS),
         (user["id"],),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def all_days(conn=None):
+    """Every logged day in the store, oldest first, each row naming the kitchen it came from.
+
+    This is the past the surplus model is fitted to. It is every account's log rather than
+    one account's, because the model is one shared model — the analyser's banner says so on
+    every run — and a kitchen that has just signed up should be forecast by a forest that
+    has seen a year of somebody's days rather than by a forest that has seen none.
+
+    Every row carries the kitchen it belongs to, which is what makes the surplus lags and
+    the rolling window a kitchen's own past: a sample whose first day followed another
+    kitchen's last would be a lesson about nothing.
+
+    The kitchen is the account's **contact** in both modes — its email, or failing that its
+    phone — which is the key a demo run files its rows under and the same one
+    `contact_key` hands out everywhere else. With persistence the contact is joined back in
+    rather than the account id being used: the two modes then hand the model the same rows
+    in the same order, so the same store is answered with the same forest and the same MAE
+    rather than with two that differ by how the tie between one day's kitchens was broken.
+    """
+    if conn is None:
+        rows = [dict(day, kitchen=key)
+                for key, days in DEMO_HISTORY.items()
+                for day in days]
+        rows.sort(key=lambda row: (str(row.get("date")), str(row["kitchen"])))
+        return rows
+    rows = conn.execute(
+        "SELECT COALESCE(u.email, u.phone, CAST(u.id AS TEXT)) AS kitchen, %s"
+        " FROM surplus_history h JOIN users u ON u.id = h.user_id"
+        " ORDER BY kitchen, h.date"
+        % ", ".join("h." + field for field in HISTORY_FIELDS)
     ).fetchall()
     return [dict(row) for row in rows]
 

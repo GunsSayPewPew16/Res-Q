@@ -26,7 +26,15 @@
  * staging API, or a local page back at a local API, without editing this file.
  */
 
-var RESQ_API_BASE = 'https://res-q-api.onrender.com';
+// The default, unless a page said otherwise before this file loaded. It is read off
+// `window` rather than written straight over it because a top-level `var` *is* the
+// property of the same name on `window`: a plain assignment here would clobber a page's
+// own `window.RESQ_API_BASE` before the block below could see it, and the override would
+// quietly do nothing. An empty string counts as an answer — "the API is on this same
+// origin" — so only `undefined` falls back to the deployed API's origin.
+var RESQ_API_BASE = (typeof window.RESQ_API_BASE === 'string')
+    ? window.RESQ_API_BASE
+    : 'https://res-q-api.onrender.com';
 
 (function () {
     var base = (window.RESQ_API_BASE || RESQ_API_BASE || '').replace(/\/+$/, '');

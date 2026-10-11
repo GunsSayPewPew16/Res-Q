@@ -1,29 +1,34 @@
 """Res-Q backend test accounts.
 
-Five kitchens with six weeks of surplus history each, so the calculator the analyser
-screen is built on can be exercised against a real past instead of its own defaults: what
-each kitchen served, what the sky over it was, and how much surplus came out of the day.
-Beside them sits the other end of a delivery — one recipient with a confirmed pin of its
-own, and one delivery already on the books between it and a kitchen, so the recipient's
-console has an order to read and a route to draw rather than an empty frame.
+Six kitchens' logs, so the calculator the analyser screen is built on can be exercised
+against a real past instead of its own defaults: what each kitchen served, what the sky
+over it was, and how much surplus came out of the day. Five of them carry six weeks each;
+the sixth is the demo account the README names at the top, a Manhattan kitchen with a
+**year** of days behind it, which is the past the model is fitted to and the account the
+analyser is shown off on. Beside them sits the other end of a delivery — one recipient
+with a confirmed pin of its own, and one delivery already on the books between it and a
+kitchen, so the recipient's console has an order to read and a route to draw rather than
+an empty frame.
 
 The fixture is built to be *readable*, not just plentiful:
 
 - **The weather is real.** Each donor's days carry the conditions Open-Meteo's archive
-  actually recorded at that donor's own pinned coordinates. If the archive cannot be
-  reached the days fall back to a deterministic pattern instead — and a day from that
-  pattern carries no WMO code, so a fallback row says plainly that it is not a reading.
-- **The customers are the fixture's, the surplus follows the shape the model was trained
-  on**: a weekday rhythm, the weekend bump of four kilos, and a little noise, with the
-  kitchen's size deciding the base. A test that ran against some other shape would prove
-  nothing about this model.
-- **Everything is seeded per donor**, so the same five kitchens come back the same way
+  actually recorded at that donor's own pinned coordinates — a year of them for the demo
+  kitchen, read in one request. If the archive cannot be reached the days fall back to a
+  deterministic pattern instead, and a day from that pattern carries no WMO code, so a
+  fallback row says plainly that it is not a reading.
+- **The customers are the fixture's, the surplus follows the site's own shape**: a weekday
+  rhythm, the weekend bump of four kilos, and a little noise, with the kitchen's size
+  deciding the base. That shape is not decoration: these rows are what the model is
+  *fitted* to, so the surplus it learns is this one.
+- **Everything is seeded per donor**, so the same six kitchens come back the same way
   every time the server starts, and a second seeding adds nothing: a kitchen's past is a
   record, and a record does not change because a seed ran again.
 
 In demo mode the server seeds these on startup, since nothing is written to disk. With
 persistence on it happens only when `RESQ_SEED=on` asks for it. Either way they sign in
-with the password below — `dana@resq.test` and the rest, listed in the README.
+with the password below — `rosa@resq.test` and `dana@resq.test` and the rest, listed in
+the README.
 """
 
 import datetime
@@ -33,6 +38,7 @@ import random
 from accounts import seed_donor_metrics
 from config import (
     DEMO_ACCOUNTS,
+    DEMO_DONOR_HISTORY_DAYS,
     DEMO_ORDER_SEQ,
     DEMO_ORDERS,
     LIVE_ORDER_STATUSES,
@@ -49,6 +55,22 @@ from weather import WeatherUnavailable, fetch_archive
 # One password for every fixture account, donors and the recipient alike: these are demo
 # accounts, and the README names them so anyone can sign in and look around.
 TEST_PASSWORD = "ResqDemo1!"
+
+# The demo account the README names at the top, in New York. It is the same kind of
+# fixture as the five below — a working donor with a goods profile, a confirmed pin and
+# its own figures — with one difference that is the whole point of it: its log covers a
+# **year** of days instead of six weeks, so the analyser has a kitchen that has been
+# through every season to be read, and the model has a year of real weather to be fitted
+# to rather than six weeks of it. The coordinates are Chelsea Market's own on 9th Avenue,
+# which is what the archive is asked about.
+DEMO_DONOR = {
+    "first_name": "Rosa", "last_name": "Alvarez", "business_name": "Chelsea Market Kitchen",
+    "email": "rosa@resq.test", "street": "75 9th Avenue", "city": "New York",
+    "province": "New York", "postal": "10011", "firm_type": "eatery",
+    "surplus_types": ("prepared_meals", "bakery_items"),
+    "lat": 40.74205, "lng": -74.00610, "customers": (240, 380), "seed": 1046,
+    "history_days": DEMO_DONOR_HISTORY_DAYS,
+}
 
 # The fixture's own five kitchens. The coordinates are pinned rather than geocoded: they
 # are what the archive is asked about and what a delivery pin would be confirmed at, and
@@ -105,6 +127,11 @@ TEST_RECIPIENT = {
     "delivery_days": ("tue", "thu"),
     "lat": 43.6386, "lng": -79.4005,
 }
+
+# Every kitchen the fixture creates, in the order they are written: the five short logs
+# first, then the demo account's year. One tuple, so an account can never be seeded
+# without also being one the README's lists describe.
+FIXTURE_DONORS = TEST_DONORS + (DEMO_DONOR,)
 
 # The delivery already on the books when the server comes up: the bakery two and a half
 # kilometres from the food bank, its packaged goods, on one of the days the food bank
@@ -445,6 +472,10 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
     """Create the fixture's accounts, their logs and their one delivery, as far as they are
     not there already.
 
+    `days` is how far back the five short logs go; a kitchen that carries a window of its
+    own — the demo account's year — is logged that far back instead, since one request to
+    the archive answers a year as easily as six weeks.
+
     Returns what it did: which accounts were created, which were already registered, how
     many days were written, where the weather came from and whether the agreed delivery
     had to be written. Called once at startup in demo mode and with `RESQ_SEED=on` in
@@ -458,7 +489,7 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
     archived = 0
     patterned = 0
 
-    for donor in TEST_DONORS:
+    for donor in FIXTURE_DONORS:
         # The account comes first: a donor already registered is skipped before any day is
         # generated, which is what keeps a second startup from asking the archive anything
         # about kitchens it has already written.
@@ -467,7 +498,9 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
             skipped.append(donor["email"])
             continue
 
-        rows = donor_days(donor, days=days, today=today)
+        # A kitchen's own window: six weeks for the five short logs, a year for the demo
+        # account, which carries `history_days` of its own.
+        rows = donor_days(donor, days=donor.get("history_days", days), today=today)
         if any(row["weather_code"] is not None for row in rows):
             archived += 1
         else:
@@ -508,5 +541,5 @@ def describe_test_accounts():
             "address": account_address(donor),
             "customers_per_day": donor["customers"],
         }
-        for donor in TEST_DONORS
+        for donor in FIXTURE_DONORS
     ]

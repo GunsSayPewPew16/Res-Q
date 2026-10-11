@@ -864,7 +864,7 @@
                             </div>
                             <span id="weekLegend" class="shrink-0 organic-chip px-4 py-2 text-[10px] uppercase tracking-[0.15em] bg-[#DAF1DE]/40 text-[#051F20]">not run yet</span>
                         </div>
-                        <div id="weekChart" class="h-40 flex items-end gap-2 md:gap-3 pb-4 border-b border-[#235347]"></div>
+                        <div id="weekChart" class="h-44 flex items-end gap-2 md:gap-3 pb-4 border-b border-[#235347]"></div>
                         <div id="weekDays" class="flex gap-2 md:gap-3 mt-3"></div>
                         <div class="flex items-center justify-between gap-4 mt-4">
                             <span id="weekChartNote" class="text-xs text-[#8EB69B]">seven days from today, in kilograms</span>
@@ -1435,10 +1435,10 @@
             if (range !== null && rangeNode) { rangeNode.textContent = range; }
         }
 
-        // One bar. The figure it is worth is printed above it where there is one to print —
-        // on today's bar and on the week's heaviest day, the two a reader wants first — and
-        // the bar's own height is decided by weekHeight below. Today's is the one lit bar,
-        // the way the reference lights one.
+        // One bar. The figure it is worth is printed above it, every day of the week: the
+        // chart is a week's forecast, and a week a reader has to read off the axis is one
+        // they cannot. The bar's own height is decided by weekHeight below, and today's is
+        // the one lit bar, the way the reference lights one.
         function weekBarHTML(value, height, lit) {
             return '<div class="flex-1 h-full flex flex-col justify-end items-center">'
                 + '<span class="block text-[10px] leading-none mb-2 '
@@ -1458,8 +1458,8 @@
         // Bars are drawn across the week's **own** range rather than up from zero: seven days
         // of one kitchen's surplus sit within a few kilos of each other, so a zero-based axis
         // draws seven identical bars and hides the shape it was built to show. What keeps
-        // that honest is that the range itself is named under the chart and the bars that
-        // matter carry their figures, so the axis is readable from the panel itself. A week
+        // that honest is that the range itself is named under the chart and every bar
+        // carries its own figure, so the axis is readable from the panel itself. A week
         // that really is flat is drawn flat, at mid-height, rather than exaggerated into a
         // shape it does not have.
         function weekHeight(kg, low, high) {
@@ -1471,7 +1471,8 @@
         }
 
         // Draw the chart from one entry per day, today first: { name, kg }, with kg null on
-        // a day nothing has been read for. Returns the week's own low, high and heaviest
+        // a day nothing has been read for — an unread day keeps its bar's place and prints
+        // nothing, so a gap says it is a gap. Returns the week's own low, high and heaviest
         // day, which is what the words under the chart are written from.
         function renderWeekChart(entries) {
             var bars = document.getElementById('weekChart');
@@ -1494,9 +1495,9 @@
             var nameHTML = '';
             entries.forEach(function (entry, index) {
                 var lit = index === 0;
-                var printed = entry.kg !== null && (lit || entry === summary.heaviest)
-                    ? entry.kg.toFixed(1)
-                    : null;
+                // Every day carries its own figure, today's included: seven bars with two
+                // numbers on them reads as a two-day answer with the rest left to the axis.
+                var printed = entry.kg !== null ? entry.kg.toFixed(1) : null;
                 var height = entry.kg === null
                     ? WEEK_REST_HEIGHT
                     : weekHeight(entry.kg, summary.low, summary.high);

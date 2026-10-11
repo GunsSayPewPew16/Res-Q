@@ -1,5 +1,26 @@
 # Res-Q
 
+## Donor demo account
+
+**Email `rosa@resq.test` · password `ResqDemo1!`**
+
+That account is Chelsea Market Kitchen, 75 9th Avenue, New York, NY 10011 — a Manhattan
+kitchen with a **year** of logged surplus days behind it, so the *Surplus Analyser* opens
+on a kitchen that has been through every season rather than on six weeks of one. Its
+weather is real: each of those days carries the conditions Open-Meteo's archive actually
+recorded over Chelsea Market, read in one request, and those days are what the model is
+fitted to. Sign in at the onboarding page's *Login*, or `POST /api/login` with
+`{"contact": "rosa@resq.test", "password": "ResqDemo1!"}`; open
+`res_q_dashboard_donor.html`, pick **Surplus Analyser** and press **Run analyser** to see
+the forecast, the week ahead it is read from, and the account's own logged days under
+them. The same password signs in the five shorter fixtures described under
+[the logged days](#the-logged-days).
+
+Running the site against a local server, the pages call the deployed API unless they are
+pointed at the local one — see the note at the top of `frontend/resq_api.js` — so a run
+that has not been pointed anywhere will show the deployed fixtures rather than this
+year-long one.
+
 Res-Q is the front end for a surplus-redistribution network. Local businesses
 with unsold food and essential goods — supermarkets, restaurants, bakeries —
 are profiled once and then matched against the shelters and community groups
@@ -369,8 +390,8 @@ python3 backend/server.py                   # demo mode: nothing is stored
 RESQ_PERSIST=on python3 backend/server.py   # persistent: accounts go to backend/resq.db
 ```
 
-Demo mode seeds five test donors with six weeks of logs each, one recipient and the one
-delivery between them on startup — see [the logged days](#the-logged-days) for who they
+Demo mode seeds six test donors — five with six weeks of logs each and the demo account
+with a year — one recipient and the one delivery between them on startup — see [the logged days](#the-logged-days) for who they
 are and their password — so the analyser has a real past to forecast from and the
 recipient's console has a route to draw from the moment the server is up. `RESQ_SEED=off`
 starts without them, and with persistence on they are written only when `RESQ_SEED=on`
@@ -451,8 +472,8 @@ file and are filled in on the service's **Environment** page:
 | `RESQ_PERSIST` / `RESQ_DB` | Set to `on`, with `RESQ_DB` on a mounted disk, to store accounts in SQLite. Left off, as committed, the deployment runs in demo mode. |
 
 `RESQ_SEED=on` — also in the file — is what makes a fresh deployment useful immediately:
-the worker creates the five test donors, their six weeks of logged days and the one agreed
-delivery as it starts, and
+the worker creates the six test donors, their logged days — six weeks each for five of
+them, a year for the demo account — and the one agreed delivery as it starts, and
 prints their addresses and shared password to the service log. The archive weather read is
 made once per donor at that moment, so the first boot takes a few seconds longer than the
 ones after it.
@@ -552,9 +573,9 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/accounts.py` | The donor impact figures (seed/fill), demo account and demo peer stores |
 | `backend/matching.py` | What makes two accounts deliverable: shared categories, confirmed pins |
 | `backend/orders.py` | The order's stored shape and the shape a dashboard reads it back in, shared by both modes, and the two keys a demo run files an order's sides under |
-| `backend/surplus.py` | The surplus calculator: the regression pipeline, trained once and cached, forecasting per request |
-| `backend/history.py` | The logged days — one row per kitchen per day — and the features the model reads out of them |
-| `backend/seed.py` | The five test donors, the one recipient and the agreed delivery between them, with the donors' six weeks of logs and the weather taken from Open-Meteo's archive |
+| `backend/surplus.py` | The surplus calculator: the regression pipeline, fitted to the store's logged days once and cached, forecasting per request |
+| `backend/history.py` | The logged days — one row per kitchen per day — the features the model reads out of them, and the whole store's log it is fitted to |
+| `backend/seed.py` | The six test donors, the one recipient and the agreed delivery between them, with the demo account's year of logs, six weeks for each of the others, and the weather taken from Open-Meteo's archive for every day of them |
 | `backend/weather.py` | The live conditions at a point — now, day by day for the week ahead, and the days behind it — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
 | `backend/wsgi.py` | The same handler as a WSGI application, which is how a host runs it; see [Deployment](#deployment) |
 
@@ -577,34 +598,57 @@ and both entry points ignore it rather than binding somewhere nothing is looking
 
 ### The surplus calculator
 
-`backend/surplus.py` is the predictor the Surplus Analyser screen is built around,
-kept as close to identical as possible to the original `surplus.py` notebook script
-it came from: 200 synthetic days of kitchen history — customers served by day and
-weather, a weekday rhythm with a weekend bump — ending in a random-forest regressor
-through an impute → scale / one-hot pipeline, with the mean absolute error it scores
-at printed when the file is run on its own (`python3 backend/surplus.py`).
+`backend/surplus.py` is the predictor the Surplus Analyser screen is built around. The
+pipeline is the original `surplus.py` notebook script's, unchanged — a random-forest
+regressor over six features, through an impute → scale / one-hot preprocessor — but it
+is fitted to the **store's logged days** rather than to a run of invented ones: every
+kitchen's history, one row per kitchen per day, the sky over each day read from
+Open-Meteo's archive. The `np.random` generator that built the notebook's 200 synthetic
+days is gone, so what the model learns is the same record the forecast is read against
+rather than a schedule of its own. Running the file on its own
+(`python3 backend/surplus.py`) fits it to the seeded kitchens' logs and prints the two
+figures the original script printed.
+
+The features are *derived* from those rows rather than trusted to the columns beside
+them, with the original script's own shifts: yesterday's surplus is the previous logged
+day's, the week-old one is seven rows back in the same log, the fourteen-day window is
+the mean of the rows before the day, and the expected customers are the count that
+weekday has actually run at. On a log with no gaps in it — the seeded kitchens' case —
+that is the previous calendar day and the same weekday a week ago, which is what
+`features_from_history` reads back out for a forecast. A day that cannot answer one of
+them, whose sky is not one of the three words the model knows, or that does not say which
+kitchen it came from is left out of the fit rather than imputed as if someone had measured
+it. Lags never cross kitchens: each kitchen's rows are turned into features on their own,
+which is what makes a sample's "yesterday" its own kitchen's yesterday.
 
 The row it forecasts is **today's**: the day the kitchen is cooking on, and the surplus
 it is holding now. The module exposes two calls:
 
-- `train_surplus_model()` — the original script verbatim, seed and features and split
-  unchanged, returning the fitted pipeline and its MAE (9.2 kg on the held-out tail).
-- `forecast_surplus(**features)` — the call a request reaches. Every feature is
-  optional; anything left out is filled with a usable default, and the labels default
-  to **today's** own day and a clear sky. The clear sky is a fallback rather than a
-  reading — the dashboard reads the real one at the account's address and passes it in
-  as `weather` — so a request that omits it is one that had no address to read. The
-  pipeline is trained on the first call and cached in the process, so the forest is not
-  rebuilt per request.
+- `train_surplus_model(rows)` — the original script's split, preprocessing and forest,
+  with the logged days as the data. The newest fifth is held out and never fitted on, so
+  the MAE is this model's error on days it did not see rather than on days it memorised
+  (5.2 kg over the seeded store's 491 usable days). Returns the fitted pipeline, its MAE
+  and the days and kitchens it was fitted to.
+- `forecast_surplus(rows=…, **features)` — the call a request reaches. `rows` is the
+  logged days the model is fitted to, and it is read on the first call only: the fitted
+  forest is cached for the life of the process, so a busy session does not refit it per
+  request. A store with no logged days in it is refused with `503` `no_history` rather
+  than answered from a forest that was never trained. Every feature is optional;
+  anything left out is filled with a usable default, and the labels default to **today's**
+  own day and a clear sky. The clear sky is a fallback rather than a reading — the
+  dashboard reads the real one at the account's address and passes it in as `weather` —
+  so a request that omits it is one that had no address to read.
 
 `GET` or `POST /api/surplus-forecast` calls it. Accepts `day_of_week` (a day name),
 `weather` (Sunny, Cloudy or Rainy) and the four numeric features
 (`expected_customers`, `surplus_yesterday`, `surplus_last_week`, `surplus_rolling_14`),
 any of them, in the query string or a JSON body. A label outside the vocabularies the
 training data was built on is refused with `400` rather than forecast against
-silently, and the answer carries the prediction, the MAE it comes with and the model
-and features that produced it. With pandas or scikit-learn missing, it is `503`,
-`model_dependencies_missing`, with the install line in the message.
+silently, and the answer carries the prediction, the MAE it comes with, the model
+and features that produced it and the days the model was fitted to. With pandas or
+scikit-learn missing, it is `503`, `model_dependencies_missing`, with the install line in
+the message; with no logged days in the store to fit the model to, it is `503`
+`no_history`, which says what to seed.
 
 ### The live weather
 
@@ -650,10 +694,11 @@ high, low and rainfall) beside the prediction for anything that wants both.
 The chart draws those bars across the week's **own** range rather than up from zero:
 seven days of one kitchen's surplus sit within a few kilos of each other, so a
 zero-based axis would draw seven identical bars and hide the shape the chart exists to
-show. The range is named under the chart and the two bars that matter — today's and the
-week's heaviest — carry their figures, which is what makes the axis readable from the
-panel itself; a week that really is flat is drawn flat rather than exaggerated into a
-shape it does not have.
+show. The range is named under the chart and **every bar carries its own figure** — all
+seven days, today's included — which is what makes the axis readable from the panel
+itself rather than leaving a reader to guess four of the seven days from the shape; a
+week that really is flat is drawn flat rather than exaggerated into a shape it does not
+have.
 
 ### The logged days
 
@@ -679,18 +724,27 @@ the dashboard read the log for the date its own address is on. `GET /api/history
 the signed-in account's own days, newest first, with the summary and the derived features
 beside them: what the log says, rather than making anything else derive it again.
 
-**Five test donors ship with the server**, so the calculator can be exercised against a
-real past instead of its own defaults. Each one has six weeks of days ending yesterday:
+Every account's rows together are also what the **model is fitted to**: `history.all_days`
+reads the whole store's log — the process's own store in demo mode, the `surplus_history`
+table when persistence is on — once, when the first forecast in a process is made, and
+each row carries the kitchen it came from so the derived features stay inside one
+kitchen. A share of a year of one kitchen's days outweighs five six-week logs put
+together, which is exactly why the demo account has the year.
 
-| Sign in as | Kitchen | Where | Serves per day |
-| --- | --- | --- | --- |
-| `dana@resq.test` | Whitfield Bakery | 60 Queen St W, Toronto | 170–250 |
-| `omar@resq.test` | Haddad Grocers | 1180 Ste-Catherine O, Montréal | 200–300 |
-| `priya@resq.test` | Raman Kitchens | 87 Elm St, Toronto | 110–190 |
-| `luis@resq.test` | Ortega Deli | 601 Biscayne Blvd, Miami | 230–330 |
-| `mei@resq.test` | Chen Noodle House | 55 Bay St, Toronto | 90–170 |
+**Six test donors ship with the server**, so the calculator can be exercised against a
+real past instead of its own defaults. Five of them carry six weeks of days ending
+yesterday, and the first is the demo account the README opens on, which carries a year:
 
-The password is `ResqDemo1!` for all five. They are created when the server starts in
+| Sign in as | Kitchen | Where | Serves per day | Days logged |
+| --- | --- | --- | --- | --- |
+| `rosa@resq.test` | Chelsea Market Kitchen | 75 9th Ave, New York | 240–380 | 365 |
+| `dana@resq.test` | Whitfield Bakery | 60 Queen St W, Toronto | 170–250 | 42 |
+| `omar@resq.test` | Haddad Grocers | 1180 Ste-Catherine O, Montréal | 200–300 | 42 |
+| `priya@resq.test` | Raman Kitchens | 87 Elm St, Toronto | 110–190 | 42 |
+| `luis@resq.test` | Ortega Deli | 601 Biscayne Blvd, Miami | 230–330 | 42 |
+| `mei@resq.test` | Chen Noodle House | 55 Bay St, Toronto | 90–170 | 42 |
+
+The password is `ResqDemo1!` for all six. They are created when the server starts in
 demo mode — nothing is written to disk there — and with persistence on only when
 `RESQ_SEED=on` asks for it, so a database nobody meant to touch is never written to
 uninvited. `RESQ_SEED=off` turns it back off in demo mode. Each donor arrives working: a
@@ -723,7 +777,7 @@ pattern, and a day from that pattern carries no WMO code — which is what marks
 measurement. The customers and the surplus are the fixture's own, generated from the same
 shape the model was trained on (a weekday rhythm, the weekend bump, a little noise),
 because a test that ran against some other shape would prove nothing about this model.
-Everything is seeded per donor, so the same five kitchens come back the same way every
+Everything is seeded per donor, so the same six kitchens come back the same way every
 time; seeding again adds nothing, since a day already logged is left alone.
 
 ### Demo mode (default)
@@ -766,8 +820,8 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 | `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the six-week window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
 | `GET` | `/api/weather` | The real conditions at a point, in the analyser's own vocabulary. Requires `lat`/`lng`, and answers `400` for a missing, non-numeric or off-globe pair. Reads Open-Meteo — keyless — and returns the model's label for today, the WMO code and summary behind it, the day's high/low and rainfall, the current temperature and wind, the address's timezone and the source. Answers `502` `weather_unavailable` when the service cannot be reached, rather than a default sky |
-| `GET` | `/api/surplus-outlook` | The week's surplus at a point, which is what the analyser's chart is drawn from: one forecast per day, today first. Requires `lat`/`lng` (`400` as above) and takes an optional `days` — a whole number, defaulting to 7 and pulled to the 16-day ceiling the weather service answers at, `400` when it is not a number. Each day carries its own date, day name, Open-Meteo conditions and the model's prediction, with the model and its MAE once for the whole week. Answers `502` `weather_unavailable` when the outlook cannot be read, and `503` `model_dependencies_missing` without pandas or scikit-learn |
-| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather`, `on_date` (the ISO day being forecast, which the log is read for) and up to four numeric features, in the query string or a JSON body. With a bearer token, any numeric feature the caller leaves out is **filled from that account's own logged days**, and the answer carries the log it read and which features came from it; an explicit value always wins. The dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy, a number sitting below zero or an unreadable `on_date`, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed |
+| `GET` | `/api/surplus-outlook` | The week's surplus at a point, which is what the analyser's chart is drawn from: one forecast per day, today first. Requires `lat`/`lng` (`400` as above) and takes an optional `days` — a whole number, defaulting to 7 and pulled to the 16-day ceiling the weather service answers at, `400` when it is not a number. Each day carries its own date, day name, Open-Meteo conditions and the model's prediction, with the model and its MAE once for the whole week. Answers `502` `weather_unavailable` when the outlook cannot be read, and `503` `model_dependencies_missing` without pandas or scikit-learn, `503` `no_history` with no logged days in the store for the model to be fitted to |
+| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather`, `on_date` (the ISO day being forecast, which the log is read for) and up to four numeric features, in the query string or a JSON body. With a bearer token, any numeric feature the caller leaves out is **filled from that account's own logged days**, and the answer carries the log it read and which features came from it; an explicit value always wins. The dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy, a number sitting below zero or an unreadable `on_date`, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed, `503` `no_history` when the store has no logged days to fit the model to. The answer also carries `trained_on`: the days and kitchens the fitted forest learned from |
 
 ### Matching and delivery orders
 

@@ -115,7 +115,7 @@ from config import (
 )
 from db import connect, init_db, users_by_ids
 from geo import bounding_box, haversine_km, offset_point
-from history import as_day, features_from_history, history_summary, read_history
+from history import all_days, as_day, features_from_history, history_summary, read_history
 from helpers import (
     account_key,
     clean_email,
@@ -139,7 +139,7 @@ from orders import (
 )
 from seed import seed_test_accounts
 from security import hash_password, verify_password
-from surplus import forecast_surplus, train_surplus_model
+from surplus import NoTrainingHistory, forecast_surplus
 from weather import WeatherUnavailable, fetch_outlook, fetch_weather
 
 
@@ -662,6 +662,20 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 return False, []
             return True, read_history(row, conn)
 
+    def training_history(self):
+        """Every logged day in the store: what the surplus model is fitted to.
+
+        The forecast is one shared model rather than one per account, so its training set
+        is the whole store's log — every kitchen's days, each row naming the kitchen it
+        came from, which is what keeps a sample's lags inside one kitchen. The connection
+        is opened and closed here, so nothing above has to know which mode this server is
+        running in, exactly as the signed-in log is read.
+        """
+        if not PERSIST:
+            return all_days()
+        with connect() as conn:
+            return all_days(conn)
+
     def api_history(self):
         """The account's own logged days, newest first, and what they can answer.
 
@@ -767,6 +781,15 @@ class ResQHandler(SimpleHTTPRequestHandler):
             },
         )
 
+    def no_training_history(self, err):
+        """The 503 a surplus answer gets when there is no logged past to fit the model to.
+
+        The forest is fitted to the store's own days, so a store with none in it has
+        nothing to learn from. That is said plainly — with the way out of it — rather than
+        answered from a model that was never trained.
+        """
+        return self.send_json(503, {"error": str(err), "code": "no_history"})
+
     def api_weather(self):
         """The real sky at a point, in the vocabulary the analyser was trained on.
 
@@ -791,6 +814,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
     def api_surplus_outlook(self):
         """The week's surplus at a point: each day's own sky, run through the model.
+
+        The model is the same one the banner's forecast is made by, fitted to the same
+        store's log, so the chart and the figure beside it cannot disagree about what the
+        kitchen's past is.
 
         This is what the analyser's weekly chart is drawn from. The weather is what makes
         one day differ from the next — and the day's own name brings the model's weekend
@@ -827,6 +854,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
         signed_in, logged = self.signed_in_history()
         logged = logged[-HISTORY_READ_DAYS:] if signed_in else []
 
+        # The past the model is fitted to: the whole store's log, read once for the week
+        # rather than once per day, since the fitted forest is cached after the first day.
+        training = self.training_history()
+
         series = []
         model = None
         try:
@@ -839,6 +870,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                         if value is not None
                     }
                 answer = forecast_surplus(
+                    rows=training,
                     day_of_week=day["day_of_week"], weather=day["label"], **features
                 )
                 series.append(
@@ -846,7 +878,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 )
                 # Every day carries the same cached pipeline and its score, so the week
                 # carries them once rather than seven times over.
-                model = {"mae_kg": answer["mae_kg"], "model": answer["model"]}
+                model = {"mae_kg": answer["mae_kg"], "model": answer["model"],
+                         "trained_on": answer["trained_on"]}
+        except NoTrainingHistory as err:
+            return self.no_training_history(err)
         except ImportError:
             return self.model_dependencies_missing()
 
@@ -908,10 +943,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
     def api_surplus_forecast(self):
         """Today's surplus, forecast by the pipeline in surplus.py.
 
-        The model is trained on synthetic daily history once and cached, so the
-        first request pays for the forest and the rest do not. Every feature is
-        optional: a parameter that is not a usable number is refused rather than
-        guessed at, because a forecast nobody can trace to its inputs is not one
+        The model is fitted to the store's logged days once and cached, so the first
+        request pays for the forest and the rest do not; a store with no days in it is
+        told so (503, `no_history`) rather than forecast from a made-up past. Every
+        feature is optional: a parameter that is not a usable number is refused rather
+        than guessed at, because a forecast nobody can trace to its inputs is not one
         worth drawing on the analyser screen.
         """
         if self.command == "POST":
@@ -954,7 +990,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
         history = self.history_features(cleaned, on_date)
         try:
-            forecast = forecast_surplus(**cleaned)
+            forecast = forecast_surplus(rows=self.training_history(), **cleaned)
+        except NoTrainingHistory as err:
+            return self.no_training_history(err)
         except ImportError:
             # Surplus.py raises the plain ImportError with install instructions when
             # pandas is missing; scikit-learn's missing import is a ModuleNotFoundError,

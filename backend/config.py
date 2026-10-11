@@ -221,6 +221,13 @@ HISTORY_READ_DAYS = 42
 # touch is never written to uninvited.
 SEED_HISTORY_DAYS = 42
 
+# The one demo account the README names at the top, and the reason it is worth naming: a
+# Manhattan kitchen whose log covers a **year** of days rather than six weeks, so the
+# analyser is read and its model fitted against a kitchen that has been through every
+# season — a holiday week, a heatwave, a fortnight of rain. Its weather is the archive's
+# own for each of those days, one request for the whole year.
+DEMO_DONOR_HISTORY_DAYS = 365
+
 _seed_flag = os.environ.get("RESQ_SEED", "").strip().lower()
 
 SEED_ON_START = (not PERSIST) if not _seed_flag else _seed_flag in ("on", "1", "true", "yes")
