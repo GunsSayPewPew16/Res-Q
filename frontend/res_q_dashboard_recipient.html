@@ -681,13 +681,16 @@
             <!-- Feed: the live board. Every surplus post in the shared Supabase table, newest
                  first, each one carrying the single action a recipient has on it — claiming it.
                  A post a donor logs anywhere arrives here over Supabase Realtime while this
-                 screen is open, and a claim made by another recipient flips the card in place
-                 rather than leaving a button that no longer works. -->
+                 screen is open, and so does a claim another recipient makes on an item this
+                 screen is showing: the card picks the name up and counts it in, which is what
+                 keeps two recipients from reading the same post as already taken. The action
+                 stays on a claimed post for that reason — a post can be claimed by several
+                 recipients, and it is the donor who rations between them. -->
             <div id="viewFeed" class="hidden">
                 <div class="panel p-5 md:p-7">
                     <!-- The board's tab bar: the view being read in mint under its rule, the
                          others sage. All three views are real filters over the rows already read
-                         — the whole board, just what is still there to take, or the posts tagged
+                         — the whole board, the posts nobody has claimed yet, or the posts tagged
                          with the goods this account asked for in its goods profile, which is what
                          *For You* means — so switching is instant and the chip at the right keeps
                          counting the whole board either way. The board's name moves to a
@@ -2512,19 +2515,23 @@
 
         // ---------------------------------------------------------------------------
         // The live feed. This is the one place a dashboard talks to Supabase rather
-        // than to the local backend: every surplus post a donor has logged is read
-        // from the shared surplus_posts table, and the button on each card claims one
-        // by writing its status. Both go through window.ResQDB, which fetches the
-        // Supabase library on first use and says plainly when the table is not there.
+        // than to the local backend: every surplus post a donor has logged is read from
+        // the shared surplus_posts table, and the button on each card claims one — a
+        // claim being a row of its own in surplus_claims, so a post can be claimed by
+        // more than one recipient. Both go through window.ResQDB, which fetches the
+        // Supabase library on first use and says plainly when a table is not there.
         //
         // A claim is only believed once the database has answered with the row it
-        // changed. When that answer is empty the post was claimed by somebody else in
-        // the meantime — the update matched nothing — so the card is re-read rather
-        // than flopped to a state that was never written.
+        // wrote. A write refused as a duplicate is this recipient asking twice for the
+        // same post; anything else refused is reported plainly. Either way the board is
+        // re-read rather than flopped to a state that was never written.
         // ---------------------------------------------------------------------------
         var feedClaiming = {};
         var feedPoll = null;
         var feedUnwatch = null;
+        var feedClaimUnwatch = null;
+        // The claims the board carries, gathered per post: { post id: [claim, ...] }.
+        var feedClaims = {};
 
         var CHIP_IDLE = 'text-neutral-500 bg-[#051F20]';
         var CHIP_BUSY = 'text-[#DAF1DE] bg-[#235347]';
@@ -2598,7 +2605,7 @@
         // What each view says when it has nothing to draw.
         function feedEmpty() {
             if (feedTab === 'open') {
-                return 'Nothing is open right now \u2014 every post on the board has been claimed.';
+                return 'Nothing untouched right now \u2014 every post on the board already has a claimant.';
             }
             if (feedTab === 'foryou') {
                 return profileGoods().length
@@ -2608,17 +2615,34 @@
             return 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.';
         }
 
+        // The count over the board, plus the one thing worth saying when the claimant
+        // line cannot be drawn at all: the project has not run the claims migration, so
+        // every claim falls back to the older first-claim-wins update and no card names
+        // anybody. That is a note, not a failure — the board still works.
+        function feedSummaryChip(db, rows, claims) {
+            var chip = db.feedSummary(rows);
+            if (!claims.ok && claims.error && claims.error.missingTable) {
+                return chip + ' \u00b7 claims migration pending';
+            }
+            return chip;
+        }
+
         function loadFeed() {
             var db = resqDb();
-            if (!db) { return; }
-            return db.listPosts({}).then(function (res) {
-                if (!res.ok) {
-                    setChip('feedState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
-                    renderFeed(null, feedFailure(res.error));
+            if (!db) { return Promise.resolve(); }
+            // The board and its claims are two tables read as one screen: the posts say
+            // what is on offer, the claims say who has already asked for it.
+            return Promise.all([db.listPosts({}), db.listClaims({})]).then(function (both) {
+                var posts = both[0];
+                var claims = both[1];
+                feedClaims = claims.ok ? db.groupClaims(claims.data) : {};
+                if (!posts.ok) {
+                    setChip('feedState', posts.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    renderFeed(null, feedFailure(posts.error));
                     return;
                 }
-                var rows = res.data || [];
-                setChip('feedState', rows.length ? db.feedSummary(rows) : 'no posts',
+                var rows = posts.data || [];
+                setChip('feedState', rows.length ? feedSummaryChip(db, rows, claims) : 'no posts',
                     rows.length ? CHIP_DONE : CHIP_IDLE);
                 renderFeed(rows, '');
             });
@@ -2663,11 +2687,37 @@
                     + '</span>';
                 return;
             }
+            // Each card carries the claims already on its post, which is the line above
+            // its action: who asked first, and how many asked after. `multiClaim` comes
+            // from the board itself — whether it can hold more than one claim — and it is
+            // what keeps the action on a post somebody has already claimed.
+            var viewer = db.claimantName(resqProfile || null);
             list.innerHTML = rows.map(function (row) {
-                return db.feedCard(row, { canClaim: true });
+                return db.feedCard(row, {
+                    canClaim: true,
+                    claimants: feedClaims[row.id] || [],
+                    multiClaim: db.claimsSupported(),
+                    viewerName: viewer
+                });
             }).join('');
         }
 
+        // The post behind a card, out of the rows the board last read, so a record of
+        // the claim can carry the item rather than just its id.
+        function feedRow(id) {
+            var found = null;
+            feedRows.some(function (row) {
+                if (row.id === id) { found = row; return true; }
+                return false;
+            });
+            return found;
+        }
+
+        // Taking an item up is a claim row now — one recipient, one post — which is what
+        // lets a shelter and a kitchen both claim the same pallet and the donor count
+        // them. The post's own status settles to claimed with the first of those, which
+        // is why a claimed card still carries the action; this recipient's own name is
+        // what it is filed under, out of the profile the page already holds.
         function claimSurplus(button) {
             var db = resqDb();
             var id = button ? button.getAttribute('data-claim') : '';
@@ -2677,34 +2727,49 @@
             button.textContent = 'Claiming';
             setChip('feedState', 'claiming\u2026', CHIP_BUSY);
 
-            db.claimPost(id).then(function (res) {
+            var profile = resqProfile || null;
+            db.claimPost(id, profile).then(function (res) {
                 delete feedClaiming[id];
                 if (!res.ok) {
                     button.disabled = false;
                     button.textContent = 'Claim';
-                    setChip('feedState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    if (res.error && res.error.duplicate) {
+                        // This recipient has claimed this post already — the claims table's
+                        // own unique index said so, rather than a second claim being
+                        // stacked on the first.
+                        setChip('feedState', 'already claimed by you', CHIP_BUSY);
+                    } else {
+                        setChip('feedState', res.error && res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    }
+                    loadFeed();
                     return;
                 }
-                if (!res.data) {
-                    // The update matched no open row, so somebody else got there first.
+                if (res.claimed === false) {
+                    // The write matched no open row and wrote nothing, which is what
+                    // claiming looks like in a project with no claims table: the older
+                    // first-claim-wins update, and somebody else got there first.
                     setChip('feedState', 'already claimed', CHIP_BUSY);
                     loadFeed();
                     return;
                 }
-                // The claim won. It is also an accepted order, and the recipient's own
-                // details go with the claimed post to the backend's own claims endpoint,
-                // with the session token beside them, so a rationing pass can read back
-                // who reached this item. The record carries the post row exactly as the
-                // board returned it, so every claimant of the same post — now or after a
-                // re-post — joins on the same post id.
-                var claimedRow = res.data;
-                db.recordClaim(claimedRow, resqProfile || null,
-                               readStore(TOKEN_KEY)).then(function (rec) {
-                    setChip('feedState', rec.ok ? 'claimed \u00b7 recorded'
-                                                : 'claimed \u00b7 record failed',
-                            rec.ok ? CHIP_DONE : CHIP_BUSY);
+                // The claim is on the board, as its own row, and it is also an accepted
+                // order: the recipient's own details go with the claimed post to the
+                // backend's own claims endpoint, with the session token beside them, so a
+                // rationing pass can read back who reached this item. The record carries
+                // the post row as the board read it, so every claimant of the same post —
+                // now or after a re-post — joins on the same post id. It is written behind
+                // the claim rather than in front of it: `surplus_claims` is the board's
+                // own copy of the same fact, and the second copy failing never undoes a
+                // claim the board has already accepted.
+                db.recordClaim(feedRow(id) || res.data, resqProfile || null,
+                               readStore(TOKEN_KEY));
+                // One more name on this post: the board is re-read so the card counts this
+                // recipient with the others, and the chip says how many are on it.
+                loadFeed().then(function () {
+                    var count = (feedClaims[id] || []).length;
+                    setChip('feedState', count ? 'claimed \u00b7 ' + count + ' on this post' : 'claimed',
+                        CHIP_DONE);
                 });
-                loadFeed();
             }).catch(function () {
                 delete feedClaiming[id];
                 if (button) {
@@ -2715,9 +2780,11 @@
             });
         }
 
-        // The feed is live while it is open: the subscription covers posts and claims
-        // as they happen, and the timer re-reads the table for a project where the
-        // realtime publication was not set up. Both stop when the section is left.
+        // The feed is live while it is open: the subscriptions cover posts and claims as
+        // they happen — the second of the two is what moves a card's claimant line when
+        // somebody else reaches the same item — and the timer re-reads both tables for a
+        // project where the realtime publication was not set up or the claims table is
+        // not there. All of it stops when the section is left.
         function openFeed() {
             setChip('feedState', 'reading\u2026', CHIP_BUSY);
             var db = resqDb();
@@ -2729,6 +2796,9 @@
             loadFeed();
             if (!feedUnwatch) {
                 feedUnwatch = db.watchPosts(function () { loadFeed(); });
+            }
+            if (!feedClaimUnwatch && db.watchClaims) {
+                feedClaimUnwatch = db.watchClaims(function () { loadFeed(); });
             }
             if (!feedPoll) {
                 feedPoll = window.setInterval(loadFeed, db.pollMs);
@@ -2743,6 +2813,10 @@
             if (feedUnwatch) {
                 feedUnwatch();
                 feedUnwatch = null;
+            }
+            if (feedClaimUnwatch) {
+                feedClaimUnwatch();
+                feedClaimUnwatch = null;
             }
         }
 

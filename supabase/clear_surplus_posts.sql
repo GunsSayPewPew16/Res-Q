@@ -1,8 +1,9 @@
 -- Res-Q · emptying the board
 --
--- Deletes every row in public.surplus_posts, so a demo can start from an empty
--- board after a day of testing. It is not a migration and nothing applies it
--- automatically — it is run by hand, on purpose.
+-- Deletes every row in public.surplus_posts — and, by the cascade on the claims table,
+-- every claim against them — so a demo can start from an empty board after a day of
+-- testing. It is not a migration and nothing applies it automatically — it is run by
+-- hand, on purpose.
 --
 -- Run it in Supabase → SQL Editor → New query → Run:
 --
@@ -15,6 +16,11 @@
 --
 -- Every open dashboard empties on its own within the poll interval, and at once
 -- if it is subscribed to Realtime: a delete is as live as an insert.
+--
+-- The claims go with the posts: every row in public.surplus_claims points at a post
+-- with `on delete cascade`, so emptying the board empties its claims too and nothing is
+-- left holding a post id that is not there any more. That is also why a project without
+-- the claims migration can run this file unchanged.
 --
 -- Nothing here depends on the goods-category migration, so the two can be run in
 -- either order, or this one alone.

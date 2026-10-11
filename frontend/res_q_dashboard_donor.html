@@ -1721,20 +1721,25 @@
         }
 
         // ---------------------------------------------------------------------------
-        // Accepted posts. An item of this donor's that a recipient takes off the board is
-        // an order accepted, so the orders figure counts them: what the profile already
-        // held, plus one for every post of theirs carrying a claimed status. It is counted
-        // from the board rather than written back into the profile, which is what keeps it
-        // honest — it always matches the rows that are really there, it needs no second
-        // write against somebody else's account, and it behaves the same in demo mode as
-        // it does with persistence on.
+        // Accepted posts. An item of this donor's that a recipient takes up is an order
+        // accepted, and *every* recipient who claims it is one: a post can now be claimed
+        // by more than one organisation, so two shelters asking for the same pallet of
+        // bread are two accepted orders between them, which is what the board's own
+        // claimant line says as well. It is counted from the claims the board holds rather
+        // than written back into the profile, which is what keeps it honest — it always
+        // matches the rows that are really there, it needs no second write against
+        // somebody else's account, and it behaves the same in demo mode as it does with
+        // persistence on. A project that has not run the claims migration falls back to
+        // counting the posts carrying a claimed status, which is exactly what this figure
+        // counted before a claim was a row of its own.
         //
         // While the dashboard is the section in front of the donor the count is live, on
-        // the same two legs the board's own screens use: a subscription for the moment a
-        // claim lands, and a re-read behind it. Leaving Dashboard stops both.
+        // the same legs the board's own screens use: a subscription for the moment a claim
+        // lands, and a re-read behind it. Leaving Dashboard stops them.
         // ---------------------------------------------------------------------------
         var acceptedPosts = 0;
         var ordersWatch = null;
+        var ordersClaimWatch = null;
         var ordersPoll = null;
 
         // What the profile held for this figure before any of the board's posts counted.
@@ -1751,8 +1756,18 @@
             fillMetric('metricOrdersCompleted', ordersFigure().toLocaleString('en-US'));
         }
 
-        function countAccepted(rows) {
-            return (rows || []).filter(function (row) { return row.status === 'claimed'; }).length;
+        // One accepted order per recipient who claimed the item, read off the claims
+        // gathered per post. Without the claims table there is nothing to count beyond
+        // the claimed posts themselves, so that is what is counted — the figure this was
+        // before claims became rows.
+        function countAccepted(rows, claimsByPost) {
+            var db = resqDb();
+            if (!db || !db.claimsSupported()) {
+                return (rows || []).filter(function (row) { return row.status === 'claimed'; }).length;
+            }
+            return (rows || []).reduce(function (total, row) {
+                return total + (((claimsByPost || {})[row.id] || []).length);
+            }, 0);
         }
 
         function openDashboardOrders() {
@@ -1761,6 +1776,12 @@
             if (!db) { return; }
             if (!ordersWatch) {
                 ordersWatch = db.watchPosts(function () { refreshMySurplus(); });
+            }
+            // A claim is its own table now, so the figure needs that stream as well: a
+            // second recipient claiming an item this donor already had a claim on moves
+            // the count without the post row itself changing at all.
+            if (!ordersClaimWatch && db.watchClaims) {
+                ordersClaimWatch = db.watchClaims(function () { refreshMySurplus(); });
             }
             if (!ordersPoll) {
                 ordersPoll = window.setInterval(refreshMySurplus, db.pollMs);
@@ -1775,6 +1796,10 @@
             if (ordersWatch) {
                 ordersWatch();
                 ordersWatch = null;
+            }
+            if (ordersClaimWatch) {
+                ordersClaimWatch();
+                ordersClaimWatch = null;
             }
         }
 
@@ -2889,29 +2914,45 @@
         }
 
         // This donor's rows, newest first. `donor_name` is what a post is filed under,
-        // so the filter is the same name the form writes.
+        // so the filter is the same name the form writes. Who has claimed each of them is
+        // read beside them, because every row carries that line and the accepted figure
+        // is counted from it.
         function refreshMySurplus() {
             var db = resqDb();
             if (!db) { return; }
             return db.listPosts({ donorName: donorName() }).then(function (res) {
                 if (!res.ok) {
                     setChip('mySurplusState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
-                    renderMySurplus(null, surplusFailure(res.error));
+                    renderMySurplus(null, surplusFailure(res.error), {});
                     return;
                 }
                 var rows = res.data || [];
-                // This donor's own rows are where their accepted orders are counted from,
-                // so the figure moves with them wherever they change.
-                acceptedPosts = countAccepted(rows);
-                renderOrdersFigure();
-                setChip('mySurplusState', rows.length ? rows.length + ' logged' : 'empty', CHIP_DONE);
-                renderMySurplus(rows, '');
-                // The analyser's category mix is read from these same rows: one read of the
-                // board feeds both the list under the form and the screen's own month. The
-                // rows are handed to the API, which files them into the kitchen's own log —
-                // and the month is read back out of that log, so a board cleared later
-                // still leaves the month on the chart.
-                loadCategoryMix(rows);
+                if (!rows.length) {
+                    acceptedPosts = 0;
+                    renderOrdersFigure();
+                    setChip('mySurplusState', 'empty', CHIP_DONE);
+                    renderMySurplus(rows, '', {});
+                    loadCategoryMix(rows);
+                    return;
+                }
+                // Who has claimed these rows is read beside them: every row carries that
+                // line, and the accepted figure is counted from the claims themselves.
+                return db.listClaims({ postIds: rows.map(function (row) { return row.id; }) })
+                    .then(function (claims) {
+                        var byPost = claims.ok ? db.groupClaims(claims.data) : {};
+                        // This donor's own rows are where their accepted orders are counted
+                        // from, so the figure moves with them wherever they change.
+                        acceptedPosts = countAccepted(rows, byPost);
+                        renderOrdersFigure();
+                        setChip('mySurplusState', rows.length ? rows.length + ' logged' : 'empty', CHIP_DONE);
+                        renderMySurplus(rows, '', byPost);
+                        // The analyser's category mix is read from these same rows: one read
+                        // of the board feeds both the list under the form and the screen's
+                        // own month. The rows are handed to the API, which files them into
+                        // the kitchen's own log — and the month is read back out of that
+                        // log, so a board cleared later still leaves the month on the chart.
+                        loadCategoryMix(rows);
+                    });
             });
         }
 
@@ -2923,7 +2964,7 @@
                 : String(value === null || value === undefined ? '' : value);
         }
 
-        function renderMySurplus(rows, message) {
+        function renderMySurplus(rows, message, claimsByPost) {
             var list = document.getElementById('mySurplusList');
             if (!list) { return; }
             var db = resqDb();
@@ -2938,6 +2979,10 @@
                 return;
             }
             list.innerHTML = rows.map(function (row) {
+                // Who has claimed this row, when anybody has: the same line the board's
+                // cards carry — the first recipient named, the others counted — so a donor
+                // reading either screen reads the same fact.
+                var claimants = db.claimHeadline((claimsByPost || {})[row.id]);
                 return '<div class="p-4 organic-inner bg-[#163832] border border-[#235347] ' +
                         'hover:border-neutral-700 transition-all">' +
                     '<div class="flex flex-wrap items-start justify-between gap-3">' +
@@ -2948,6 +2993,10 @@
                     '</div>' +
                     '<div class="mt-2 text-[11px] text-neutral-400">' +
                         surplusText(db.postNeeds(row)) + '</div>' +
+                    (claimants
+                        ? '<div class="mt-1.5 text-[12px] font-bold text-[#DAF1DE]">' +
+                            surplusText(claimants) + '</div>'
+                        : '') +
                     '<div class="mt-1 text-[10px] text-neutral-600">' +
                         surplusText(row.location) + ' &#183; logged ' +
                         surplusText(db.formatWhen(row.created_at)) + '</div>' +
@@ -2988,19 +3037,26 @@
 
         // ---------------------------------------------------------------------------
         // The shared board. This is the same table the recipient dashboard reads as its
-        // feed, read here too: every published post from every donor, newest first. The
-        // board is one board, so the cards come from the same renderer — without its
-        // claim action, because taking surplus is the recipient's side of the exchange,
-        // and with this donor's own posts marked. It is live the same way the
-        // recipient's copy is: a subscription while the screen is open, with a re-read
-        // behind it for a project where the realtime publication was not set up.
+        // feed, read here too: every published post from every donor, newest first, with
+        // the claims each post carries read beside it. The board is one board, so the
+        // cards come from the same renderer — without its claim action, because taking
+        // surplus is the recipient's side of the exchange, and with this donor's own
+        // posts marked. Those claims are the part a donor reads a card for: the line
+        // under the item names the first recipient who asked for it and counts the rest,
+        // so an item taken up by three organisations says so on its own card. It is live
+        // the same way the recipient's copy is, and on both tables: a subscription to
+        // the posts and a second to the claims while the screen is open, with a re-read
+        // behind them for a project where the realtime publication was not set up.
         // ---------------------------------------------------------------------------
         var feedPoll = null;
         var feedUnwatch = null;
-        // The board as it was last read, and which of its three views is on screen. The
-        // tab filters those rows rather than reading the table again, so switching is
-        // instant and the chip above still counts the whole board.
+        var feedClaimUnwatch = null;
+        // The board as it was last read, its claims gathered per post, and which of its
+        // three views is on screen. The tab filters those rows rather than reading the
+        // table again, so switching is instant and the chip above still counts the whole
+        // board.
         var feedRows = [];
+        var feedClaims = {};
         var feedTab = 'all';
         var FEED_TABS = { all: 'feedTabAll', mine: 'feedTabMine', foryou: 'feedTabForYou' };
 
@@ -3039,17 +3095,32 @@
             return 'No surplus has been posted yet. Every logged item appears here on its own.';
         }
 
+        // The count over the board, plus the one thing worth saying when no card can
+        // carry a claimant line: the project has not run the claims migration, so every
+        // claim falls back to the older first-claim-wins update. That is a note rather
+        // than a failure — the board itself still works.
+        function feedSummaryChip(db, rows, claims) {
+            var chip = db.feedSummary(rows);
+            if (!claims.ok && claims.error && claims.error.missingTable) {
+                return chip + ' \u00b7 claims migration pending';
+            }
+            return chip;
+        }
+
         function loadFeed() {
             var db = resqDb();
-            if (!db) { return; }
-            return db.listPosts({}).then(function (res) {
-                if (!res.ok) {
-                    setChip('feedState', res.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
-                    renderFeed(null, surplusFailure(res.error));
+            if (!db) { return Promise.resolve(); }
+            return Promise.all([db.listPosts({}), db.listClaims({})]).then(function (both) {
+                var posts = both[0];
+                var claims = both[1];
+                feedClaims = claims.ok ? db.groupClaims(claims.data) : {};
+                if (!posts.ok) {
+                    setChip('feedState', posts.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
+                    renderFeed(null, surplusFailure(posts.error));
                     return;
                 }
-                var rows = res.data || [];
-                setChip('feedState', rows.length ? db.feedSummary(rows) : 'no posts',
+                var rows = posts.data || [];
+                setChip('feedState', rows.length ? feedSummaryChip(db, rows, claims) : 'no posts',
                     rows.length ? CHIP_DONE : CHIP_IDLE);
                 renderFeed(rows, '');
                 // The board is one board, and this row of it filters the same read, so the
@@ -3099,8 +3170,17 @@
                     + '</span>';
                 return;
             }
+            // Every card carries its post's own claims: who asked for it first, and how
+            // many asked after. A donor's copy of the board has no claim action on it —
+            // taking surplus is the recipient's side of the exchange — so this line is
+            // what the card is being read for.
             list.innerHTML = rows.map(function (row) {
-                return db.feedCard(row, { canClaim: false, ownName: mine });
+                return db.feedCard(row, {
+                    canClaim: false,
+                    ownName: mine,
+                    claimants: feedClaims[row.id] || [],
+                    multiClaim: db.claimsSupported()
+                });
             }).join('');
         }
 
@@ -3120,6 +3200,12 @@
             if (!feedUnwatch) {
                 feedUnwatch = db.watchPosts(function () { loadFeed(); });
             }
+            // The claims stream on their own channel, which is what moves a card's
+            // claimant line while the board is open: somebody else asking for an item
+            // this donor is looking at does not touch the post's own row at all.
+            if (!feedClaimUnwatch && db.watchClaims) {
+                feedClaimUnwatch = db.watchClaims(function () { loadFeed(); });
+            }
             if (!feedPoll) {
                 feedPoll = window.setInterval(loadFeed, db.pollMs);
             }
@@ -3133,6 +3219,10 @@
             if (feedUnwatch) {
                 feedUnwatch();
                 feedUnwatch = null;
+            }
+            if (feedClaimUnwatch) {
+                feedClaimUnwatch();
+                feedClaimUnwatch = null;
             }
         }
 

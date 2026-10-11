@@ -143,11 +143,13 @@ the matching logic, and invites visitors into the flow above.
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
 | `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes — its second panel the last month's mix by goods category, weighed by the backend and labelled one bar per category — plus the delivery-location card; and the *Ongoing Deliveries* section, which is the rationing pass for this kitchen: three figures, a ring of one post's claimants with every slice labelled by shelter and share, and the queue under it |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same arrangement for recipients, carrying the same top rail under its own section names (*Incoming Deliveries*, *Delivery Status*, *Received Deliveries*) and the same Dashboard screen with its own counters; its *Feed* section is that same live board in three views (all posts, open, and the posts tagged with the goods this recipient needs), with a claim button on every open post |
-| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, holds the six goods categories one time, and draws every post as the one shared card both roles see |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same arrangement for recipients, carrying the same top rail under its own section names (*Incoming Deliveries*, *Delivery Status*, *Received Deliveries*) and the same Dashboard screen with its own counters; its *Feed* section is that same live board in three views (all posts, the posts nobody has claimed yet, and the posts tagged with the goods this recipient needs), with a claim button on every post — a claimed one included, because a post can be claimed by several recipients and it is the donor who rations between them |
+| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` and `surplus_claims` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, reads back who has claimed what, streams changes to both tables, holds the six goods categories one time, and draws every post as the one shared card both roles see — including the line naming the first recipient to claim it and counting the rest |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
 | `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` | The `goods_type` tag column, its constraint to the six categories and the claim-guard update that freezes it — run once against the project, after the file above |
 | `supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql` | The five allocation columns the rationing pass publishes back to a claimed row — its weight, its share, the score behind it, who receives it and when — with the note on the policy and trigger that already permit the write |
+| `supabase/migrations/20261012000000_create_surplus_claims.sql` | The `surplus_claims` table — one row per recipient per post, which is what lets several recipients claim the same item and lets a card name and count them — with its policies, its one-claim-per-recipient index and its realtime publication entry: run once against the project, after the three files above |
+| `supabase/seed_demo_claims.sql` | One post and three recipients who claim it, for showing the claimant line on the board — run by hand in the SQL editor, the way the migrations are, and safe to run more than once |
 | `supabase/clear_surplus_posts.sql` | Empties the board between demos: one `delete` run by hand as the project owner, since the publishable key the pages hold cannot delete |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
@@ -264,9 +266,11 @@ still hand a location to the account.
 ## The surplus board (Supabase)
 
 The one thing the site keeps outside its own backend is the surplus board: the
-items a donor has spare, and who has claimed them. It lives in a Supabase Postgres
-table, `public.surplus_posts`, so an item is on every open dashboard the moment it
-is logged rather than waiting for a page to be reloaded.
+items a donor has spare, and who has claimed them. It lives in two Supabase Postgres
+tables — `public.surplus_posts` for the items, `public.surplus_claims` for the claims
+against them — so an item is on every open dashboard the moment it is logged rather
+than waiting for a page to be reloaded, and a claim on it is on every open dashboard
+the moment it is made.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -276,7 +280,7 @@ is logged rather than waiting for a page to be reloaded.
 | `quantity` | `text` | How much of it, said the way a shop says it — "24 kg across 6 crates" |
 | `location` | `text` | Where it can be collected from |
 | `goods_type` | `text` | Which of the six goods categories the post is for, or `null` on a post logged before the category existed |
-| `status` | `text` | `pending` or `claimed`, defaulting to `pending` |
+| `status` | `text` | `pending` or `claimed`, defaulting to `pending`. `claimed` means at least one recipient has claimed the post; it no longer means nobody else may |
 | `created_at` | `timestamptz` | Defaulting to `now()`; the board reads newest-first |
 | `allocated_kg` | `numeric` | The rationing pass's answer for the row, once it is published: how much of the item the shelter will receive |
 | `allocation_percent` | `numeric` | That ration as a share of the post, 0–100 |
@@ -284,18 +288,40 @@ is logged rather than waiting for a page to be reloaded.
 | `allocated_to` | `text` | The shelter it is for, named the way the header names them |
 | `allocated_at` | `timestamptz` | When it was published |
 
-Apply them once against the project, in order: paste
+And the claims themselves, `public.surplus_claims`, one row per recipient per post:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key, defaulting to `gen_random_uuid()` |
+| `post_id` | `uuid` | The post claimed, referencing `surplus_posts(id)`; the row goes with the post |
+| `recipient_name` | `text` | Who claimed it — the contact's own name, or the organisation's when the profile has no person on it |
+| `recipient_org` | `text` | The organisation they claim for, or `null` |
+| `claimed_at` | `timestamptz` | Defaulting to `now()`; the earliest claim is the name a card leads with |
+
+The claims table is what makes a post claimable by more than one recipient. A unique
+index on `(post_id, lower(recipient_name))` is what keeps it to one claim per recipient
+per post — clicking **Claim** twice, or two dashboards open on one account, is refused
+by the database rather than double-counted. There is deliberately no update and no
+delete policy on it: a claim is a thing that happened, not a thing that is edited.
+
+Apply the tables once against the project, in order: paste
 `supabase/migrations/20261008000000_create_surplus_posts.sql` into **SQL Editor →
 New query → Run** in the Supabase dashboard, then
-`supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` the same
-way — or point the Supabase CLI at the project and run `supabase db push`. All three
-files are written to be safe to run more than once. The second one only has to be applied
-once: until it is, the compose box still logs posts, but it logs them untagged and
-says so on the line under the fields, so a half-migrated project loses the category
-rather than the ability to post. The third adds the five allocation columns the rationing
-pass publishes its answer into; until it is applied the board still works exactly as it
-did, and publishing an allocation is the one call that answers with the migration's name
-instead.
+`supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql`,
+`supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql` and
+`supabase/migrations/20261012000000_create_surplus_claims.sql` the same way — or point the
+Supabase CLI at the project and run `supabase db push`. All four files are written to be
+safe to run more than once.
+
+Three of them can be *late* without taking a feature down, and each says so itself. Until
+the `goods_type` migration is applied, the compose box still logs posts, but it logs them
+untagged and says so on the line under the fields — the project loses the category rather
+than the ability to post. Until the allocation one is applied, the board still works
+exactly as it did, and publishing an allocation is the one call that answers with the
+migration's name instead. Until the claims one is applied, a claim falls back to the older
+behaviour below — one claim per post, written as a status — no card carries a claimant
+line, and the board's chip says *claims migration pending*: a half-migrated project loses
+the count, not the ability to claim.
 
 Emptying the board is a separate, deliberate act rather than a migration:
 `supabase/clear_surplus_posts.sql` deletes every row and is run by hand the same way.
@@ -338,16 +364,37 @@ sit on a dashboard rather than behind the API:
   status, which is what makes the *For You* view legible: the filter chooses between
   tagged posts, so it shows which tag it chose. A
   donor's own posts are marked *your post* so they are easy to pick out among everyone
-  else's. The two copies differ only in what they offer: a recipient's card has one
-  action, **Claim**, which
-  writes `status = 'claimed'`, and a donor's has none, because taking surplus is the
-  recipient's side of the exchange. A claimed card keeps its place with a claimed chip
-  and no button, so the board reads as a record of what was offered rather than
-  quietly emptying. A claim only ever matches a post that is still `pending`, so the
-  second visitor to click the same item is told *already claimed* and the card is
-  re-read instead of the claim being overwritten. A claim is also an accepted order,
-  and it adds one to that donor's orders figure on their dashboard's effect panel —
-  see [the impact figures](#how-the-pieces-connect).
+  else's.
+
+  Who has claimed a post is on the card, in the one line under the item: the first
+  recipient to claim it, named, and the rest counted — **"Daniela Ruiz and 2 more
+  claimed"**, which is the reference feed's *"Followed by …"* line with the claim in it
+  and no avatar beside it, because what a donor is reading there is the count. With one
+  claimant the line names them on their own (*"Daniela Ruiz claimed"*, since *and 0
+  more* is not how anybody says it), and a post nobody has claimed carries no line at
+  all. The same line is on each row of the donor's own *Surplus Analyser* log.
+
+  The two copies of the board differ in what they offer. A recipient's card has one
+  action, **Claim**, and a donor's has none, because taking surplus is the recipient's
+  side of the exchange. That action stays on a post somebody has already claimed: a
+  claim writes a row of its own into `surplus_claims` rather than closing the post, so
+two shelters with a use for the same pallet of bread can both ask for it and the donor
+  is the one who rations between them. The post's own `status` still settles to
+  `claimed` with the first of those claims — the board's chips and the donor's figure
+  read that — so a claimed card keeps its place and its claimed chip, and reads as a
+  record of what was offered rather than quietly emptying. A recipient who has already
+  claimed a post reads *you claimed* where the button would be, rather than a button
+  that could only be refused; a second click from the same account, or from a second
+  dashboard open on it, is refused by the claims table's own index and the board is
+  re-read rather than the claim being written twice. A claim is also an accepted order,
+  and **every recipient who claims one of that donor's posts** adds one to that donor's
+  orders figure on their dashboard's effect panel — see
+  [the impact figures](#how-the-pieces-connect).
+
+  In a project that has not run the claims migration, all of this degrades to what it
+  was before the table existed, and does so by itself: claiming becomes the single
+  first-claim-wins status write, the second recipient to click the same item is told
+  *already claimed*, and the cards carry no claimant line.
 - **Surplus Analyser** — the donor's own rows, the same table narrowed to that
   donor's name, with the status each one has reached. It is the donor's log rather
   than the shared board, which is why it lives beside the feed instead of in it.
@@ -376,19 +423,21 @@ chip and the tab's filter cannot drift apart — and the table constrains the co
 the same six, so a post cannot be filed under a category nothing else knows.
 
 Every one of those screens is live. While one is on screen it subscribes to Postgres
-changes on the table over Supabase Realtime, so a post logged anywhere appears in an
-open feed on its own and a claim flips the card in every other open feed — including
-the donor's copy of the board, which is the same list being watched from the other
-side. A timer
-re-reads the table every 20 seconds as well, which is what covers a project where the
+changes over Supabase Realtime — on `surplus_posts` and on `surplus_claims`, the second
+subscribing being what moves a card's claimant line as somebody else claims the same
+item — so a post logged anywhere appears in an open feed on its own and a claim is
+counted into every other open feed, including the donor's copy of the board, which is
+the same list being watched from the other side. A timer
+re-reads both tables every 20 seconds as well, which is what covers a project where the
 realtime publication was not set up — the board is then still live, just a little
-later. The subscription and the timer both stop when the section is left.
+later. The subscriptions and the timer all stop when the section is left.
 
 The pages hold the project's **publishable** key, which is the key meant to sit in a
 page: it can only ever act as the anonymous role, and what that role may do is decided
-by the table's row level security policies. Those policies are exactly the three the
-dashboard needs — anybody may read the board, add a post, and set a status — and
-nothing else: no deletes, and no access to anything but this table. Because Res-Q runs
+by the tables' row level security policies. Those policies are exactly what the
+dashboard needs and nothing else — anybody may read the board, add a post and claim
+one, and read and write claims — so no key held in a page can delete a row, edit a
+post's own details or touch anything but these two tables. Because Res-Q runs
 its own sign-in rather than Supabase Auth, a post is attributed to the name on the
 donor's own profile rather than to a Supabase user, and the table's update trigger
 refuses any change other than a status, so a claimed row cannot be rewritten into a
@@ -578,6 +627,11 @@ for a run that wants the file written instead — the rationing pass reads
 `backend/claim_records.json` either way, so nothing it recorded earlier is lost. It is a
 companion process on its own port, it lives in `backend/` because that is where this
 project's Python lives, and nothing in the API imports it.
+
+The board keeps a copy of the same fact itself: every claim is a row in `surplus_claims`,
+which is what a card's claimant line is drawn from. That is why a recipient dashboard
+writes both behind the claim rather than in front of it — the claim the board has already
+accepted is never held up by a second copy of it failing.
 
 ## Backend and API
 
@@ -1062,13 +1116,17 @@ How the pieces connect:
   given its figures the first time it is read. That is what keeps the three figures the
   same on every load instead of changing under whoever is reading them.
   The orders figure is the one that then moves, because the board is where an order is
-  accepted: **every post of that donor's a recipient claims adds one to it.** The count
-  is read from the board's own rows rather than written back to the profile, so it
-  needs no second write against another account, it cannot drift from the claims that
-  were really made, and it behaves the same in demo mode as with persistence on. While
-  Dashboard is the section in front of the donor it is watched and re-read like the
-  board's own screens are, so a claim made in another browser moves the figure there
-  without a reload.
+  accepted: **every recipient who claims one of that donor's posts adds one to it**, so
+  three organisations asking for the same pallet of bread are three orders in it. The count
+  is read from the board's own rows — the claims on that donor's posts, counted one by
+  one, with the number of posts carrying a claimed status standing in for it in a
+  project that has not run the claims migration — rather than written back to the
+  profile, so it needs no second write against another account, it cannot drift from the
+  claims that were really made, and it behaves the same in demo mode as with persistence
+  on. While Dashboard is the section in front of the donor it is watched and re-read
+  like the board's own screens are — on both tables, so a second recipient claiming an
+  item the donor already had a claim on moves the figure without the post itself
+  changing — so a claim made in another browser moves the figure there without a reload.
 - **The confirmed delivery location.** `/api/delivery-location` writes four fields on
   the signed-in account: `delivery_address`, `delivery_lat`, `delivery_lng` and
   `delivery_confirmed_at`. The dashboard map reads them back from `/api/me` when it

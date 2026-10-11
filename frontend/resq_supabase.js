@@ -7,6 +7,14 @@
  * which is also what lets a post reach every open dashboard the moment it is
  * written.
  *
+ * A post is claimed by more than one recipient, so the claims are rows of their
+ * own in `surplus_claims`, one per recipient per post. That second table is what
+ * lets the board answer the two questions surplus_posts.status cannot — *who* asked
+ * for an item, and *how many* asked — and it is where the line the card carries
+ * comes from: "Daniela Ruiz and 2 more claimed". A project that has not run the
+ * claims migration yet is not broken by any of this: the claim falls back to the
+ * older first-claim-wins update and the cards simply carry no claimant line.
+ *
  * The key below is the project's *publishable* key. It is the key that is meant
  * to sit in a page: it can only ever act as the anonymous role, so what it may
  * do is decided by the table's row level security policies, not by keeping it
@@ -26,6 +34,12 @@
     var SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js';
 
     var TABLE = 'surplus_posts';
+
+    // The claims a post carries, added by
+    // supabase/migrations/20261012000000_create_surplus_claims.sql. One row per
+    // recipient per post, which is what makes a post claimable by several recipients
+    // and lets the board name and count them.
+    var CLAIMS_TABLE = 'surplus_claims';
 
     // The six goods categories, in the order the goods profile lists them. They live
     // here once: a post's tag, the compose box's picker and the feed's *For You*
@@ -57,9 +71,19 @@
     // shows new posts rather than nothing.
     var POLL_MS = 20000;
     var POST_LIMIT = 60;
+    // Claims are one small row each, so a board draws them all rather than asking per
+    // post: the newest few hundred cover every post the feed shows.
+    var CLAIM_LIMIT = 400;
 
     var client = null;
     var libraryLoading = null;
+
+    // Whether the claims table is in the project, learned from the first read or
+    // write that touches it: 'unknown' until then, 'yes' once a claim read or written
+    // row comes back, 'no' when the table is not there. It is what decides between
+    // the board's two claim behaviours — many claimants per post, or the older
+    // first-claim-wins — and it is never guessed.
+    var claimsSupport = 'unknown';
 
     // -------------------------------------------------------------------------
     // The client
@@ -136,6 +160,17 @@
                 message: 'the surplus_posts table is not in the project yet'
             };
         }
+        // 23505 is the claims table's own unique index answering: this recipient has
+        // already claimed this post. That is not a failure worth an error tone — the
+        // card says so in a word — so it is named rather than left as a generic error.
+        if (String(code) === '23505') {
+            return {
+                missingTable: false,
+                missingColumn: false,
+                duplicate: true,
+                message: 'this recipient has already claimed that post'
+            };
+        }
         if (!message && error && error.name) { message = error.name; }
         return {
             missingTable: false,
@@ -150,7 +185,12 @@
     function reply(builder) {
         return Promise.resolve(builder).then(function (res) {
             if (res && res.error) { return { ok: false, error: describe(res.error) }; }
-            return { ok: true, data: (res && res.data) || [] };
+            // `data` is an array for a list and a single row — or a null — for the
+            // `.single()`/`.maybeSingle()` calls. That null is kept exactly as it comes
+            // back: it is how an update that matched no row is told apart from one that
+            // matched, which is what a claim raced by somebody else looks like.
+            var data = res ? res.data : null;
+            return { ok: true, data: data === undefined ? [] : data };
         }, function (err) {
             return { ok: false, error: describe(err) };
         });
@@ -218,33 +258,197 @@
         });
     }
 
-    // Claiming is the same update for everyone: the row is matched on being
-    // still pending, so the second recipient to click loses the race cleanly
-    // (no row comes back) instead of overwriting the first claim.
-    function claimPost(id) {
+    // ---------------------------------------------------------------------------
+    // Claiming a post
+    // ---------------------------------------------------------------------------
+    // The person behind a claim, and the organisation they claim for, both read off
+    // the account profile the page holds: the contact's own name first, and the
+    // business or organisation name when there is no person on the profile.
+    function claimantName(recipient) {
+        var person = [
+            String((recipient && recipient.first_name) || '').trim(),
+            String((recipient && recipient.last_name) || '').trim()
+        ].join(' ').trim();
+        return person || claimantOrg(recipient);
+    }
+
+    function claimantOrg(recipient) {
+        return String((recipient && recipient.business_name) || '').trim();
+    }
+
+    // Claiming is a row of its own now, and that is the whole point: `surplus_claims`
+    // keeps one row per recipient per post, so a shelter and a kitchen looking at the
+    // same pallet of bread can both claim it and the donor can read back who asked.
+    // The post's own status still settles to 'claimed' on the first claim — the
+    // board's chips and figures read that — but it no longer closes the post to
+    // anybody else, which is why the feed keeps the claim action on a claimed post.
+    //
+    // Two things fall back to the older first-claim-wins update, unchanged, rather
+    // than writing something the project cannot hold: a project where the claims
+    // table is not there yet, and a claim with no name to file it under.
+    function claimPost(id, recipient) {
+        var claimant = claimantName(recipient);
+        var org = claimantOrg(recipient);
         return withClient(function (db) {
-            return reply(db.from(TABLE)
-                .update({ status: 'claimed' })
-                .eq('id', id)
-                .eq('status', 'pending')
-                .select()
-                .maybeSingle());
+            function legacy() {
+                // The row is matched on being still open, so the second recipient to
+                // click loses the race cleanly (no row comes back) instead of
+                // overwriting the first claim. `claimed` says which of the two happened,
+                // because this path writes nothing when it loses: an answered null is a
+                // claim that was not made, not one that was recorded without settling the
+                // post.
+                return reply(db.from(TABLE)
+                    .update({ status: 'claimed' })
+                    .eq('id', id)
+                    .eq('status', 'pending')
+                    .select()
+                    .maybeSingle())
+                    .then(function (res) {
+                        if (res.ok) { res.claimed = !!res.data; }
+                        return res;
+                    });
+            }
+
+            if (!claimant) { return legacy(); }
+
+            var row = { post_id: id, recipient_name: claimant };
+            if (org) { row.recipient_org = org; }
+
+            return reply(db.from(CLAIMS_TABLE).insert(row).select().single())
+                .then(function (res) {
+                    if (!res.ok) {
+                        if (res.error && res.error.missingTable) {
+                            claimsSupport = 'no';
+                            return legacy();
+                        }
+                        return res;
+                    }
+                    claimsSupport = 'yes';
+                    // The claim is on the board now. Settling the post itself is the
+                    // second half and deliberately not a gate: whether it was open or
+                    // already claimed by somebody else, this recipient's claim is
+                    // recorded and the card is redrawn with one more name on it.
+                    return reply(db.from(TABLE)
+                        .update({ status: 'claimed' })
+                        .eq('id', id)
+                        .eq('status', 'pending')
+                        .select()
+                        .maybeSingle())
+                        .then(function (settled) {
+                            return {
+                                ok: true,
+                                claimed: true,
+                                duplicate: false,
+                                claim: res.data,
+                                data: (settled.ok && settled.data) || null
+                            };
+                        });
+                });
         });
     }
 
+    // ---------------------------------------------------------------------------
+    // The claims on the board
+    // ---------------------------------------------------------------------------
+    // Read newest-first so a busy board's most recent claims are never the ones
+    // dropped by the limit; a group is then put back in claim order below, because
+    // "who asked first" is the name the line leads with.
+    function listClaims(options) {
+        var opts = options || {};
+        return withClient(function (db) {
+            var query = db.from(CLAIMS_TABLE)
+                .select('id,post_id,recipient_name,recipient_org,claimed_at')
+                .order('claimed_at', { ascending: false })
+                .limit(opts.limit || CLAIM_LIMIT);
+            if (opts.postIds && opts.postIds.length) {
+                query = query.in('post_id', opts.postIds);
+            }
+            return reply(query).then(function (res) {
+                if (res.ok) {
+                    claimsSupport = 'yes';
+                } else if (res.error && res.error.missingTable) {
+                    claimsSupport = 'no';
+                }
+                return res;
+            });
+        });
+    }
+
+    // The claims of one board, gathered per post: `{ post id: [claim, claim] }`, each
+    // list in claim order so the first element is the recipient who asked first.
+    function groupClaims(claims) {
+        var byPost = {};
+        (claims || []).forEach(function (claim) {
+            var key = String((claim && claim.post_id) || '');
+            if (!key) { return; }
+            if (!byPost[key]) { byPost[key] = []; }
+            byPost[key].push(claim);
+        });
+        Object.keys(byPost).forEach(function (key) {
+            byPost[key].sort(function (one, other) {
+                return String(one.claimed_at || '').localeCompare(String(other.claimed_at || ''));
+            });
+        });
+        return byPost;
+    }
+
+    function claimsSupported() {
+        return claimsSupport === 'yes';
+    }
+
+    // The names on a post's claims, in the order the claims were made.
+    function claimNames(claims) {
+        return (claims || []).map(function (claim) {
+            return String((claim && claim.recipient_name) || '').trim();
+        }).filter(function (name) { return !!name; });
+    }
+
+    // The line the reference feed draws under a title — "Followed by tryansylvania and
+    // 4.7 M others" — with the claim in it instead: the first recipient to ask named,
+    // and the rest counted. One claimant is named on their own, because "and 0 more"
+    // is not how anybody says it. An unclaimed post says nothing at all.
+    function claimHeadline(claims) {
+        var names = claimNames(claims);
+        if (!names.length) { return ''; }
+        if (names.length === 1) { return names[0] + ' claimed'; }
+        return names[0] + ' and ' + (names.length - 1) + ' more claimed';
+    }
+
+    // The same line as markup, on the card's own terms: the reference's bold light
+    // text on the dark surface, and no avatar — the person's face is not what a
+    // donor is reading here, the count is.
+    function claimIndicator(claims) {
+        var headline = claimHeadline(claims);
+        if (!headline) { return ''; }
+        return '<p class="mt-3 text-[15px] leading-snug font-bold text-[#DAF1DE]">' +
+            escapeHtml(headline) + '</p>';
+    }
+
+    // Whether two names are the same person. The board compares names trimmed — a
+    // trailing space is not a different recipient, and neither is a different case.
+    function sameName(one, other) {
+        return String(one === null || one === undefined ? '' : one).trim().toLowerCase()
+            === String(other === null || other === undefined ? '' : other).trim().toLowerCase();
+    }
+
     // -------------------------------------------------------------------------
-    // Claim records: who claimed which post, for the rationing pass.
+    // Claim records: a second copy of each claim, for the rationing pass.
     //
-    // The board itself is one shared table — first claim wins and the post stops
-    // being claimable — and what it does NOT keep is *who* claimed a post. That
-    // record is what a rationing pass reads when more than one shelter wanted the
-    // same item, so it is filed with the site's own backend, where the rest of
-    // this project's state lives: `POST /api/claims` takes the row that was
-    // claimed and files it against the signed-in account — the token is what says
-    // whose claim it is, never the body — one record per claim, every one of them
-    // carrying the post id it claimed. A claim therefore survives on a deployment
-    // the way its accounts do, instead of living on the machine the page happens
-    // to be open on.
+    // Claim records: a second copy of every claim, filed with the site's own backend.
+    //
+    // The board keeps *who* claimed a post itself, since a claim became a row of its own
+    // in `surplus_claims` — that is what the claimant line on a card is drawn from. This
+    // is the same fact written a second time, on the rationing pass's own terms, because
+    // the pass runs in the API rather than in a page: `POST /api/claims` takes the row
+    // that was claimed and files it against the signed-in account — the token is what says
+    // whose claim it is, never the body — one record per claim, every one of them carrying
+    // the post id it claimed. Multiple recipients reaching the same post each get their own
+    // record, tied to that one post id, which is what a rationing pass joins on; the board's
+    // own rows carry the names the donor reads. A record therefore survives on a deployment
+    // the way its accounts do, instead of living on the machine the page happens to be open
+    // on, and it is deliberately not a gate on the claim: a claim the board has already
+    // accepted is never held up by the second copy of it failing.
+
     // -------------------------------------------------------------------------
     var CLAIMS_URL = apiUrl('/api/claims');
 
@@ -277,6 +481,32 @@
     // function has not been called. A project whose table is not in the realtime
     // publication simply never calls it — the caller's own timer covers that, so
     // a subscription that cannot happen is not an error the page has to show.
+    // The claims stream the same way, on their own channel: a claim landing anywhere
+    // moves the donor's claimant line while the board is open. A project without the
+    // claims table, or without it in the realtime publication, simply never calls
+    // back — the caller's own timer covers it.
+    function watchClaims(onChange) {
+        var channel = null;
+        var stopped = false;
+        ready().then(function (db) {
+            if (stopped) { return; }
+            channel = db.channel('resq-surplus-claims')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: CLAIMS_TABLE
+                }, function (payload) {
+                    if (!stopped) { onChange(payload); }
+                })
+                .subscribe();
+        }).catch(function () { /* the caller's poll is the fallback */ });
+
+        return function () {
+            stopped = true;
+            if (channel) { channel.unsubscribe(); }
+        };
+    }
+
     function watchPosts(onChange) {
         var channel = null;
         var stopped = false;
@@ -425,6 +655,16 @@
         var opts = options || {};
         var claimed = row.status === 'claimed';
         var mine = isOwnPost(row, opts.ownName);
+        // The claims this post already carries, and whether the person reading this
+        // card is one of them. `multiClaim` says the project can hold more than one
+        // claim, which is what keeps the action on a claimed post; without it the
+        // card behaves exactly as it did — the action is only on an open one.
+        var claimants = opts.claimants || [];
+        var viewerClaimed = !!opts.viewerName && claimNames(claimants).some(function (name) {
+            return sameName(name, opts.viewerName);
+        });
+        var claimable = opts.canClaim && !viewerClaimed
+            && (!!opts.multiClaim || !claimed);
         return '<article class="feed-card' + (claimed ? ' is-claimed' : '') + ' p-4 sm:p-5">' +
             '<div class="flex items-start gap-3">' +
                 avatarMarkup(row.donor_name) +
@@ -456,6 +696,9 @@
                         '<span class="text-[#8EB69B]/80">' + escapeHtml(row.location) +
                         '</span>' +
                     '</p>' +
+                    // Who has claimed this post, which is the one line a donor reads
+                    // first: the first recipient to ask, named, and the rest counted.
+                    claimIndicator(claimants) +
                     '<div class="mt-4 pt-3 border-t border-[#235347] flex flex-wrap ' +
                         'items-center gap-x-5 gap-y-3">' +
                         '<span class="text-[11px] text-[#8EB69B]">\u23f1 ' +
@@ -476,12 +719,22 @@
                         // The one action, wearing the site's hero-card treatment: dark with
                         // cream text at rest, filled with the accent and turned black while
                         // hovered or keyboard-focused — see .claim-btn in the dashboards.
-                        (opts.canClaim && !claimed
+                        // It stays on a claimed post, because more than one recipient may
+                        // claim the same item; a recipient who has already claimed this one
+                        // reads a chip in its place rather than a button that would only
+                        // be refused.
+                        (claimable
                             ? '<button type="button" data-claim="' + escapeHtml(row.id) + '" ' +
                                 'onclick="claimSurplus(this)" class="claim-btn ml-auto px-5 ' +
                                 'py-2.5 rounded-full text-xs font-black uppercase ' +
                                 'tracking-widest transition-all disabled:opacity-40 ' +
                                 'disabled:cursor-not-allowed">Claim</button>'
+                            : '') +
+                        (opts.canClaim && viewerClaimed
+                            ? '<span class="ml-auto inline-flex items-center h-6 px-3 ' +
+                                'rounded-full border border-[#235347] bg-[#051F20] ' +
+                                'text-[10px] uppercase tracking-[0.18em] ' +
+                                'text-[#8EB69B]">you claimed</span>'
                             : '') +
                     '</div>' +
                 '</div>' +
@@ -507,14 +760,26 @@
             return type ? type.label : '';
         },
         pollMs: POLL_MS,
+        claimsTable: CLAIMS_TABLE,
+        claimLimit: CLAIM_LIMIT,
         ready: ready,
         describe: describe,
         listPosts: listPosts,
         createPost: createPost,
         claimPost: claimPost,
+        listClaims: listClaims,
+        groupClaims: groupClaims,
+        claimNames: claimNames,
+        claimHeadline: claimHeadline,
+        claimIndicator: claimIndicator,
+        claimantName: claimantName,
+        claimantOrg: claimantOrg,
+        claimsSupported: claimsSupported,
+        sameName: sameName,
         recordClaim: recordClaim,
         claimsUrl: CLAIMS_URL,
         watchPosts: watchPosts,
+        watchClaims: watchClaims,
         escapeHtml: escapeHtml,
         statusChip: statusChip,
         statusLabel: statusLabel,
