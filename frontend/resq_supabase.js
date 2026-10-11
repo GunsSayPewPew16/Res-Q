@@ -236,24 +236,30 @@
     // Claim records: who claimed which post, for the rationing pass.
     //
     // The board itself is one shared table — first claim wins and the post stops
-    // being claimable — so a claim that only raced one claimant is already on
-    // the board. What the board does NOT keep is *who* claimed a post: the
-    // recipient's details are written to the claim recorder, a small companion
-    // service beside the site's own backend, which keeps one record per claim
-    // in backend/claim_records.json, each carrying the post id it claimed.
-    // Multiple recipients reaching the same post across the post's life each
-    // get their own record, all tied to that one post id — which is exactly
-    // what the rationing pass joins on.
+    // being claimable — and what it does NOT keep is *who* claimed a post. That
+    // record is what a rationing pass reads when more than one shelter wanted the
+    // same item, so it is filed with the site's own backend, where the rest of
+    // this project's state lives: `POST /api/claims` takes the row that was
+    // claimed and files it against the signed-in account — the token is what says
+    // whose claim it is, never the body — one record per claim, every one of them
+    // carrying the post id it claimed. A claim therefore survives on a deployment
+    // the way its accounts do, instead of living on the machine the page happens
+    // to be open on.
     // -------------------------------------------------------------------------
-    var RECORDER_URL = 'http://127.0.0.1:8081/claims';
+    var CLAIMS_URL = apiUrl('/api/claims');
 
-    function recordClaim(post, recipient) {
+    function recordClaim(post, recipient, token) {
         if (!post || !post.id) {
             return Promise.resolve({ ok: false, error: { message: 'no post to record' } });
         }
-        return fetch(RECORDER_URL, {
+        var headers = { 'Content-Type': 'application/json' };
+        if (token) { headers.Authorization = 'Bearer ' + token; }
+        return fetch(CLAIMS_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
+            // The profile travels with the claim because a claim is meant to be readable
+            // on its own; the account it is filed under is the token's, so what arrives
+            // in the body decides nothing about whose record it becomes.
             body: JSON.stringify({ post: post, recipient: recipient || null })
         }).then(function (response) {
             return response.json().catch(function () { return {}; }).then(function (data) {
@@ -507,7 +513,7 @@
         createPost: createPost,
         claimPost: claimPost,
         recordClaim: recordClaim,
-        recorderUrl: RECORDER_URL,
+        claimsUrl: CLAIMS_URL,
         watchPosts: watchPosts,
         escapeHtml: escapeHtml,
         statusChip: statusChip,

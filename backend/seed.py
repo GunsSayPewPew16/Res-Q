@@ -39,7 +39,7 @@ from config import (
     METRIC_DECIMALS,
     SEED_HISTORY_DAYS,
 )
-from geo import haversine_km
+from geo import haversine_km, offset_point
 from helpers import account_key, clean_email
 from history import write_history
 from orders import demo_order_pair, order_payload, order_row, remember_demo_order
@@ -115,6 +115,60 @@ TEST_DELIVERY = {
     "category": "packaged_goods",
     "scheduled_for": "thu",
 }
+
+# One claimed post, and three shelters that reached for it, for the rationing pass to read
+# on a deployment nobody has used yet: a board with no claims on it has no ration to show,
+# and a ration that is always a hundred percent of a post shows nothing about how the pass
+# splits one. The item is written the way a shop actually logs it — packs and halves rather
+# than a weight — because reading that text is the first thing the pass does.
+TEST_CLAIM = {
+    "donor_email": "mei@resq.test",
+    "id": "8f1c6b2e-0a4d-4a6f-9b3a-5c7d2e1f0a91",
+    "item_name": "End-of-day produce, pastries and milk",
+    "quantity": "3 crates of tomatoes, 2 trays of pastries and a crate of milk",
+    "goods_type": "fresh_produce",
+    # Hours before now, so the fixture is the same shape whenever the server is up: the
+    # pass reads how long a post has been sitting, and a fixed date would have it sitting
+    # there for years.
+    "posted_hours_ago": 9.0,
+}
+
+# What is known about the fixture's own recipient on that claim. The board carries no such
+# figures — a claim says who claimed an item, not how many are waiting for it — so they are
+# the fixture's own, and the pass reads a real claim without them.
+TEST_RECIPIENT_CLAIM = {
+    "households_waiting": 180,
+    "days_since_last_delivery": 12,
+    "claimed_hours_ago": 6.0,
+}
+
+# The other two shelters on the post. They exist only for this one claim, to give the split
+# something to split: each sits its own distance from the donor's pin — measured from that
+# pin rather than pinned absolutely, so the fixture is plausible wherever the kitchen is —
+# and each reports a different household count and wait, which is what moves the scores
+# apart.
+TEST_CLAIMANTS = (
+    {
+        "id": 9101,
+        "business_name": "Harbour Lights Shelter",
+        "street": "12 Harbour Lane", "city": "Toronto", "province": "Ontario",
+        "postal": "M5J 1A1",
+        "needs": ("prepared_meals", "fresh_produce"),
+        "distance_km": 1.4, "bearing": 20,
+        "households_waiting": 260, "days_since_last_delivery": 9,
+        "claimed_hours_ago": 5.0,
+    },
+    {
+        "id": 9102,
+        "business_name": "Riverside Community Pantry",
+        "street": "88 Riverside Walk", "city": "Toronto", "province": "Ontario",
+        "postal": "M5A 4K8",
+        "needs": ("packaged_goods", "household_essentials"),
+        "distance_km": 2.6, "bearing": 115,
+        "households_waiting": 140, "days_since_last_delivery": 3,
+        "claimed_hours_ago": 2.0,
+    },
+)
 
 
 def account_address(person):
@@ -439,6 +493,107 @@ def seed_delivery(conn=None):
     )
     conn.commit()
     return cursor.lastrowid
+
+
+def is_fixture_recipient(caller, conn=None):
+    """Whether this account is the fixture's own recipient.
+
+    The fixture's claimed post is demo data with demo claimants on it, so a rationing pass
+    reads it only for the one account it was written for. Anybody else's pass reads the
+    claims the board really has — which is what keeps the fixture out of a run that has
+    claims of its own.
+    """
+    email = clean_email((caller or {}).get("email"))
+    if not email or email != clean_email(TEST_RECIPIENT["email"]):
+        return False
+    return test_account(email, conn) is not None
+
+
+def fixture_time(hours_ago, now):
+    """A moment that many hours back, written the way the claim recorder writes one."""
+    return (now - datetime.timedelta(hours=hours_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def fixture_claim(post, recipient, spec, donor_lat, donor_lng, now):
+    """One fixture claim, in the shape a recorded claim is read in.
+
+    The pass reads a claim as a post, the shelter that claimed it, when they claimed it, and
+    the distance between the two pins — so the fixture is written in exactly that shape and
+    nothing else, which is what makes it a test of the pass rather than of itself.
+    """
+    distance = round(haversine_km(float(donor_lat), float(donor_lng),
+                                 float(recipient["delivery_lat"]),
+                                 float(recipient["delivery_lng"])), METRIC_DECIMALS)
+    metrics = {
+        "households_waiting": spec["households_waiting"],
+        "days_since_last_delivery": spec["days_since_last_delivery"],
+    }
+    return {
+        "post": dict(post),
+        "recipient": recipient,
+        "claimed_at": fixture_time(spec["claimed_hours_ago"], now),
+        "metrics": metrics,
+        "donor_lat": donor_lat,
+        "donor_lng": donor_lng,
+        "distance_km": distance,
+    }
+
+
+def claim_fixture(conn=None, now=None):
+    """The fixture's one claimed post, as the claims a rationing pass reads.
+
+    Returns an empty list when the fixture's accounts are not there, which is every run that
+    seeded nothing: the claim needs a kitchen to post it and a shelter to claim it. The two
+    extra shelters are built here rather than registered, because they exist for this claim
+    alone — each one placed its own measured distance from the donor's pin, so the fixture
+    reads plausibly wherever that kitchen is.
+    """
+    donor = test_account(TEST_CLAIM["donor_email"], conn)
+    recipient = test_account(TEST_RECIPIENT["email"], conn)
+    if donor is None or recipient is None:
+        return []
+    donor_lat = donor.get("delivery_lat")
+    donor_lng = donor.get("delivery_lng")
+    if donor_lat is None or donor_lng is None or recipient.get("delivery_lat") is None:
+        return []
+
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    post = {
+        "id": TEST_CLAIM["id"],
+        "donor_name": donor.get("business_name"),
+        "item_name": TEST_CLAIM["item_name"],
+        "quantity": TEST_CLAIM["quantity"],
+        "location": donor.get("delivery_address") or account_address(donor),
+        "goods_type": TEST_CLAIM["goods_type"],
+        "created_at": fixture_time(TEST_CLAIM["posted_hours_ago"], now),
+    }
+
+    claims = [fixture_claim(post, recipient, TEST_RECIPIENT_CLAIM, donor_lat, donor_lng, now)]
+    for claimant in TEST_CLAIMANTS:
+        lat, lng = offset_point(donor_lat, donor_lng,
+                                claimant["distance_km"], claimant["bearing"])
+        shelter = {
+            "id": claimant["id"],
+            "role": "recipient",
+            "first_name": None,
+            "last_name": None,
+            "business_name": claimant["business_name"],
+            "email": None,
+            "phone": None,
+            "street": claimant["street"],
+            "city": claimant["city"],
+            "province": claimant["province"],
+            "postal": claimant["postal"],
+            "surplus_types": list(claimant["needs"]),
+            "delivery_days": [],
+            "delivery_address": account_address(claimant),
+            "delivery_lat": lat,
+            "delivery_lng": lng,
+            "delivery_confirmed_at": None,
+            "demo": True,
+        }
+        claims.append(fixture_claim(post, shelter, claimant, donor_lat, donor_lng, now))
+    return claims
 
 
 def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):

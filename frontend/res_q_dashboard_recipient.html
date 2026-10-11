@@ -729,9 +729,9 @@
                                 <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="M12 12v9M12 12 3 7.5M12 12l9-4.5"/></svg>
                             </div>
                             <div class="min-w-0">
-                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
-                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
-                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Your ration</span>
+                                <span id="dsRation" class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span id="dsRationSub" class="block text-[11px] text-[#8EB69B] mt-2 leading-snug">no claimed post yet</span>
                             </div>
                         </div>
 
@@ -740,9 +740,9 @@
                                 <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
                             </div>
                             <div class="min-w-0">
-                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
-                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
-                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Share of the post</span>
+                                <span id="dsShare" class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0%</span>
+                                <span id="dsShareSub" class="block text-[11px] text-[#8EB69B] mt-2 leading-snug">nothing shared yet</span>
                             </div>
                         </div>
 
@@ -751,9 +751,9 @@
                                 <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 16V7h11v9M13 10h4l3 3v3h-2"/><circle cx="6.5" cy="17.5" r="1.75"/><circle cx="16.5" cy="17.5" r="1.75"/><path d="M2 16h2.5M9.5 17.5h5.25"/></svg>
                             </div>
                             <div class="min-w-0">
-                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
-                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
-                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Weighted score</span>
+                                <span id="dsScore" class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span id="dsScoreSub" class="block text-[11px] text-[#8EB69B] mt-2 leading-snug">nothing rationed yet</span>
                             </div>
                         </div>
                     </div>
@@ -2102,10 +2102,128 @@
             });
         }
 
+        // ---------------------------------------------------------------------------
+        // The ration: how much of the items this account claimed it will actually get.
+        //
+        // A post that more than one shelter reached for is split between them in
+        // proportion to how much each of them needs it, so these figures read the
+        // rationing pass's own answer rather than the quantity written on the board:
+        // /api/rations carries this account's ration and its share of the post, and never
+        // another shelter's name or amount — the other claimants are a count. The three
+        // blocks at the top of the console are that answer: the kilos it comes to, the
+        // share of the post they are, and the weighted score the share came out of.
+        // ---------------------------------------------------------------------------
+        var RATIONS_URL = apiUrl('/api/rations');
+
+        var rationData = null;
+        var rationReading = false;
+
+        function setRation(id, value, sub, title) {
+            var valueEl = document.getElementById(id);
+            var subEl = document.getElementById(id + 'Sub');
+            if (valueEl) {
+                valueEl.textContent = value;
+                valueEl.title = title || '';
+            }
+            if (subEl) {
+                subEl.textContent = sub;
+                subEl.title = title || '';
+            }
+        }
+
+        function noRation(sub) {
+            setRation('dsRation', '0', sub);
+            setRation('dsShare', '0%', sub);
+            setRation('dsScore', '0', sub);
+        }
+
+        function rationValue(value) {
+            return value === null || value === undefined ? '\u2014' : String(value);
+        }
+
+        // Which reading the pass used, in the vocabulary the answer carries: "llm" when a
+        // model read the claim, "local" when the pass's own tables did.
+        function rationMethod(data) {
+            return (data && data.normalizer && data.normalizer.mode === 'llm') ? 'llm' : 'local';
+        }
+
+        function paintRation(data) {
+            var rows = (data && data.allocations) || [];
+            if (!rows.length) {
+                // Nothing is claimed under this account yet, so there is no post to take a
+                // share of: the figures stay at zero and say why.
+                noRation('no claimed post yet');
+                return;
+            }
+            var row = rows[0];
+            var score = row.score || {};
+            var claimants = row.claimants || 1;
+            var others = Math.max(0, claimants - 1);
+            var method = rationMethod(data) === 'llm' ? 'ai read the claim' : 'read without a model';
+
+            setRation('dsRation',
+                rationValue(row.ration_kg) + ' kg',
+                'of ' + rationValue(row.total_kg) + ' kg \u00b7 ' + claimants
+                    + (claimants === 1 ? ' shelter' : ' shelters'),
+                'Your ration of ' + rationValue(row.item_name) + ' from '
+                    + rationValue(row.donor) + ' (' + rationValue(row.quantity) + ').');
+
+            setRation('dsShare',
+                rationValue(row.share_percent) + '%',
+                others ? 'shared with ' + others + ' other shelter' + (others === 1 ? '' : 's')
+                       : 'the only shelter on it',
+                'Rank ' + rationValue(row.rank) + ' of ' + claimants + ' claimants \u00b7 '
+                    + method + '.');
+
+            setRation('dsScore',
+                rationValue(score.total),
+                rationValue(score.distance_score) + ' d \u00b7 '
+                    + rationValue(score.need_score) + ' n \u00b7 '
+                    + rationValue(score.expiry_urgency_multiplier) + ' u \u00b7 '
+                    + (rationMethod(data) === 'llm' ? 'ai' : 'local'),
+                (data.formula || '') + ' \u00b7 distance ' + rationValue(score.distance_score)
+                    + ', need ' + rationValue(score.need_score) + ', urgency '
+                    + rationValue(score.expiry_urgency_multiplier) + ' \u00b7 '
+                    + ((data.normalizer && data.normalizer.note) || ''));
+        }
+
+        // The pass could not be read at all — a connection that is down, or a session that
+        // has gone. The figures say so rather than holding a number nobody can stand behind.
+        function rationUnread() {
+            setRation('dsRation', '\u2014', 'the ration could not be read');
+            setRation('dsShare', '\u2014', 'open the section again to retry');
+            setRation('dsScore', '\u2014', 'open the section again to retry');
+        }
+
+        function loadRation() {
+            var token = readStore(TOKEN_KEY);
+            if (!token || rationReading) { return null; }
+            rationReading = true;
+            return fetch(RATIONS_URL, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    rationReading = false;
+                    if (res.status !== 200 || !res.data) { rationUnread(); return; }
+                    rationData = res.data;
+                    paintRation(res.data);
+                })
+                .catch(function () {
+                    rationReading = false;
+                    rationUnread();
+                });
+        }
+
         // The section's own loader. It reads once — the newest delivery is the one a console
         // is about — and mounting waits for the section to be on screen, since a map built
         // inside a hidden box is a map of nothing.
         function openDeliveryStatus() {
+            // The ration is read beside the route, from the same opening: the figures and
+            // the map are two readings of one delivery, and neither waits for the other.
+            if (!rationData && !rationReading) { loadRation(); }
             if (!routeOrder) { loadRouteOrder(); return; }
             if (!routeMap) { mountRouteMap(routeOrder); return; }
             if (routeMap) { window.setTimeout(function () { routeMap.resize(); }, 0); }
@@ -2574,12 +2692,14 @@
                     return;
                 }
                 // The claim won. It is also an accepted order, and the recipient's own
-                // details go with the claimed post to the claim recorder so a rationing
-                // pass can read back who reached this item. The record carries the post
-                // row exactly as the board returned it, so every claimant of the same
-                // post — now or after a re-post — joins on the same post id.
+                // details go with the claimed post to the backend's own claims endpoint,
+                // with the session token beside them, so a rationing pass can read back
+                // who reached this item. The record carries the post row exactly as the
+                // board returned it, so every claimant of the same post — now or after a
+                // re-post — joins on the same post id.
                 var claimedRow = res.data;
-                db.recordClaim(claimedRow, resqProfile || null).then(function (rec) {
+                db.recordClaim(claimedRow, resqProfile || null,
+                               readStore(TOKEN_KEY)).then(function (rec) {
                     setChip('feedState', rec.ok ? 'claimed \u00b7 recorded'
                                                 : 'claimed \u00b7 record failed',
                             rec.ok ? CHIP_DONE : CHIP_BUSY);

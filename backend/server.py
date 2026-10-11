@@ -32,6 +32,10 @@ Endpoints
     GET  /api/matches               rank the counterparts near the account, nearest first
     GET  /api/orders                list the delivery orders the account is part of
     POST /api/orders                bind the account and one counterpart into an order
+    GET  /api/rations               the account's own ration of the posts it claimed
+    POST /api/rations               ration the account's claims and publish its shares
+    GET  /api/claims                the account's own claims, newest first
+    POST /api/claims                record the account's claim on one board row
     GET  /api/history               the account's own logged days, and what they answer
     GET  /api/weather               the real conditions at a point, in the analyser's words
     GET  /api/surplus-forecast      forecast today's surplus (surplus.py pipeline)
@@ -53,6 +57,10 @@ the API can be inspected a topic at a time:
     accounts.py   impact figures and the demo accounts and peers
     matching.py   what makes two accounts deliverable
     orders.py     the order's stored shape
+    rationing.py  the rationing pass: the weighted score, the split, the queue
+    llm.py        the optional model that reads a claim's written half
+    claims.py     the claims: one shape, recorded by the API and read by the pass
+    supabase.py   the one write this backend makes to the board: an allocation
     history.py    the logged days, and the features the model reads out of them
     seed.py       the five test donors and their six weeks of logs
     weather.py    live conditions from Open-Meteo, in the model's three words
@@ -128,6 +136,7 @@ from helpers import (
     password_problem,
     query_number,
 )
+from claims import caller_claims, record_from_post, remember, stamp
 from matching import routing_problem, shared_categories
 from orders import (
     demo_order_pair,
@@ -136,7 +145,14 @@ from orders import (
     order_row,
     remember_demo_order,
 )
+from rationing import gather_claims, rationing_pass
 from seed import seed_test_accounts
+from supabase import (
+    allocation_fields,
+    configured as board_configured,
+    describe as board_state,
+    publish_allocation,
+)
 from security import hash_password, verify_password
 from surplus import forecast_surplus, train_surplus_model
 from weather import WeatherUnavailable, fetch_outlook, fetch_weather
@@ -305,6 +321,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_matches()
         if path == "/api/orders":
             return self.api_orders()
+        if path == "/api/rations":
+            return self.api_rations()
+        if path == "/api/claims":
+            return self.api_claims()
         if path == "/api/history":
             return self.api_history()
         if path == "/api/weather":
@@ -331,6 +351,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_delivery_location()
         if path == "/api/orders":
             return self.api_order_create()
+        if path == "/api/claims":
+            return self.api_claim_create()
+        if path == "/api/rations":
+            return self.api_rations_publish()
         if path == "/api/surplus-forecast":
             return self.api_surplus_forecast()
         if path == "/api/dev/switch-role":
@@ -1115,6 +1139,198 @@ class ResQHandler(SimpleHTTPRequestHandler):
             ]
 
         return self.send_json(200, {"ok": True, "count": len(orders), "orders": orders})
+
+    # ------------------------------------------------------- claims and rations
+    def no_session_body(self):
+        """The 401 body every endpoint answers an expired session with."""
+        return {
+            "error": "Your session has expired. Please sign in again.",
+            "code": "no_session",
+        }
+
+    def session_account(self):
+        """The signed-in account, or `(None, 401 body)` when the session has gone.
+
+        Whether the account *is* the demo session or a row read back from the token is the
+        one difference between the two modes, and it now sits in one place: the claims and
+        the rationing pass both need this lookup, on three endpoints between them, and a
+        fourth copy of it is how the four drift apart.
+        """
+        token = self.bearer_token()
+        if not PERSIST:
+            user = DEMO_SESSIONS.get(token)
+            if user is None:
+                return None, self.no_session_body()
+            return dict(user), None
+        with connect() as conn:
+            row = self.user_for_token(conn, token)
+        if row is None:
+            return None, self.no_session_body()
+        return dict(row), None
+
+    def api_claims(self):
+        """The claims the signed-in account has made, newest first.
+
+        A claim is filed under the account that made it, so this is the caller's own list
+        and never anybody else's — which is also what the rationing pass narrows its answer
+        to, since a ration belongs to the shelter that reached for the item.
+        """
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+        records = caller_claims(me)
+        if PERSIST:
+            with connect() as conn:
+                records = caller_claims(me, conn)
+        payload = {"ok": True, "count": len(records), "claims": list(reversed(records))}
+        if not PERSIST:
+            payload["demo"] = True
+        return self.send_json(200, payload)
+
+    def api_claim_create(self):
+        """Record the caller's claim on one board row.
+
+        The row comes from the page, because the board is Supabase's and this API does not
+        read it; the *account* does not. The record is filed against the token's own account,
+        and whatever profile the body carries is ignored, so one shelter cannot file a claim
+        in another's name. Claiming the same post twice answers with the claim already saved
+        rather than a second copy of it.
+        """
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+
+        post = data.get("post")
+        if not isinstance(post, dict) or not str(post.get("id") or "").strip():
+            return self.send_json(
+                400,
+                {
+                    "error": "A claim has to name the board row it claimed: send post.id.",
+                    "field": "post.id",
+                    "code": "no_post",
+                },
+            )
+
+        record = record_from_post(post, me)
+        if PERSIST:
+            with connect() as conn:
+                stored = remember(record, conn)
+        else:
+            stored = remember(record)
+        duplicate = stored.get("record_id") != record["record_id"]
+        payload = {
+            "ok": True,
+            "duplicate": duplicate,
+            "claim": stored,
+        }
+        if not PERSIST:
+            payload["demo"] = True
+        return self.send_json(200 if duplicate else 201, payload)
+
+    def api_rations(self):
+        """The rationing pass, read for the signed-in account.
+
+        The pass needs *every* claim a post has, not just the caller's own: a share is a
+        fraction of what all of its claimants took, so it can only be worked out against
+        the others. What comes back is narrowed to the caller's own ration and share —
+        another shelter's name and amount are never in the answer — with the queue the
+        share came out of beside it, every other claimant named by count alone. This verb
+        only reads: publishing a share to the board is the `POST` below.
+        """
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+
+        claims = gather_claims(me)
+        if PERSIST:
+            with connect() as conn:
+                claims = gather_claims(me, conn)
+
+        payload = rationing_pass(claims, account_key(me))
+        payload["ok"] = True
+        payload["board"] = board_state()
+        if not PERSIST:
+            payload["demo"] = True
+        if not payload["allocations"]:
+            payload["note"] = (
+                "No surplus post is claimed under this account yet. A ration is a share of"
+                " an item more than one shelter asked for, so it appears here once this"
+                " account has claimed one on the board."
+            )
+        return self.send_json(200, payload)
+
+    def api_rations_publish(self):
+        """Run the pass and write the caller's own shares back to the board.
+
+        The rationing pass computes a share; publishing it is what puts the number where both
+        ends of the delivery can see it — on the board row the donor logged and the shelter
+        claimed — instead of only inside the console that asked. Only the caller's own rows
+        are written, and only the allocation columns of them, so this cannot change a post's
+        donor, item, status or identity however it is called.
+
+        A board that is not configured, or a row that refuses the write, is reported per post
+        rather than failing the request: a ration that was worked out and not published is
+        still a ration the console can show, and the answer says which happened.
+        """
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+
+        # Nothing can be published without a board to publish to, and answering `200` to a
+        # request that could not do its job would be the wrong shape of answer: this verb
+        # exists to write, so an unconfigured board is a `503` with the two variable names
+        # in it, not a success carrying an empty list.
+        if not board_configured():
+            return self.send_json(
+                503,
+                {
+                    "error": "This API has no board to publish to. Set RESQ_SUPABASE_URL"
+                             " and RESQ_SUPABASE_KEY on the service and restart for an"
+                             " allocation to be written back.",
+                    "field": "RESQ_SUPABASE_URL",
+                    "code": "board_unconfigured",
+                },
+            )
+
+        claims = gather_claims(me)
+        if PERSIST:
+            with connect() as conn:
+                claims = gather_claims(me, conn)
+
+        payload = rationing_pass(claims, account_key(me))
+        written_at = stamp()
+        results = []
+        for allocation in payload["allocations"]:
+            fields = allocation_fields(allocation, display_name(me), written_at)
+            ok, detail = publish_allocation(allocation["post_id"], fields)
+            allocation["published"] = ok
+            results.append({
+                "post_id": allocation["post_id"],
+                "item_name": allocation.get("item_name"),
+                "ok": ok,
+                "wrote": fields if ok else None,
+                "error": None if ok else detail,
+                "board_row": detail if ok else None,
+            })
+
+        payload["ok"] = True
+        payload["board"] = board_state()
+        payload["publish"] = {
+            "count": len([result for result in results if result["ok"]]),
+            "results": results,
+        }
+        if not PERSIST:
+            payload["demo"] = True
+        if not payload["allocations"]:
+            payload["note"] = (
+                "No surplus post is claimed under this account yet, so there is no share to"
+                " publish to the board."
+            )
+        return self.send_json(200, payload)
 
     def api_order_create(self):
         """Bind the signed-in account and one counterpart into a delivery order.

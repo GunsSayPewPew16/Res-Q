@@ -47,6 +47,28 @@ def fill_donor_metrics(user):
         user[field] = fresh[field]
     return True
 
+def account_by_business(name, conn=None):
+    """The account a business name points at, or None when no account carries it.
+
+    A claim names its donor the way the board does — by business name, the only name a
+    post carries — so this is how the rationing pass places a claim's pickup end and, with
+    it, the distance the delivery would cover. In a demo run the registered accounts are in
+    the process; with persistence on the name is looked up in the table, compared the way
+    the claim would have been written rather than case-sensitively.
+    """
+    wanted = (name or "").strip().lower()
+    if not wanted:
+        return None
+    if conn is None:
+        for user in DEMO_ACCOUNTS.values():
+            if (user.get("business_name") or "").strip().lower() == wanted:
+                return dict(user)
+        return None
+    row = conn.execute(
+        "SELECT * FROM users WHERE lower(business_name) = ?", (wanted,)
+    ).fetchone()
+    return dict(row) if row else None
+
 def demo_lookup(email, phone):
     """Return a demo account registered earlier in this process, if there is one.
 
