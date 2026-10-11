@@ -74,12 +74,6 @@
             border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
         }
 
-        /* The light surface: one per screen, at most. The roadmap's open step is it. */
-        .surface-light {
-            background-color: #DAF1DE;
-            color: #051F20;
-        }
-
         .spark {
             display: inline-block;
             width: 0.9rem;
@@ -96,51 +90,77 @@
         ::-webkit-scrollbar-thumb { background: #235347; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #8EB69B; }
 
-        /* THE ROADMAP. Six stops on one vertical track: a node column and a story column
-           per row. The open stop is the page's one light surface — ink text on mint — and
-           its description is only ever open when the row is. The others stay quiet: node,
-           name, nothing more. Selecting is a click, a keyboard press, or a hover on a
-           desktop pointer, so the reader's cursor walks the route the way it reads. */
-        .road-row { border-radius: max(1.25rem, calc(var(--canvas-r) - var(--gutter) - 0.25rem)); transition: background-color 0.35s ease, border-color 0.35s ease, transform 0.35s ease; }
-        .road-row[data-open="false"] { border: 1px solid transparent; }
-        .road-row[data-open="true"] {
-            background-color: #DAF1DE;
-            color: #051F20;
-            border: 1px solid #DAF1DE;
-            transform: translateY(-2px);
+        /* THE ROUTE MAP. The console's card, brought over whole: the same painted vector
+           tiles, the same ink teardrop at the pickup and the same open mint ring for the
+           drop-off, with the drive OSRM answers between them. What a landing page does not
+           need is left out of the style itself — its two label layers are gone, so not one
+           font glyph is fetched — and the map is not interactive, so it is a reading rather
+           than a control. Nothing here is requested while the page loads: the script at the
+           foot of the page asks for MapLibre, its stylesheet, the tiles and the road only
+           once the card has been approached, which is why the drawn shape stays under it. */
+        #landingRouteMap { position: absolute; inset: 0; }
+
+        /* The map sizes itself from its container's box, and MapLibre's own stylesheet
+           arrives after this one setting `.maplibregl-map { position: relative }`, which
+           would drop the stretch and collapse the map to nothing — the id rule above keeps
+           it winning. */
+        .maplibregl-map { font-family: inherit; }
+
+        /* The delivery pin: an ink teardrop with a mint ring and core, drawn here rather
+           than fetched, so it is the palette's own. Its box is taller than the teardrop,
+           because the tip — the point it names — sits at the bottom, which is where the
+           marker anchors it. */
+        .resq-pin-icon {
+            background: transparent;
+            border: 0;
+            width: 30px;
+            height: 36px;
         }
-        .road-node {
-            width: 2.75rem;
-            height: 2.75rem;
-            flex: none;
-            display: inline-flex;
+        .resq-pin {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            background-color: #051F20;
+            border: 3px solid #DAF1DE;
+            transform: rotate(-45deg);
+            display: flex;
             align-items: center;
             justify-content: center;
-            background-color: #051F20;
-            border: 1px solid #235347;
+            box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
         }
-        .road-row[data-open="true"] .road-node { background-color: #051F20; border-color: rgba(5,31,32,0.25); color: #DAF1DE; }
-        /* The rail between rows: drawn as a segment only when the row below is not first. */
-        .road-seg { width: 2px; flex: 1 1 auto; min-height: 1.4rem; background-color: #235347; }
-        .road-row[data-open="true"] .road-seg-done { background-color: #8EB69B; }
-        .road-title { font-family: 'Crake', 'Bodoni Moda', ui-serif, Didot, Georgia, serif; }
-        .road-row[data-open="true"] .road-cta-arrow { transform: translateX(4px); }
-        .road-cta-arrow { transition: transform 0.3s ease; }
-        /* Concise descriptions: the line the open step carries. Closed rows hold one so
-           the reveal does not shift layout — the text is there, merely hidden. */
-        .road-desc { transition: opacity 0.3s ease; }
-        .road-row[data-open="false"] .road-desc { display: none; }
-        .road-row[data-open="false"]:hover .road-desc,
-        .road-row[data-open="false"].road-preview .road-desc { display: block; opacity: 0.85; }
+        .resq-pin span {
+            width: 7px;
+            height: 7px;
+            border-radius: 9999px;
+            background-color: #DAF1DE;
+        }
+
+        /* The drop-off end of the route: an open ring rather than a second teardrop, so the
+           two ends of one delivery are told apart at a glance — the tip is where the food
+           is picked up, the ring is where it is going. */
+        .resq-ring-icon {
+            background: transparent;
+            border: 0;
+            width: 26px;
+            height: 26px;
+        }
+        .resq-ring {
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            background-color: rgba(218, 241, 222, 0.20);
+            border: 3px solid #DAF1DE;
+            box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
+        }
     </style>
 </head>
 <body class="bg-[#0B2B26] text-[#DAF1DE] font-sans antialiased selection:bg-[#DAF1DE] selection:text-[#051F20]">
 
     <!-- RES-Q LANDING PAGE: the site's default document, inside one inset green canvas,
          the same arrangement the dashboards use. The six old hero cards are gone; in
-         their place stands one interactive roadmap — six stops from what a donor logs
-         to what a shelter receives — each row opening on a concise line when it is
-         read, one stop lit at a time. -->
+         their place stands the route map — the fixture's own delivery drawn the way the
+         recipient's console draws it — and its library, tiles and road are fetched only
+         once that card is reached, so the page loads and reads without any of it. -->
 
     <div class="organic-canvas bg-[#0B2B26] border border-[#235347] min-h-[calc(100vh-1.5rem)] md:min-h-[calc(100vh-2.5rem)] flex flex-col">
 
@@ -196,146 +216,80 @@
                 </div>
             </section>
 
-            <!-- The roadmap. One track, six stops, one open at a time. Mouse entering a
-                 closed row previews it; clicking or keyboard-selecting keeps it open and
-                 closes the one before, so exactly one stop is ever lit. -->
+            <!-- The route map: the journey above, drawn. It is the same map the recipient's
+                 console reads — the donor's teardrop, the shelter's ring and the drive OSRM
+                 answers between them — showing the fixture's one agreed delivery. The drawn
+                 shape is what this section paints; the map itself is fetched only once the
+                 card is approached, so the landing page loads without any of it. -->
             <section id="roadmap" class="panel p-6 md:p-12">
-                <div class="max-w-3xl mb-8 md:mb-12">
-                    <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B] mb-3">The route one item takes</span>
-                    <h2 class="font-display text-4xl md:text-5xl leading-none">How Res-Q moves surplus</h2>
-                    <p class="mt-4 text-sm text-[#8EB69B] leading-relaxed max-w-xl">
-                        Six stops from a shop floor to a shelter kitchen. Open a stop to read what
-                        happens there — the mint-lit row is where the journey stands right now.
-                    </p>
-                </div>
-
-                <div id="roadmapList" class="max-w-4xl mx-auto">
-
-                    <!-- Stop 01 -->
-                    <div class="road-row group" data-open="true" data-stop="1" tabindex="0" role="button" aria-expanded="true" aria-labelledby="road-1-title"
-                        onclick="openRoadStop(1)" onkeydown="roadKey(event, 1)" onmouseenter="roadHover(1)">
-                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
-                            <div class="flex flex-col items-center self-stretch">
-                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">01</span>
-                                <span class="road-seg road-seg-done"></span>
-                            </div>
-                            <div class="min-w-0 flex-1 pt-1">
-                                <div class="flex items-center justify-between gap-4">
-                                    <h3 id="road-1-title" class="road-title text-2xl md:text-3xl leading-none">Profile the business</h3>
-                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
-                                </div>
-                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl opacity-90">
-                                    A shop, bakery or kitchen answers once — where it is, what it usually
-                                    has spare, which days goods can leave — and Res-Q keeps the profile.
-                                </p>
-                            </div>
-                        </div>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 items-start">
+                    <div class="lg:col-span-4 space-y-4">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">The route one item takes</span>
+                        <h2 class="font-display text-4xl md:text-5xl leading-none">How Res-Q moves surplus</h2>
+                        <p class="text-sm text-[#8EB69B] leading-relaxed">
+                            A kitchen profiles itself once and logs what is spare tonight; a shelter
+                            near enough to need it claims the item on a day it already takes
+                            deliveries. Six stops from the shop floor to the kitchen door — and the
+                            last of them are one drive, so here it is drawn.
+                        </p>
+                        <p class="text-xs text-[#8EB69B]/80 leading-relaxed">
+                            The two ends are the fixture's own: Whitfield Bakery's packaged goods
+                            going to Fort York Food Bank, the delivery already on the books.
+                        </p>
                     </div>
 
-                    <!-- Stop 02 -->
-                    <div class="road-row group" data-open="false" data-stop="2" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-2-title"
-                        onclick="openRoadStop(2)" onkeydown="roadKey(event, 2)" onmouseenter="roadHover(2)">
-                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
-                            <div class="flex flex-col items-center self-stretch">
-                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">02</span>
-                                <span class="road-seg"></span>
-                            </div>
-                            <div class="min-w-0 flex-1 pt-1">
-                                <div class="flex items-center justify-between gap-4">
-                                    <h3 id="road-2-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Log the surplus</h3>
-                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
-                                </div>
-                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
-                                    Tonight's spare goes on the live board in one line — the item, the
-                                    amount, where pickup happens.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="lg:col-span-8 w-full">
+                        <article id="routeCard" class="relative panel-raised p-0 overflow-hidden h-[440px] md:h-[420px]">
+                            <!-- The drawn shape: a picture of a route rather than a reading of
+                                 one. It stays under the map, so the card is never empty and
+                                 nothing moves when the real one arrives. -->
+                            <svg id="routeRest" class="absolute inset-0 w-full h-full z-10" viewBox="0 0 640 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <g stroke="#235347" stroke-opacity="0.55" fill="none">
+                                    <path d="M0 70 H640" /><path d="M0 150 H640" /><path d="M0 250 H640" /><path d="M0 330 H640" />
+                                    <path d="M90 0 V400" /><path d="M230 0 V400" /><path d="M400 0 V400" /><path d="M540 0 V400" />
+                                </g>
+                                <path d="M110 320 C 190 300 210 210 300 190 C 400 168 430 110 520 84" stroke="#235347" stroke-width="10" fill="none" stroke-linejoin="round" opacity="0.4"/>
+                                <path d="M110 320 C 190 300 210 210 300 190 C 400 168 430 110 520 84" stroke="#DAF1DE" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+                                <circle cx="520" cy="84" r="11" fill="#DAF1DE" fill-opacity="0.18"/>
+                                <circle cx="520" cy="84" r="7" fill="none" stroke="#DAF1DE" stroke-width="3"/>
+                                <circle cx="110" cy="320" r="7" fill="#0B2B26" stroke="#DAF1DE" stroke-width="2.5"/>
+                                <circle cx="300" cy="190" r="3" fill="#DAF1DE"/>
+                            </svg>
 
-                    <!-- Stop 03 -->
-                    <div class="road-row group" data-open="false" data-stop="3" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-3-title"
-                        onclick="openRoadStop(3)" onkeydown="roadKey(event, 3)" onmouseenter="roadHover(3)">
-                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
-                            <div class="flex flex-col items-center self-stretch">
-                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">03</span>
-                                <span class="road-seg"></span>
-                            </div>
-                            <div class="min-w-0 flex-1 pt-1">
-                                <div class="flex items-center justify-between gap-4">
-                                    <h3 id="road-3-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Match with need</h3>
-                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
-                                </div>
-                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
-                                    Shelters filtered by distance and shared goods categories see
-                                    what fits them first.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                            <!-- The live map mounts here, and only when its library has arrived. -->
+                            <div id="landingRouteMap" class="absolute inset-0 hidden"></div>
 
-                    <!-- Stop 04 -->
-                    <div class="road-row group" data-open="false" data-stop="4" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-4-title"
-                        onclick="openRoadStop(4)" onkeydown="roadKey(event, 4)" onmouseenter="roadHover(4)">
-                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
-                            <div class="flex flex-col items-center self-stretch">
-                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">04</span>
-                                <span class="road-seg"></span>
+                            <!-- What the card is showing, in the corner the drawn card kept for
+                                 its one chip: the delivery's state, and its distance once the
+                                 router has answered. -->
+                            <div class="absolute top-3 right-3 z-20 organic-chip inline-flex items-center gap-2 px-3 py-2 bg-[#051F20]/90 border border-[#235347]">
+                                <span id="routeChipDot" class="w-1.5 h-1.5 rounded-full bg-[#235347]"></span>
+                                <span id="routeChipText" class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">sample delivery</span>
                             </div>
-                            <div class="min-w-0 flex-1 pt-1">
-                                <div class="flex items-center justify-between gap-4">
-                                    <h3 id="road-4-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Claim and schedule</h3>
-                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
-                                </div>
-                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
-                                    A shelter claims the item and books it on a day it already asked
-                                    for deliveries.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Stop 05 -->
-                    <div class="road-row group" data-open="false" data-stop="5" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-5-title"
-                        onclick="openRoadStop(5)" onkeydown="roadKey(event, 5)" onmouseenter="roadHover(5)">
-                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
-                            <div class="flex flex-col items-center self-stretch">
-                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">05</span>
-                                <span class="road-seg"></span>
-                            </div>
-                            <div class="min-w-0 flex-1 pt-1">
-                                <div class="flex items-center justify-between gap-4">
-                                    <h3 id="road-5-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Route the pickup</h3>
-                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
+                            <!-- Both ends of the route, named, with the line under them saying
+                                 where the route itself came from. Inside the panel rather than
+                                 on the map: a pale line over pale tiles is a line nobody can
+                                 read. -->
+                            <div id="routeLegend" class="absolute bottom-4 left-4 right-4 z-20 hidden">
+                                <div class="organic-inner bg-[#051F20]/90 border border-[#235347] px-3 py-2 space-y-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE] shrink-0"></span>
+                                        <span id="routeFrom" class="text-[11px] leading-snug text-[#DAF1DE] truncate"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full border border-[#8EB69B] shrink-0"></span>
+                                        <span id="routeTo" class="text-[11px] leading-snug text-[#8EB69B] truncate"></span>
+                                    </div>
+                                    <p id="routeNote" class="text-[10px] text-[#8EB69B]/80 leading-relaxed pt-2 border-t border-[#235347]"></p>
                                 </div>
-                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
-                                    Both pins confirmed on the map, the driver gets one pickup and
-                                    one drop-off.
-                                </p>
                             </div>
-                        </div>
-                    </div>
 
-                    <!-- Stop 06 -->
-                    <div class="road-row group" data-open="false" data-stop="6" tabindex="0" role="button" aria-expanded="false" aria-labelledby="road-6-title"
-                        onclick="openRoadStop(6)" onkeydown="roadKey(event, 6)" onmouseenter="roadHover(6)">
-                        <div class="flex items-start gap-4 md:gap-6 px-4 md:px-7 py-5">
-                            <div class="flex flex-col items-center self-stretch">
-                                <span class="road-node organic-inner text-[#8EB69B] text-sm font-medium" aria-hidden="true">06</span>
-                            </div>
-                            <div class="min-w-0 flex-1 pt-1">
-                                <div class="flex items-center justify-between gap-4">
-                                    <h3 id="road-6-title" class="road-title text-2xl md:text-3xl leading-none text-[#DAF1DE]">Serve the community</h3>
-                                    <span class="road-cta-arrow shrink-0 text-[#8EB69B] text-lg" aria-hidden="true">&rarr;</span>
-                                </div>
-                                <p class="road-desc mt-3 text-sm leading-relaxed max-w-xl text-[#8EB69B]">
-                                    The kilos, meals and completed runs land on each dashboard —
-                                    the loop closes on a number.
-                                </p>
-                            </div>
-                        </div>
+                            <p id="routeRestNote" class="absolute bottom-4 left-4 right-4 z-10 text-[11px] text-[#8EB69B] leading-relaxed">
+                                The drive between the two ends, drawn as soon as this card is in view.
+                            </p>
+                        </article>
                     </div>
-
                 </div>
             </section>
 
@@ -396,54 +350,409 @@ def rank(candidates, me):
     </div>
 
     <script>
-        // -----------------------------------------------------------------------
-        // The roadmap: one selector, exactly one lit stop. openRoadStop(1..6) keeps
-        // the lit mint surface on the chosen row and clears the one before it, so
-        // the reader always knows where the journey stands. Hover previews a closed
-        // row's line without moving the lit stop; focus and Enter do move it.
-        // -----------------------------------------------------------------------
-        function openRoadStop(stop) {
-            var rows = document.querySelectorAll('#roadmapList .road-row');
-            Array.prototype.forEach.call(rows, function (row) {
-                var wanted = Number(row.getAttribute('data-stop')) === stop;
-                row.setAttribute('data-open', wanted ? 'true' : 'false');
-                row.setAttribute('aria-expanded', wanted ? 'true' : 'false');
-                var title = row.querySelector('.road-title');
-                var desc = row.querySelector('.road-desc');
-                if (wanted) {
-                    if (title) { title.classList.remove('text-[#DAF1DE]'); title.classList.add('text-[#051F20]'); }
-                    if (desc) { desc.classList.remove('text-[#8EB69B]'); desc.classList.add('text-[#051F20]/80'); }
-                } else {
-                    if (title) { title.classList.add('text-[#DAF1DE]'); title.classList.remove('text-[#051F20]'); }
-                    if (desc) { desc.classList.add('text-[#8EB69B]'); desc.classList.remove('text-[#051F20]/80'); }
+        // ---------------------------------------------------------------------------
+        // The route map. The console's card, on the landing page: a donor's teardrop, a
+        // shelter's ring, and the drive OSRM answers between them, for the fixture's one
+        // agreed delivery — Whitfield Bakery's packaged goods going to Fort York Food Bank.
+        //
+        // Nothing is fetched while the page loads. MapLibre, its stylesheet, the tiles and
+        // the router are asked for only once the card has been approached, and the drawn
+        // shape underneath keeps the card whole until the real map arrives. The map is not
+        // interactive, so a scroll over the card keeps scrolling the page.
+        // ---------------------------------------------------------------------------
+        var TRIP = {
+            from: { name: 'Whitfield Bakery', address: '60 Queen Street West, Toronto',
+                    lat: 43.6522, lng: -79.3805 },
+            to: { name: 'Fort York Food Bank', address: '40 Fort York Boulevard, Toronto',
+                  lat: 43.6386, lng: -79.4005 },
+            state: 'confirmed',
+            day: 'thu'
+        };
+
+        var MAPLIBRE_CSS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+        var MAPLIBRE_JS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+        var ROUTE_URL = 'https://router.project-osrm.org/route/v1/driving/';
+        // The tiles are OpenFreeMap's copy of OpenStreetMap data and the road is OSRM's, so
+        // both are credited in the card's own legend rather than in a control under it.
+        var MAP_CREDIT_TEXT = '\u00a9 OpenStreetMap contributors \u00b7 tiles \u00a9 OpenFreeMap';
+
+        // The console's style, minus its two label layers: a street name needs a font glyph
+        // fetched, and the two ends of this route are named in the card's legend instead.
+        // What is left is the ground, the water and the one warm-white road — the whole look.
+        var MAP_STYLE = {
+            version: 8,
+            sources: {
+                openmaptiles: {
+                    type: 'vector',
+                    url: 'https://tiles.openfreemap.org/planet'
                 }
-            });
-            document.getElementById('roadmapList').setAttribute('data-open-stop', String(stop));
-        }
-        function roadKey(event, stop) {
-            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
-                event.preventDefault();
-                openRoadStop(stop);
+            },
+            layers: [
+                { id: 'background', type: 'background',
+                  paint: { 'background-color': '#8CA083' } },
+
+                { id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park',
+                  paint: { 'fill-color': '#95A98C', 'fill-opacity': 0.75 } },
+                { id: 'landcover', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+                  filter: ['in', 'class', 'wood', 'grass', 'scrub', 'wetland', 'farmland'],
+                  paint: { 'fill-color': ['match', ['get', 'class'],
+                      'wood', '#849877', 'grass', '#93A78A', 'farmland', '#8FA586', '#8CA083'],
+                      'fill-opacity': 0.55 } },
+                { id: 'landuse', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+                  filter: ['in', 'class', 'residential', 'suburb', 'neighbourhood',
+                      'commercial', 'industrial', 'cemetery', 'hospital', 'school'],
+                  paint: { 'fill-color': '#8FA588', 'fill-opacity': 0.45 } },
+
+                { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water',
+                  paint: { 'fill-color': '#7C948E' } },
+                { id: 'waterway', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway',
+                  paint: { 'line-color': '#7C948E',
+                      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 18, 3] } },
+
+                { id: 'road-path', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+                  filter: ['all', ['in', 'class', 'path', 'track', 'pedestrian'],
+                      ['!=', 'brunnel', 'tunnel']],
+                  layout: { 'line-cap': 'round', 'line-join': 'round' },
+                  paint: { 'line-color': '#F2F1E8', 'line-dasharray': [2, 2],
+                      'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 18, 1.6] } },
+                { id: 'road', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+                  // `none` is the not-any-of: no foot traffic, no ferries, no tunnels.
+                  filter: ['none',
+                      ['in', 'class', 'path', 'track', 'pedestrian', 'aerialway', 'ferry'],
+                      ['==', 'brunnel', 'tunnel']],
+                  layout: { 'line-cap': 'round', 'line-join': 'round' },
+                  paint: { 'line-color': '#F7F6EE',
+                      'line-width': ['interpolate', ['linear'], ['zoom'],
+                          6, ['match', ['get', 'class'], ['motorway', 'trunk'], 1.1,
+                              'primary', 0.8, 0.35],
+                          12, ['match', ['get', 'class'], ['motorway', 'trunk'], 3.4,
+                              'primary', 2.8, ['secondary', 'tertiary'], 2.2, 1.2],
+                          17, ['match', ['get', 'class'], ['motorway', 'trunk'], 13,
+                              'primary', 10.5, ['secondary', 'tertiary'], 8, 4]] } }
+            ]
+        };
+
+        var landingRouteMap = null;
+        var routePickup = null;
+        var routeDropoff = null;
+        var maplibreRequested = false;
+        var maplibreOnPage = false;
+
+        function routeEl(id) { return document.getElementById(id); }
+
+        function setRouteChip(text, live) {
+            var label = routeEl('routeChipText');
+            var dot = routeEl('routeChipDot');
+            if (label) { label.textContent = text; }
+            if (dot) {
+                dot.className = 'w-1.5 h-1.5 rounded-full ' + (live ? 'bg-[#DAF1DE]' : 'bg-[#235347]');
             }
         }
-        // Hover previews: the description peeks out of a closed row, without stealing
-        // the lit stop from wherever the reader last clicked.
-        function roadHover(stop) {
-            var fine = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-            if (!fine) { return; }
-            var open = Number(document.getElementById('roadmapList').getAttribute('data-open-stop'));
-            if (stop === open) { return; }
-            var rows = document.querySelectorAll('#roadmapList .road-row');
-            Array.prototype.forEach.call(rows, function (row) {
-                row.classList.toggle('road-preview', Number(row.getAttribute('data-stop')) === stop);
+
+        function setRouteNote(text) {
+            var note = routeEl('routeNote');
+            if (note) { note.textContent = text || ''; }
+        }
+
+        // MapLibre and its stylesheet, asked for the first time this card is reached. One
+        // card means one request, so there is no queue of waiters here: the page either has
+        // the library, is fetching it, or has been told it could not be fetched.
+        function withMaplibre(onReady, onFail) {
+            if (maplibreOnPage) { onReady(); return; }
+            if (maplibreRequested) { return; }
+            maplibreRequested = true;
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = MAPLIBRE_CSS;
+            document.head.appendChild(css);
+            var script = document.createElement('script');
+            script.src = MAPLIBRE_JS;
+            script.async = true;
+            script.onload = function () {
+                maplibreOnPage = true;
+                onReady();
+            };
+            script.onerror = function () {
+                maplibreRequested = false;
+                if (onFail) { onFail(); }
+            };
+            document.head.appendChild(script);
+        }
+
+        // Both ends of the route, named. One line each with the whole address on the
+        // element's own title: the card is a map first, and a two-line address block would
+        // take a third of it.
+        function paintRouteSummary() {
+            var from = routeEl('routeFrom');
+            var to = routeEl('routeTo');
+            if (from) {
+                from.textContent = 'Picked up at ' + TRIP.from.name + ' \u00b7 ' + TRIP.from.address;
+                from.title = from.textContent;
+            }
+            if (to) {
+                to.textContent = 'Delivered to ' + TRIP.to.name + ' \u00b7 ' + TRIP.to.address;
+                to.title = to.textContent;
+            }
+        }
+
+        // The drawn shape goes, the legend arrives: the card is a reading from here on.
+        function showRouteSurface() {
+            var rest = routeEl('routeRest');
+            var restNote = routeEl('routeRestNote');
+            var legend = routeEl('routeLegend');
+            if (rest) { rest.classList.add('hidden'); }
+            if (restNote) { restNote.classList.add('hidden'); }
+            if (legend) { legend.classList.remove('hidden'); }
+        }
+
+        // The other way out: the drawn shape comes back and the map stands down, so a map that
+        // cannot be drawn leaves a card that still reads rather than an empty panel.
+        function keepDrawnRoute(why) {
+            var map = routeEl('landingRouteMap');
+            var rest = routeEl('routeRest');
+            var restNote = routeEl('routeRestNote');
+            var legend = routeEl('routeLegend');
+            if (map) { map.classList.add('hidden'); }
+            if (rest) { rest.classList.remove('hidden'); }
+            if (restNote) {
+                restNote.classList.remove('hidden');
+                restNote.textContent = why + ' ' + MAP_CREDIT_TEXT;
+            }
+            if (legend) { legend.classList.add('hidden'); }
+        }
+
+        // A style that never arrives leaves a map with nothing to draw on, and an empty green
+        // box is worse than the drawn route it replaced. This is caught after the fact rather
+        // than before it, because the same `error` event carries a single tile that failed to
+        // download, which is not worth taking the card away for.
+        function routeMapTrouble() {
+            if (!landingRouteMap || landingRouteMap.isStyleLoaded()) { return; }
+            keepDrawnRoute('The map tiles could not be loaded, so this is the drawn shape of '
+                + 'the route.');
+        }
+
+        function landingPinElement() {
+            var pin = document.createElement('div');
+            pin.className = 'resq-pin-icon';
+            pin.innerHTML = '<div class="resq-pin"><span></span></div>';
+            return pin;
+        }
+
+        // The drop-off end: an open ring, made here rather than fetched, so it is the
+        // palette's own mark the way the teardrop at the other end is.
+        function landingRingElement() {
+            var ring = document.createElement('div');
+            ring.className = 'resq-ring-icon';
+            ring.innerHTML = '<div class="resq-ring"></div>';
+            return ring;
+        }
+
+        function mountLandingRoute() {
+            var container = routeEl('landingRouteMap');
+            if (!container || landingRouteMap) { return; }
+            withMaplibre(function () {
+                try {
+                    // Shown before it is built: MapLibre sizes itself from its container's
+                    // box, and a hidden container measures nothing.
+                    container.classList.remove('hidden');
+                    landingRouteMap = new window.maplibregl.Map({
+                        container: container,
+                        style: MAP_STYLE,
+                        center: [TRIP.from.lng, TRIP.from.lat],
+                        zoom: 12,
+                        // A teaser is looked at rather than driven: no pan, no zoom, no
+                        // rotation, so a scroll over the card keeps scrolling the page.
+                        interactive: false,
+                        // No attribution control either: the credit belongs in the card's
+                        // legend, where it is as readable as the rest of the card.
+                        attributionControl: false,
+                        // A transition that cannot run leaves the view stuck halfway, and a
+                        // route wants no animation.
+                        fadeDuration: 0
+                    });
+                } catch (err) {
+                    landingRouteMap = null;
+                    container.classList.add('hidden');
+                    keepDrawnRoute('The map could not start in this page'
+                        + (err && err.message ? ' (' + err.message + ')' : '')
+                        + ', so this is the drawn shape of the route.');
+                    return;
+                }
+                // The style arrives asynchronously and a source can only be added once it has:
+                // adding one before that throws, which on a cold load the road router's answer
+                // can easily beat. So the drawn shape stays up — over the empty map, which is
+                // why it carries a stacking order — and the card only becomes a reading once
+                // the style is really there and the route can be drawn onto it.
+                landingRouteMap.once('load', function () {
+                    showRouteSurface();
+                    paintRouteSummary();
+                    drawLandingRoute();
+                });
+                landingRouteMap.on('error', routeMapTrouble);
+                landingRouteMap.resize();
+            }, function () {
+                keepDrawnRoute('The map library could not be loaded, so this is the drawn '
+                    + 'shape of the route.');
             });
         }
-        document.getElementById('roadmapList').addEventListener('mouseleave', function () {
-            Array.prototype.forEach.call(document.querySelectorAll('#roadmapList .road-row'), function (row) {
-                row.classList.remove('road-preview');
+
+        function drawLandingRoute() {
+            var from = TRIP.from;
+            var to = TRIP.to;
+            routePins(from, to);
+            fitLandingRoute(from, to);
+            // The road is awaited, so what the card says and what it draws are the same
+            // reading: the router's own kilometres, or the direct line and the reason.
+            return fetchRoadRoute(from, to).then(function (route) {
+                if (!landingRouteMap) { return; }
+                putLandingRoute(route ? route.coordinates
+                                      : [[from.lng, from.lat], [to.lng, to.lat]]);
+                if (route) {
+                    setRouteChip(TRIP.state + ' \u00b7 ' + (route.metres / 1000).toFixed(1)
+                        + ' km \u00b7 ' + TRIP.day, true);
+                    setRouteNote('Road route \u00b7 ' + (route.metres / 1000).toFixed(1)
+                        + ' km by road \u00b7 about ' + Math.max(1, Math.round(route.seconds / 60))
+                        + ' min \u00b7 OSRM \u00b7 ' + MAP_CREDIT_TEXT);
+                } else {
+                    setRouteChip(TRIP.state + ' \u00b7 ' + TRIP.day, true);
+                    setRouteNote('Shown as the direct line between the two pins \u2014 the road '
+                        + 'router could not be read. ' + MAP_CREDIT_TEXT);
+                }
+                // Fitted last, once the legend is carrying its note: the panel is taller with
+                // that line in it, and the route has to clear what is actually on the card.
+                fitLandingRoute(from, to);
+                // The chip and the legend are measured to take that fit, and a webfont that
+                // arrives after it changes both by a pixel or two — so the fit is taken once
+                // more when the fonts are in, rather than leaving the route rubbing the chip.
+                if (document.fonts && document.fonts.ready) {
+                    document.fonts.ready.then(function () {
+                        if (landingRouteMap) { fitLandingRoute(from, to); }
+                    });
+                }
             });
-        });
-        openRoadStop(1);
+        }
+
+        function routePins(from, to) {
+            if (!routePickup) {
+                routePickup = new window.maplibregl.Marker(
+                    { element: landingPinElement(), anchor: 'bottom' });
+            }
+            routePickup.setLngLat([from.lng, from.lat]).addTo(landingRouteMap);
+            if (!routeDropoff) {
+                routeDropoff = new window.maplibregl.Marker(
+                    { element: landingRingElement(), anchor: 'center' });
+            }
+            routeDropoff.setLngLat([to.lng, to.lat]).addTo(landingRouteMap);
+        }
+
+        // The two marks stand off the coordinate they name: the teardrop's tip is the point
+        // and its body rises above it, the ring is centred on its own point and so reaches
+        // past it. The padding has to clear the chip and the legend *and* the mark between,
+        // which is the same arithmetic the console's card does with its own fixed figures.
+        var PIN_HEIGHT = 36;
+        var RING_REACH = 13;
+
+        // How much of the card the map may not draw under, read off the card's own furniture
+        // rather than guessed at: the chip runs along the top and the legend along the
+        // bottom, and on a phone the legend is a third of the card's height.
+        function routePadding() {
+            var card = routeEl('routeCard');
+            var chip = document.querySelector('#routeCard .organic-chip');
+            var legend = routeEl('routeLegend');
+            var padding = { top: 72, bottom: 108, left: 44, right: 44 };
+            if (!card) { return padding; }
+            var box = card.getBoundingClientRect();
+            if (chip) {
+                padding.top = Math.round(chip.getBoundingClientRect().bottom - box.top)
+                    + 20 + PIN_HEIGHT;
+            }
+            if (legend && !legend.classList.contains('hidden')) {
+                padding.bottom = Math.round(box.bottom - legend.getBoundingClientRect().top)
+                    + 14 + RING_REACH;
+            }
+            return padding;
+        }
+
+        function fitLandingRoute(from, to) {
+            var bounds = new window.maplibregl.LngLatBounds(
+                [from.lng, from.lat], [from.lng, from.lat]);
+            bounds.extend([to.lng, to.lat]);
+            // Snapping rather than animating: a route wants no animation, and the padding is
+            // taken again on every fit because the legend is only measured once it exists.
+            landingRouteMap.fitBounds(bounds, { padding: routePadding(), duration: 0 });
+        }
+
+        // The line itself: a wide casing with the route drawn over it, which is how the
+        // drawn card told a road from the ground behind it, in the same two colour steps.
+        function putLandingRoute(coordinates) {
+            var shape = {
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates: coordinates }
+            };
+            var source = landingRouteMap.getSource('landing-route');
+            if (source) { source.setData(shape); return; }
+            landingRouteMap.addSource('landing-route', { type: 'geojson', data: shape });
+            landingRouteMap.addLayer({
+                id: 'landing-route-case',
+                type: 'line',
+                source: 'landing-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#235347', 'line-width': 9, 'line-opacity': 0.5 }
+            });
+            landingRouteMap.addLayer({
+                id: 'landing-route',
+                type: 'line',
+                source: 'landing-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#DAF1DE', 'line-width': 2.5 }
+            });
+        }
+
+        // The drive between the two pins, from OSRM's keyless demo router: the one free
+        // service that answers with a road rather than a distance. Anything it cannot answer
+        // is `null`, which the caller draws as the direct line and names as that.
+        function fetchRoadRoute(from, to) {
+            var url = ROUTE_URL + from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat
+                + '?overview=full&geometries=geojson';
+            return fetch(url, { headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    if (response.status !== 200) { return null; }
+                    return response.json().catch(function () { return null; });
+                })
+                .then(function (data) {
+                    var route = data && data.routes && data.routes[0];
+                    if (!route || !route.geometry || !route.geometry.coordinates) {
+                        return null;
+                    }
+                    return {
+                        coordinates: route.geometry.coordinates,
+                        metres: route.distance,
+                        seconds: route.duration
+                    };
+                })
+                .catch(function () { return null; });
+        }
+
+        // The card is watched rather than loaded: MapLibre is a fetch of its own, and a
+        // visitor who never reaches this section should never pay for it. The observer fires
+        // a quarter of a screen early, so the map is usually there by the time the card is.
+        (function watchRouteCard() {
+            var card = routeEl('routeCard');
+            if (!card) { return; }
+            if (!('IntersectionObserver' in window)) {
+                window.setTimeout(mountLandingRoute, 1500);
+                return;
+            }
+            var observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) { return; }
+                    observer.disconnect();
+                    mountLandingRoute();
+                });
+            }, { rootMargin: '250px 0px' });
+            observer.observe(card);
+        })();
 
         // The brand lockup in the corner sends signed-in visitors to the dashboard for their
         // role and everyone else to this landing page.

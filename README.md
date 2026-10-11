@@ -118,8 +118,9 @@ role chosen at the start.
    filter labels over a mint box headed *Pending orders*, which holds the orders
    still waiting and, inset into its right-hand side, the selected order's details.
    Below it sit the routing map and a panel still waiting for content of its own, and
-   under those the *Latest completed orders* cards — one per finished order, empty
-   until an order finishes. The bell in the header
+   under those the *Latest completed orders* cards — the donor's own finished orders,
+   read back from `GET /api/orders` and dated by the moment each one finished, newest
+   first, and empty until an order finishes. The bell in the header
    opens a small notifications panel under it rather than a browser alert, and the
    account pill beside it opens the same kind of panel; nothing feeds either list
    yet, so both are left empty on purpose.
@@ -138,11 +139,11 @@ the matching logic, and invites visitors into the flow above.
 
 | File | Purpose |
 | --- | --- |
-| `frontend/index.html` | Landing page — the site's entry point and default document |
+| `frontend/index.html` | Landing page — the site's entry point and default document, carrying the route map under the hero |
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on). The HTTP handler and the routes; everything it calls lives in the topic modules beside it |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes — its second panel the last month's mix by goods category, weighed by the backend and labelled one bar per category — plus the delivery-location card; and the *Ongoing Deliveries* section, which is the rationing pass for this kitchen: three figures, a ring of one post's claimants with every slice labelled by shelter and share, and the queue under it |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels — the items of theirs a shelter has claimed, in a carousel of summaries with the selected one expanded beside its figures — the *Route to the shelter* panel under it, whose map draws the selected order and whose rail lists that order's claimants, each one drawing the route to its own shelter, the *Latest completed orders* cards — the donor's own finished orders read back from `GET /api/orders`, one card each, newest first and dated the moment it went out —, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes — its second panel the last month's mix by goods category, weighed by the backend and labelled one bar per category — plus the delivery-location card; and the *Ongoing Deliveries* section, which is the rationing pass for this kitchen: three figures, a ring of one post's claimants with every slice labelled by shelter and share, and the queue under it |
 | `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same arrangement for recipients, carrying the same top rail under its own section names (*Incoming Deliveries*, *Delivery Status*, *Received Deliveries*) and the same Dashboard screen with its own counters; its *Feed* section is that same live board in three views (all posts, the posts nobody has claimed yet, and the posts tagged with the goods this recipient needs), with a claim button on every post — a claimed one included, because a post can be claimed by several recipients and it is the donor who rations between them |
 | `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` and `surplus_claims` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, reads back who has claimed what, streams changes to both tables, holds the six goods categories one time, and draws every post as the one shared card both roles see — including the line naming the first recipient to claim it and counting the rest |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
@@ -248,6 +249,21 @@ reverse lookup behind a moved pin — are OpenStreetMap's **Nominatim** service.
 it is free and keyless, so the overlay needs no account, no API key and no card.
 MapLibre is fetched from a CDN the first time the overlay opens, so the dashboards
 themselves stay light.
+
+The landing page carries the same map without an account: the section under the hero
+draws the fixture's own delivery — Whitfield Bakery to Fort York Food Bank — with the
+same teardrop at the pickup, the same ring for the drop-off and the same road from
+OSRM, its two ends named in the card's legend. It is a teaser rather than a console,
+so the map takes no pointer and carries no controls or attribution strip, and its
+style drops the two label layers the console paints: the ends are named in the legend,
+and a street name would have pulled font glyphs down with it. Nothing is fetched while
+the page loads — MapLibre, its stylesheet, the tiles and the road are all asked for
+only once that card has been approached, and its drawn shape holds the space until
+then; a card whose library or router cannot be read keeps that shape and says which of
+the two failed instead of showing an empty panel. The route is placed against the
+card's own furniture rather than against fixed figures, re-measured after the webfonts
+land, because a phone's legend is a third of the card and the two marks stand off the
+coordinates they name.
 
 Both OSM services are shared public infrastructure, so the overlay stays a good
 citizen: lookups run once per search and once per settled pin movement rather than on
@@ -857,6 +873,9 @@ delivery to read rather than an empty frame:
 | --- | --- | --- | --- |
 | `noor@resq.test` | Fort York Food Bank | 40 Fort York Blvd, Toronto | Tue, Thu |
 
+It also claims items off the demo board — Whitfield Bakery's two and Chen Noodle House's
+one — so the fixture's own recipient is a claimant on the surface it is read from.
+
 The same password signs it in and the same switches create it. It arrives the same way a
 donor does — a goods profile, a confirmed pin at its own address, no impact figures, since
 those are the kitchen's own. The delivery already on the books is Whitfield Bakery's
@@ -866,8 +885,57 @@ settled is not one a route would be drawn for. Both ends are filed under the acc
 them rather than under the session that wrote it, so the food bank reads its own delivery
 back the way any other order would be read — which is what the *Delivery status* card
 opens on, described under [The delivery map](#the-delivery-map). Seeding again adds
-nothing: an account that exists is skipped, a day already logged is left alone, and the
-delivery is not doubled.
+nothing: an account that exists is skipped, a day already logged is left alone, andthe delivery is not doubled.
+
+**Ortega Deli's books ship filled beside them**, so the donor Dashboard and its Ongoing
+Deliveries screen read a record on a deployment nobody has used yet: three Miami shelters,
+the five deliveries that kitchen has already run, and the three items it has open now.
+
+| Sign in as | Organisation | Where | Takes deliveries on |
+| --- | --- | --- | --- |
+| `ana@resq.test` | Biscayne Bay Shelter | 1450 NE 2nd Ave, Miami | Mon, Thu |
+| `ines@resq.test` | Overtown Community Kitchen | 750 NW 3rd Ave, Miami | Tue, Fri |
+| `tomas@resq.test` | Little Havana Food Pantry | 1200 SW 8th St, Miami | Wed, Sat |
+
+The same password signs them in. The five finished deliveries are ordinary **orders**,
+written `completed` with the moment each one finished — spread over the last four weeks,
+oldest first, the way the books are read as a timeline — which is what the donor
+dashboard's *Latest completed orders* cards read, newest first. The three open items are
+**claims**, each with two or three of those shelters on it, written in exactly the shape a
+recorded claim is read in, so the rationing pass splits them without knowing they are the
+fixture: the donor's *Ongoing Deliveries* screen opens on three real items with named
+shelters and rations rather than on an empty frame. Both are read for the accounts they
+were written about — that kitchen and its three shelters — so a deployment with claims of
+its own never has the fixture mixed into its queue, and seeding again adds nothing.
+
+**The same items are on the board, with their claims**, because the donor console reads
+Supabase rather than the books: a deployment that has just come up would otherwise open on
+a carousel with nothing in it, a map with no route on it and a claimant rail with nobody in
+it. Eight items from four kitchens are seeded onto the board itself — the Miami kitchen's
+three are **the same three items as its book**, one id, one text and one stamp, so what the
+pending orders list and what the pass splits are one set of items rather than two — and the
+claims on them are recorded beside them. The fourth Miami item is left open on purpose, so
+claiming can be shown live. Whitfield Bakery's two items and Chen Noodle House's one carry
+the fixture's own recipient and the two Toronto shelters that ship for them:
+
+| Sign in as | Organisation | Where | Claims |
+| --- | --- | --- | --- |
+| `harbour@resq.test` | Harbour Lights Shelter | 12 Harbour Lane, Toronto | Whitfield Bakery, Chen Noodle House |
+| `riverside@resq.test` | Riverside Community Pantry | 88 Riverside Walk, Toronto | Chen Noodle House, Raman Kitchens |
+
+The board's posts go to the board and a claim goes to the API's own claim records **and**,
+where the board has the `surplus_claims` table, to a row beside them — the two halves a
+donor's console reads its claimants and their pins out of. Both are written by a read
+first, so seeding again adds nothing: a post the board already holds is left where it is,
+and a shelter that has already claimed an item is not counted twice. Where a claim is both
+recorded and in the book, the record is the claim and the book is the floor under it: the
+pass reads it once, not twice. A board that is not configured to be written to
+(`RESQ_SUPABASE_URL` and `RESQ_SUPABASE_KEY`) simply keeps the claim records — which is the
+half that carries each shelter's pin — and the startup line says so; a board that is
+configured says what it wrote, and names
+`supabase/migrations/20261012000000_create_surplus_claims.sql` when the claims table is not
+there yet, since until that migration is run the board holds no claim rows and a post can
+only be claimed once.
 
 The **weather in those logs is real**: each donor's days carry the conditions Open-Meteo's
 archive actually recorded at that donor's coordinates, so the history is a record rather
@@ -914,12 +982,13 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `POST` | `/api/profile` | Save the goods profile — establishment type and up to 2 surplus categories for donors, up to 2 delivery days and up to 2 required goods for recipients. Answers beyond the limit are rejected with `400`. The page sends the visitor to the dashboard for their role once this returns 200 |
 | `POST` | `/api/delivery-location` | Save the delivery location the dashboard pin points at, from an `address` plus `lat`/`lng`. Needs a bearer token (`401`), and answers `400` for an empty address, coordinates that are not numbers or are off the globe, or a malformed body. Overwrites any earlier confirmation and only ever writes the caller's own row; the refreshed user comes back in the response |
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
-| `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from |
+| `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from. A delivery that has finished carries `completed` in `status` and the moment it finished in `completed_at`, which is what the donor dashboard's *Latest completed orders* cards read and date themselves by |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
 | `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing. Only the caller's own ration and share are named — other claimants are a count. The caller's own business name travels with the request, so a donor also gets `owned`: one entry per post of theirs a claim is on, with every claimant named beside its ration and share |
 | `POST` | `/api/surplus-categories` | The last month of the caller's own surplus log, summarised by goods category: kilograms, entry count, share of the total and how each bar was read — `text`, `assumed`, `logged` or `mixed`. The caller's board rows arrive in the body as `posts` (`400` `no_posts` without the key) and are **filed into the log first**, each row once, under its own post id; the window (`days`, default 30, clamped to 1–365) is applied when the log is read rather than when the board is. Only rows carrying the caller's own business name are filed — the rest are reported as `skipped` — and the answer carries `filed` and `stored` beside the summary. A month of logged days is seeded into the log for the fixture kitchens, so the mix stands on a board that has been cleared |
 | `POST` | `/api/rations` | Run the same pass and publish the caller's own shares back to the board, writing `allocated_kg`, `allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at` onto each row it claimed — and nothing else about the row. Answers `503` `board_unconfigured` when `RESQ_SUPABASE_URL`/`RESQ_SUPABASE_KEY` are not set, and `200` with a per-post result otherwise — including when a row refuses the write, which the result says per post rather than failing the request |
 | `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
+| `GET` | `/api/post-claims` | The other side of the row above: the claims other shelters have made on the signed-in account's **own board posts**, gathered post by post, newest post first, each with the claimants on it — their name, address and confirmed pin, when they claimed it, and how far they are from the caller's own pin. Needs a bearer token (`401`); answers an empty list with a `note` for an account with nothing claimed. Only the caller's own posts are ever read, so a shelter that owns no posts is told that rather than shown somebody else's delivery |
 | `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201` |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 | `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the year-long window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
@@ -962,6 +1031,23 @@ takes the newest order the caller is the recipient side of and draws the drive b
 its two pins, described under [The delivery map](#the-delivery-map). Nothing calls
 `/api/matches` from a page yet: wiring the rails and the donor's impact panel to it is
 the next piece of work.
+
+**The donor's side of the same board** reads it the other way round. The donor
+dashboard's *Pending orders* surface is the items of theirs a shelter has reached for:
+the rows the board marks `claimed`, newest first, in a carousel of summaries, with the
+selected one expanded beside its figures — how much is on the move, how many shelters
+are on it and how far the nearest one is. The board carries the item and its status but
+not *who* claimed it, because that record lives in this API, so the two halves are read
+separately and joined on the post id: the rows come from `surplus_posts` and the
+claimants from `GET /api/post-claims`. Under that surface the selected order is a
+delivery: the donor's own confirmed pin is the pickup, the shelter's is the drop-off, and
+the drive between them is drawn with the same map and the same OSRM router the
+recipient's console uses — nearest shelter first, and pressing another shelter in the
+rail beside the map redraws it to that one. A claim whose shelter has confirmed no
+location is listed as a card that says so rather than a route drawn to nowhere, and a
+claimed row with no claim on record — which is what an older row looks like on a
+deployment that has just started keeping claims — says that too instead of reading as
+zero claimants.
 
 ### The rationing pass
 
@@ -1050,14 +1136,16 @@ is still worked out and shown, and the answer says the board was not written to.
 caller's own rows are written, and only those five columns of them, so the status, the donor,
 the item and the timestamp the claim guard freezes cannot be touched by it.
 
-A fresh deployment has no claims on its board yet, so `seed.py` carries one claimed post
-with three shelters on it — the fixture's own recipient among them — and the pass reads it
-for the two accounts it was written about: the shelter that claimed it, whose ration it is,
-and the kitchen whose item it was, which is the account that reads the whole split. Anybody
-else's pass reads the claims the board really has, which is what keeps the fixture's
-claimants out of a run that has claims of its own. That is what gives a deployment nobody
-has used yet a share that is not a hundred percent, and a split with three named shelters
-on it for the donor's own screen.
+A fresh deployment has no claims on its board yet, so `seed.py` carries fixtures and the
+pass reads each for the accounts it was written about. The first is one claimed post with
+three shelters on it — the fixture's own recipient among them — read for that shelter,
+whose ration it is, and the kitchen whose item it was, which is the account that reads the
+whole split. The second is the **Miami book**: three items Ortega Deli has open, each
+reached for by two or three of its own three shelters, read for that kitchen and for each
+of its shelters. Between them a deployment nobody has used yet has a share that is not a
+hundred percent and, on the donor's own screen, three real splits with named shelters.
+Anybody else's pass reads the claims the board really has, which is what keeps the
+fixtures' claimants out of a run that has claims of its own.
 
 `POST /api/surplus-categories` is the pass's own reading of a written quantity, borrowed
 for the other screen that asks what a month of surplus came to. The board is Supabase's and
@@ -1210,6 +1298,6 @@ and its coordinates are stored on the account and waiting there the next time th
 opens. The surplus board needs its migration applied once before it will take a row.
 
 The layout of the site is still settling: the landing page keeps only teaser
-content (the hero details, the capability cards and the footer) and hands off to
+content (the hero, the route map and the matching-engine cards) and hands off to
 the onboarding page, whose role chooser modal is now unreachable from the UI, and
 the onboarding page still carries its own copy of the marketing sections.

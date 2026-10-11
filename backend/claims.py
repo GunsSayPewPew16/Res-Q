@@ -32,8 +32,10 @@ from config import (
     CLAIM_RECIPIENT_FIELDS,
     CLAIM_RECORDS_PATH,
     DEMO_CLAIMS,
+    METRIC_DECIMALS,
 )
-from helpers import account_key
+from geo import haversine_km
+from helpers import account_key, display_name
 
 
 def utcnow():
@@ -170,3 +172,88 @@ def caller_claims(caller, conn=None):
         return []
     return [record for record in stored_records(conn)
             if account_key(record.get("recipient")) == key]
+
+
+def claims_on_posts(donor_name, conn=None):
+    """The claims other shelters have made on the posts one donor logged, oldest first.
+
+    The other side of `caller_claims`, and it is found the other way round: a shelter is
+    the key its own claims are filed under, while a post is identified by the name on it.
+    That is the only join there is — the board is Supabase's and keeps no donor id, so the
+    `donor_name` a claim carries on the post row it recorded is the one thing tying a
+    claimed item back to the kitchen that posted it. A donor's claimants are therefore
+    found by the same name its own posts are, which is how the board's own *My posts* read
+    finds them too.
+    """
+    wanted = str(donor_name or "").strip()
+    if not wanted:
+        return []
+    return [record for record in stored_records(conn)
+            if str((record.get("post") or {}).get("donor_name") or "").strip() == wanted]
+
+
+def delivery_point(user):
+    """An account's own confirmed pin as a pair of numbers, or None when it has none."""
+    account = user or {}
+    try:
+        return (float(account.get("delivery_lat")), float(account.get("delivery_lng")))
+    except (TypeError, ValueError):
+        return None
+
+
+def claimed_posts(records, donor):
+    """The claims on one donor's posts, gathered item by item, newest item first.
+
+    One entry per claimed post, each carrying the shelters that reached for it in the order
+    a round would serve them — nearest first, because this is read beside a map and the
+    nearest shelter is the one a donor is most likely to look at. A claimant that has
+    confirmed no location is kept rather than dropped: it is still a shelter holding a
+    claim, so it stays in the list with no pin and no distance for the map to draw.
+
+    The distance is measured between the two pins the delivery really runs between — the
+    caller's own pin and the claimant's — and is left unread rather than guessed at when
+    either end has no coordinates.
+    """
+    pin = delivery_point(donor)
+    posts = []
+    index = {}
+    for record in records:
+        post = record.get("post") or {}
+        post_id = str(post.get("id") or "").strip()
+        if not post_id:
+            continue
+        entry = index.get(post_id)
+        if entry is None:
+            entry = {
+                "post_id": post_id,
+                "item_name": post.get("item_name"),
+                "quantity": post.get("quantity"),
+                "location": post.get("location"),
+                "goods_type": post.get("goods_type"),
+                "created_at": post.get("created_at"),
+                "claimants": [],
+            }
+            index[post_id] = entry
+            posts.append(entry)
+
+        claimant = record.get("recipient") or {}
+        at = delivery_point(claimant)
+        entry["claimants"].append({
+            "name": display_name(claimant) if claimant else None,
+            "address": claimant.get("delivery_address"),
+            "city": claimant.get("city"),
+            "lat": at[0] if at else None,
+            "lng": at[1] if at else None,
+            "claimed_at": record.get("claimed_at"),
+            "distance_km": (round(haversine_km(pin[0], pin[1], at[0], at[1]), METRIC_DECIMALS)
+                            if (pin and at) else None),
+        })
+
+    posts.sort(key=lambda entry: str(entry.get("created_at") or ""), reverse=True)
+    for entry in posts:
+        entry["claimants"].sort(key=lambda claim: (
+            claim["distance_km"] is None,
+            claim["distance_km"] or 0.0,
+            str(claim["claimed_at"] or ""),
+        ))
+    return posts

@@ -121,6 +121,9 @@ CREATE TABLE IF NOT EXISTS orders (
     dropoff_lng     REAL,
     distance_km     REAL,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    -- When the delivery finished, on the orders that have: null is an order still on its
+    -- way — or one written before the column existed — and a moment is one that has gone out.
+    completed_at    TEXT,
     FOREIGN KEY (donor_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE
 );
@@ -527,8 +530,17 @@ LLM_TEMPERATURE = 0
 
 # An order starts life proposed. Until the status transitions land that is the only
 # status one can be in, and these are the two that stop a second order for the same pair
-# and category being proposed on top of the first.
+# and category being proposed on top of the first. They are also what "ongoing" means: a
+# delivery still on its way, as opposed to one that has finished.
 LIVE_ORDER_STATUSES = ("proposed", "accepted")
+
+# A delivery that has gone out. A finished order carries the moment it finished
+# (`completed_at`) beside the moment it was proposed, because the dashboard's finished
+# orders read by how recently they went out rather than by when they were booked; one
+# that has not finished carries none. Nothing in the API moves an order to this status
+# yet — the fixture's five finished Miami deliveries are written with it, and they are
+# what the donor dashboard's finished-orders cards read.
+FINISHED_ORDER_STATUS = "completed"
 
 # Demo mode has no second account to match against, so the pipeline is walked through
 # against fabricated counterparts. Each one sits a fixed distance from the caller's own

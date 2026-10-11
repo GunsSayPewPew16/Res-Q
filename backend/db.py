@@ -1,7 +1,7 @@
 """Res-Q backend database access.
 
 The SQLite connection and the schema. One connection shape (`connect`) returns
-rows as dictionaries, soreading an account column by name is the same in demo
+rows as dictionaries, so reading an account column by name is the same in demo
 and persistent mode; `init_db` creates the tables and carries older databases
 forward, column by column, without a migration tool.
 """
@@ -57,6 +57,12 @@ def init_db():
         ):
             if column not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
+        # A delivery that has finished says when it finished. An orders table written
+        # before that column reads as orders still on their way, which is what a null in
+        # it means anyway.
+        order_columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
+        if "completed_at" not in order_columns:
+            conn.execute("ALTER TABLE orders ADD COLUMN completed_at TEXT")
         if "delivery_day" in columns or "surplus_type" in columns:
             old_day = "delivery_day" if "delivery_day" in columns else "NULL"
             old_type = "surplus_type" if "surplus_type" in columns else "NULL"

@@ -166,6 +166,134 @@ def allocation_fields(allocation, shelter_name, written_at):
     }
 
 
+# ---------------------------------------------------------------------------
+# The other half: adding a row that is not there yet
+# ---------------------------------------------------------------------------
+# Publishing a ration edits a row the board already holds. The demo fixture needs the
+# opposite too — the posts and the claims a fresh board has none of — so the same request
+# plumbing is exposed for a single-row insert, guarded by a read first. The guard is what
+# makes a seeding pass safe to run on every startup: the row is added once, and every
+# startup after that finds it and leaves it alone.
+
+# The claims a post carries, added by the migration named here. A project without it is a
+# project this write reports and steps around rather than fails on: the board's own claim
+# rows are one half of a claim and the API's record is the other, so a board that cannot
+# hold them yet still shows the claims a donor's console reads.
+CLAIMS_TABLE = "surplus_claims"
+CLAIMS_MIGRATION = "supabase/migrations/20261012000000_create_surplus_claims.sql"
+
+
+def request(url, method="GET", body=None, prefer=None):
+    """One request to the board: `(ok, payload_or_message)`. Never raises."""
+    if not configured():
+        return False, "no board configured"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + SUPABASE_KEY,
+    }
+    if prefer:
+        headers["Prefer"] = prefer
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(url, data=data, headers=headers, method=method),
+            timeout=SUPABASE_TIMEOUT_SECONDS,
+        ) as response:
+            raw = response.read().decode("utf-8")
+    except urllib.error.HTTPError as error:
+        try:
+            detail = error.read().decode("utf-8")
+        except (OSError, ValueError):
+            detail = ""
+        message = redact(parsed_message(detail)) or ("the board answered %s" % error.code)
+        return False, message
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
+        return False, redact(error)
+    try:
+        return True, json.loads(raw or "null")
+    except ValueError:
+        return True, None
+
+
+def table_url(table, query=""):
+    """One table's REST endpoint, with a query string when there is one."""
+    return "%s/rest/v1/%s%s" % (SUPABASE_URL, table, query)
+
+
+def row_url(table, filters, select="id"):
+    """A table's endpoint narrowed to one row, written the way PostgREST reads a filter."""
+    pairs = [(name, value) for name, value in sorted(filters.items()) if value is not None]
+    query = "?".join([""] + ["%s=eq.%s" % (name, urllib.parse.quote(str(value), safe=""))
+                             for name, value in pairs])
+    return table_url(table, query + "&select=" + select + "&limit=1")
+
+
+def holds_row(table, filters):
+    """Whether the board already has that row: `(ok, present_or_message)`."""
+    ok, payload = request(row_url(table, filters))
+    if not ok:
+        return False, payload
+    return True, bool(payload)
+
+
+def missing_table(message):
+    """Whether a board message is the board saying a whole table is not there.
+
+    It says it two ways, and which one it is depends on where the request stopped: the REST
+    layer's cache answers "Could not find the table … in the schema cache" before the
+    statement is sent, while Postgres answers "… does not exist" when it is. Both mean the
+    migration that creates the table has not been applied.
+    """
+    text = str(message or "")
+    return "does not exist" in text or "in the schema cache" in text
+
+
+def name_trouble(table, message):
+    """A board message, with the migration named when a whole table is what is missing.
+
+    The one failure whose fix is a file rather than a setting should say which file — the
+    same rule the allocation write follows.
+    """
+    text = str(message or "")
+    if table == CLAIMS_TABLE and missing_table(text):
+        return text + " · apply " + CLAIMS_MIGRATION + " to let the board hold claims"
+    return text
+
+
+def add_row(table, row, filters):
+    """Add one row unless the board already holds it: `(ok, detail)`.
+
+    The detail is the row the board wrote back on a success and its own message on a
+    failure, with the key stripped out of either. `filters` names the row the way the board
+    can find it again — an id, or the pair that has to be unique — and is what makes a
+    second pass over the same fixture add nothing.
+    """
+    ok, present = holds_row(table, filters)
+    if not ok:
+        return False, name_trouble(table, present)
+    if present:
+        return True, {"present": True}
+    ok, payload = request(table_url(table), "POST", row, "return=representation")
+    if not ok:
+        return False, name_trouble(table, payload)
+    if isinstance(payload, list):
+        return True, (payload[0] if payload else {"written": True})
+    return True, payload
+
+
+def add_post(row):
+    """One board post, added unless that id is on the board already."""
+    return add_row(SUPABASE_TABLE, row, {"id": row.get("id")})
+
+
+def add_claim(row):
+    """One claim row, added unless that shelter is already on that post."""
+    return add_row(CLAIMS_TABLE, row, {"post_id": row.get("post_id"),
+                                       "recipient_name": row.get("recipient_name")})
+
+
 def parsed_message(text):
     """The board's own error message out of its JSON body, or the body itself."""
     try:

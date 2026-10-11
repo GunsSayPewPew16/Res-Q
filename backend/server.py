@@ -36,6 +36,7 @@ Endpoints
     POST /api/rations               ration the account's claims and publish its shares
     POST /api/surplus-categories    the account's own logged month, by goods category
     GET  /api/claims                the account's own claims, newest first
+    GET  /api/post-claims           the claims on the account's own board posts
     POST /api/claims                record the account's claim on one board row
     GET  /api/history               the account's own logged days, and what they answer
     GET  /api/weather               the real conditions at a point, in the analyser's words
@@ -148,7 +149,14 @@ from helpers import (
     query_number,
     utc_stamp,
 )
-from claims import caller_claims, record_from_post, remember, stamp
+from claims import (
+    caller_claims,
+    claimed_posts,
+    claims_on_posts,
+    record_from_post,
+    remember,
+    stamp,
+)
 from matching import routing_problem, shared_categories
 from orders import (
     demo_order_pair,
@@ -358,6 +366,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_rations()
         if path == "/api/claims":
             return self.api_claims()
+        if path == "/api/post-claims":
+            return self.api_post_claims()
         if path == "/api/history":
             return self.api_history()
         if path == "/api/weather":
@@ -1281,6 +1291,42 @@ class ResQHandler(SimpleHTTPRequestHandler):
             payload["demo"] = True
         return self.send_json(200, payload)
 
+    def api_post_claims(self):
+        """The claims other shelters have made on this donor's own board posts.
+
+        The other side of `GET /api/claims`, which answers the claims an account *made*: a
+        shelter reads that one, and the donor of the item reads this one — the shelters
+        that reached for what it posted, with each one's own confirmed pin, because the
+        donor is the other end of that delivery and has to be able to route to it.
+
+        A claim carries the board row it claimed, and that row names the donor the way the
+        board does — by the name the post is filed under — so the two sides are joined on
+        it. Which means this only ever answers the caller's own posts: a name that owns
+        nothing on the board owns no claimants, and a shelter asking is told that rather
+        than shown somebody else's delivery.
+        """
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+
+        records = claims_on_posts(display_name(me))
+        if PERSIST:
+            with connect() as conn:
+                records = claims_on_posts(display_name(me), conn)
+
+        posts = claimed_posts(records, me)
+        payload = {
+            "ok": True,
+            "donor": display_name(me),
+            "count": len(records),
+            "posts": posts,
+        }
+        if not posts:
+            payload["note"] = "no shelter has claimed one of your posts yet"
+        if not PERSIST:
+            payload["demo"] = True
+        return self.send_json(200, payload)
+
     def api_claim_create(self):
         """Record the caller's claim on one board row.
 
@@ -2183,13 +2229,31 @@ def prepare_state():
     else:
         seed_report = seed_test_accounts()
     print(
-        "Test accounts: %d donors, %d recipient created, %d already there,"
-        " %d days logged"
+        "Test accounts: %d donors, %d recipient and %d shelters created, %d already"
+        " there, %d days logged"
         % (len(seed_report["created"]),
            1 if seed_report["recipient_created"] else 0,
+           len(seed_report["shelters_created"]),
            len(seed_report["skipped"]), seed_report["days_written"]),
         flush=True,
     )
+    board = seed_report["board"]
+    if (board["posts_published"] or board["posts_already"]
+            or board["claims_recorded"]):
+        print(
+            "  demo board (%s): %d posts written, %d already there, %d claims recorded,"
+            " %d claim rows written"
+            % (board["board"], len(board["posts_published"]),
+               len(board["posts_already"]), board["claims_recorded"],
+               board["board_claims_published"]),
+            flush=True,
+        )
+    if board["posts_trouble"]:
+        print("  demo board: the posts could not be written — " + board["posts_trouble"],
+              flush=True)
+    if board["claims_trouble"]:
+        print("  demo board: the claim rows could not be written — " + board["claims_trouble"],
+              flush=True)
     if seed_report["weather_from_archive"] or seed_report["weather_from_pattern"]:
         print(
             "  weather: %d donors from the Open-Meteo archive, %d from the fallback"
@@ -2203,6 +2267,17 @@ def prepare_state():
             % seed_report["log_written"],
             flush=True,
         )
+    if seed_report["shelters_created"]:
+        print(
+            "  shelters: %d created" % len(seed_report["shelters_created"]),
+            flush=True,
+        )
+    if seed_report["orders_written"]:
+        print(
+            "  deliveries: %d finished orders written for %s"
+            % (len(seed_report["orders_written"]), seed_report["orders_for"]),
+            flush=True,
+        )
     if seed_report["delivery"] is not None:
         print(
             "  delivery: order %s accepted, %s to %s"
@@ -2213,6 +2288,7 @@ def prepare_state():
     accounts = list(seed_report["created"])
     if seed_report["recipient_created"]:
         accounts.append(seed_report["recipient_created"])
+    accounts.extend(seed_report["shelters_created"])
     if accounts:
         print(
             "  sign in as " + ", ".join(accounts) + " with the password "

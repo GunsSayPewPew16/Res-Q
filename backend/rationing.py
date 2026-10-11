@@ -806,9 +806,10 @@ def gather_claims(caller, conn=None):
 
     The pass reads every claim on the board rather than only the caller's own, because a
     share is a fraction of what all of a post's claimants took; the caller's own rows are
-    the ones that come back as allocations. The fixture's claimed post is added only when
-    the caller is the fixture's own recipient, which is what keeps a deployment with real
-    claims from having demo claimants' shares mixed into its own.
+    the ones that come back as allocations. Each fixture is added only for the accounts it
+    was written about — the claimed post for its own shelter and kitchen, and the Miami
+    kitchen's three open deliveries for that kitchen and its shelters — which is what keeps
+    a deployment with real claims from having demo claimants' shares mixed into its own.
     """
     claims = []
     for record in stored_records(conn):
@@ -820,4 +821,25 @@ def gather_claims(caller, conn=None):
     # is the account that reads the whole split.
     if seed.is_fixture_recipient(caller, conn) or seed.is_fixture_donor(caller, conn):
         claims.extend(seed.claim_fixture(conn))
+    # The Miami kitchen's own book: three items of its open on the board, each reached for
+    # by two or three of its shelters, so a donor's Ongoing Deliveries screen has real
+    # splits on a deployment nobody has used yet. Read for the kitchen whose items they are
+    # and for each shelter on them, and for nobody else — a run with claims of its own never
+    # has the fixture's shelters mixed into its queue.
+    #
+    # A claim the store already holds is not read from the book a second time: the same
+    # three items are seeded onto the board as posts, and the claims on them are recorded,
+    # so counting the fixture's copy beside the record would put every claimant on a post
+    # twice and split it between two copies of itself. The book is what stands in where no
+    # record was written — the record is the claim, and this is the floor under it.
+    if seed.is_miami_kitchen(caller, conn) or seed.is_miami_shelter(caller, conn):
+        seen = set()
+        for claim in claims:
+            post = claim.get("post") or {}
+            seen.add((str(post.get("id") or ""), account_key(claim.get("recipient"))))
+        claims.extend(
+            claim for claim in seed.fixture_deliveries(conn)
+            if (str((claim.get("post") or {}).get("id") or ""),
+                account_key(claim.get("recipient"))) not in seen
+        )
     return claims
