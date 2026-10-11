@@ -10,12 +10,16 @@ credential each time.
 
 Matching is the second half of the API: once an account has confirmed its delivery
 location, GET /api/matches ranks the counterparts near it that share a category, and
-POST /api/orders turns a chosen pair into a delivery order. A logged surplus item goes
-through the same machinery: POST /api/submit-surplus scores it against the registered
-shelters and answers with the one that should take it.
+POST /api/orders turns a chosen pair into a delivery order.
 
     python3 backend/server.py                   # demo mode, port 8080
     RESQ_PERSIST=on python3 backend/server.py   # store accounts in SQLite (backend/resq.db)
+
+This file is also the whole of the API when it is deployed: `wsgi.py` adapts its handler
+into a WSGI application, which is what Gunicorn runs on Render (see the README's
+deployment section). Both front-ends answer with the same routes because there is one
+implementation of them, and the cross-origin rules — which origins may read this API —
+are read from `RESQ_ALLOWED_ORIGINS` so a deployment's frontend can be named there.
 
 Endpoints
     GET  /api/health                liveness probe
@@ -25,984 +29,185 @@ Endpoints
     POST /api/logout                drop the session
     POST /api/profile               save the goods profile (establishment + surplus category)
     POST /api/delivery-location     save the location confirmed on the dashboard map
-    POST /api/submit-surplus        match a logged surplus item to the shelter that takes it
     GET  /api/matches               rank the counterparts near the account, nearest first
     GET  /api/orders                list the delivery orders the account is part of
     POST /api/orders                bind the account and one counterpart into an order
+    GET  /api/history               the account's own logged days, and what they answer
+    GET  /api/weather               the real conditions at a point, in the analyser's words
+    GET  /api/surplus-forecast      forecast today's surplus (surplus.py pipeline)
+    GET  /api/surplus-outlook       the week ahead at a point, a forecast per day
 
-Only the standard library is used, so there is nothing to install.
+Only the standard library is used for the site and session work, so the server
+runs as before with nothing to install; the live weather wants nothing but a
+connection, and the surplus forecast additionally wants pandas and scikit-learn and
+answers 503 with install instructions without them.
+
+The handler lives here; everything it calls lives in the module that owns it, so
+the API can be inspected a topic at a time:
+
+    config.py     every constant, limit and vocabulary, and the demo stores
+    db.py         the SQLite connection and the schema
+    helpers.py    request cleaning and naming
+    security.py   password hashing and checking
+    geo.py        distance, the pre-filter box, the offset point
+    accounts.py   impact figures and the demo accounts and peers
+    matching.py   what makes two accounts deliverable
+    orders.py     the order's stored shape
+    history.py    the logged days, and the features the model reads out of them
+    seed.py       the five test donors and their six weeks of logs
+    weather.py    live conditions from Open-Meteo, in the model's three words
+    surplus.py    the surplus calculator: train once, forecast per request
 """
 
 import datetime
-import hashlib
-import hmac
 import json
-import math
 import os
-import random
-import re
 import secrets
-import sqlite3
 import sys
-import time
-import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from itertools import count
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, urlparse
 
-# This folder is the backend: its code and its database file live here. The pages it
-# serves live beside it in frontend/, so the two are resolved separately — the site's
-# document root is the pages' folder, never this one.
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-FRONTEND_DIR = os.path.join(os.path.dirname(BACKEND_DIR), "frontend")
-DB_PATH = os.environ.get("RESQ_DB", os.path.join(BACKEND_DIR, "resq.db"))
+# The two label vocabularies the forecast accepts. They are the training data's own
+# values — days of the week and three weather words — so anything else cannot be
+# forecast against silently.
+SURPLUS_DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+                "Saturday", "Sunday")
+SURPLUS_WEATHERS = ("Sunny", "Cloudy", "Rainy")
 
-# Demo mode (the default for now): onboarding answers are accepted and a session is
-# handed back, but nothing is written to SQLite and duplicate details are never
-# rejected, so the whole site can be walked through without registering a new
-# credential every time. Accounts are kept in memory for the life of the process.
-# Start the server with RESQ_PERSIST=on to store accounts in the database again.
-PERSIST = os.environ.get("RESQ_PERSIST", "off").strip().lower() in ("on", "1", "true", "yes")
-DEMO_SESSIONS = {}
-# Demo orders belong to a session token the way the sessions themselves do, and go when
-# the process does. The counter hands out ids that look like the persistent ones.
-DEMO_ORDERS = {}
-DEMO_ORDER_SEQ = count(1)
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    role          TEXT    NOT NULL DEFAULT 'donor',
-    first_name    TEXT    NOT NULL,
-    last_name     TEXT    NOT NULL,
-    business_name TEXT,
-    email         TEXT    UNIQUE,
-    phone         TEXT    UNIQUE,
-    dial_code     TEXT,
-    street        TEXT,
-    sub_locality  TEXT,
-    locality      TEXT,
-    province      TEXT,
-    city          TEXT,
-    postal        TEXT,
-    password_hash TEXT    NOT NULL,
-    password_salt TEXT    NOT NULL,
-    firm_type     TEXT,
-    delivery_days TEXT,
-    surplus_types TEXT,
-    delivery_address TEXT,
-    delivery_lat  REAL,
-    delivery_lng  REAL,
-    delivery_confirmed_at TEXT,
-    surplus_saved REAL,
-    meals_served  INTEGER,
-    orders_completed INTEGER,
-    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-    token      TEXT    PRIMARY KEY,
-    user_id    INTEGER NOT NULL,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS orders (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    donor_id        INTEGER NOT NULL,
-    recipient_id    INTEGER NOT NULL,
-    category        TEXT    NOT NULL,
-    status          TEXT    NOT NULL DEFAULT 'proposed',
-    scheduled_for   TEXT,
-    pickup_address  TEXT,
-    pickup_lat      REAL,
-    pickup_lng      REAL,
-    dropoff_address TEXT,
-    dropoff_lat     REAL,
-    dropoff_lng     REAL,
-    distance_km     REAL,
-    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (donor_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE
-);
-"""
-
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-PUBLIC_FIELDS = (
-    "id", "role", "first_name", "last_name", "business_name", "email", "phone",
-    "dial_code", "street", "sub_locality", "locality", "province", "city",
-    "postal", "firm_type", "delivery_days", "surplus_types",
-    "delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at",
-    "surplus_saved", "meals_served", "orders_completed",
-    "created_at",
+from accounts import (
+    demo_lookup,
+    demo_peer_users,
+    fill_donor_metrics,
+    remember_demo_account,
+    seed_donor_metrics,
 )
-
-# The delivery location confirmed on the dashboard map. The coordinates are the point
-# for routing; the address is what the map showed at that point when it was confirmed.
-DELIVERY_FIELDS = ("delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at")
-# The two columns a confirmed dashboard pin lives in, which is what places a shelter.
-PIN_FIELDS = ("delivery_lat", "delivery_lng")
-MAX_ADDRESS_CHARS = 400
-# The largest body any form here sends is a registration, well under a kilobyte; a
-# request that declares more than this is answered as unreadable rather than read, so a
-# thread cannot be parked waiting on bytes a client only promised.
-MAX_REQUEST_BODY_BYTES = 64 * 1024
-# The Log surplus form's own input limits, so the route never accepts more than a form
-# could have sent, and nothing a page types can be used to grow a row without bound.
-MAX_ITEM_CHARS = 120
-MAX_QUANTITY_CHARS = 80
-
-# The three impact figures the donor dashboard shows. They belong to the donor's own
-# profile and to no other role: they are that donor's record of what their surplus
-# became. Surplus saved is a weight in kilograms, kept to two decimals — fractions of a
-# kilo matter when food is weighed — while meals served and orders completed are whole
-# counts.
-DONOR_METRIC_FIELDS = ("surplus_saved", "meals_served", "orders_completed")
-METRIC_DECIMALS = 2
-
-# Nothing has come out of the pipeline yet, so a new donor profile starts from the
-# plausible range the dashboard's placeholders used. A routing pass that completes an
-# order would overwrite these with what actually moved.
-NEW_DONOR_SURPLUS_KG = (1200.0, 4800.0)
-NEW_DONOR_MEALS = (2400, 9600)
-NEW_DONOR_ORDERS = (40, 260)
-
-# These two arrive as lists and are stored as JSON text, so a row has to be decoded
-# before it goes out.
-LIST_FIELDS = ("delivery_days", "surplus_types")
-
-# The goods profile asks different questions per role: donors describe where the goods
-# come from, recipients when they want them delivered and what they need.
-DELIVERY_DAYS = ("sat", "sun", "mon", "tue", "wed", "thu", "fri")
-DONOR_SURPLUS = (
-    "prepared_meals", "fresh_produce", "bakery_items", "packaged_goods",
-    "dairy_beverages", "household_essentials",
+from config import (
+    CORS_ALLOWED_HEADERS,
+    CORS_ALLOWED_METHODS,
+    CORS_MAX_AGE_SECONDS,
+    DB_PATH,
+    DEFAULT_MATCH_LIMIT,
+    DEFAULT_RADIUS_KM,
+    DEMO_ORDER_SEQ,
+    DEMO_ORDERS,
+    DEMO_SESSIONS,
+    DELIVERY_DAYS,
+    DONOR_METRIC_FIELDS,
+    DONOR_SURPLUS,
+    EMAIL_RE,
+    FIRM_SURPLUS,
+    FRONTEND_DIR,
+    HISTORY_READ_DAYS,
+    LIST_FIELDS,
+    LIVE_ORDER_STATUSES,
+    MAX_ADDRESS_CHARS,
+    MAX_MATCH_LIMIT,
+    MAX_PICKS,
+    MAX_RADIUS_KM,
+    METRIC_DECIMALS,
+    PERSIST,
+    PUBLIC_FIELDS,
+    RECIPIENT_NEEDS,
+    SEED_ON_START,
+    WEATHER_MAX_OUTLOOK_DAYS,
+    WEATHER_OUTLOOK_DAYS,
 )
-RECIPIENT_NEEDS = (
-    "prepared_meals", "fresh_produce", "dairy_beverages", "household_essentials",
-    "packaged_goods",
+from db import connect, init_db, users_by_ids
+from geo import bounding_box, haversine_km, offset_point
+from history import as_day, features_from_history, history_summary, read_history
+from helpers import (
+    account_key,
+    clean_email,
+    clean_id,
+    clean_phone,
+    clean_selection,
+    decode_list,
+    demo_display_name,
+    display_name,
+    origin_allowed,
+    password_problem,
+    query_number,
 )
-
-# Which firm classifications may hand over each surplus category. This mirrors the rule
-# the goods profile applies to the dropdown, so a crafted request cannot save a category
-# the chosen establishment does not actually produce.
-FIRM_SURPLUS = {
-    "prepared_meals": ("retail", "eatery"),
-    "fresh_produce": ("retail",),
-    "bakery_items": ("retail", "eatery"),
-    "packaged_goods": ("retail",),
-    "dairy_beverages": ("retail", "eatery"),
-    "household_essentials": ("retail",),
-}
-
-# Every profile question takes at most two answers.
-MAX_PICKS = 2
-
-# A delivery is worth proposing only when both sides have a point on the map: the donor's
-# pickup and the recipient's drop-off. Candidates are therefore filtered by distance from
-# the caller's own confirmed pin, must share at least one category, and are ranked
-# nearest first, because distance is what a delivery costs.
-DEFAULT_RADIUS_KM = 25.0
-MAX_RADIUS_KM = 250.0
-DEFAULT_MATCH_LIMIT = 10
-MAX_MATCH_LIMIT = 50
-KM_PER_DEGREE = 111.32
-EARTH_RADIUS_KM = 6371.0088
-
-# A surplus item and a shelter first meet the hard filter: the shelter has to accept the
-# kind of item on offer, and the two pins have to sit within HARD_FILTER_RADIUS_KM of each
-# other along the road. The road measurement comes from OSRM's public demo router — the
-# same service the root 'import requests.py' experiment called — so it needs no key and no
-# package. That is an outbound call, hence a short timeout and a handled failure rather
-# than a fatal one.
-HARD_FILTER_RADIUS_KM = 15.0
-OSRM_TIMEOUT_SECONDS = 5.0
-OSRM_ROUTE_URL = (
-    "https://router.project-osrm.org/route/v1/driving/%s,%s;%s,%s?overview=false"
+from matching import routing_problem, shared_categories
+from orders import (
+    demo_order_pair,
+    demo_order_side,
+    order_payload,
+    order_row,
+    remember_demo_order,
 )
-# The same pair of pins is measured again on every refresh and the router is shared with
-# the rest of the internet, so successful answers are remembered for the life of the
-# process; a full cache starts over rather than evicting one entry at a time.
-ROAD_DISTANCE_CACHE = {}
-ROAD_DISTANCE_CACHE_LIMIT = 512
-
-# An address typed on the website carries no coordinates, so the same Nominatim geocoder the
-# root 'import requests.py' experiment called turns it into a pin before anything is
-# measured. Its usage policy asks for one request a second and an identifying agent, so
-# calls are spaced and signed; a hit is remembered like a road distance is.
-NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=%s"
-GEOCODING_TIMEOUT_SECONDS = 5.0
-NOMINATIM_MIN_INTERVAL_SECONDS = 1.0
-GEOCODER_USER_AGENT = "resq-backend/1.0 (prototype; github.com/GunsSayPewPew16/Res-Q)"
-GEOCODE_CACHE = {}
-GEOCODE_CACHE_LIMIT = 256
-GEOCODE_LAST_CALL_AT = 0.0
-# The address columns the onboarding form fills, in the order they read back as one line.
-ADDRESS_PART_FIELDS = ("street", "sub_locality", "locality", "city", "province", "postal")
-
-# The allocation score is the prototype's weighting: how close the drive is, how much the
-# shelter needs the goods, and how soon they expire — 0.3, 0.4 and 3.0. Proximity counts
-# down from the filter radius, and the urgency multiplier is 1 / (hours + 0.1), so goods
-# nearly out of time outrank a comfortable run by design.
-DISTANCE_SCORE_CEILING_KM = 15.0
-DISTANCE_SCORE_WEIGHT = 0.3
-NEED_SCORE_WEIGHT = 0.4
-URGENCY_WEIGHT = 3.0
-URGENCY_SMOOTHING_HOURS = 0.1
-SCORE_DECIMALS = 2
-
-# The allocation score needs a need score and an expiry time, and the Log surplus form
-# collects neither, so a submission fills both with what is written here rather than
-# guessing halfway through the weighting: a shelter nobody has rated carries the middle of
-# the prototype's 1-to-10 scale, and logged goods are taken to keep for a day.
-DEFAULT_SHELTER_NEED_SCORE = 5.0
-DEFAULT_SURPLUS_EXPIRY_HOURS = 24.0
-
-# A logged item arrives as free text ("Crates of ripe tomatoes"), so the submission route
-# reads the words a shop would use and files the item under one of the profile categories.
-# A keyword matches at a word start inside the item or the quantity, so "tomato" catches
-# "tomatoes"; the quantity only decides when the item name said nothing. Nothing matching
-# is an answer too — the caller falls back to the donor's own goods profile rather than
-# putting the item on a shelf nobody asked for.
-SURPLUS_KEYWORDS = (
-    ("prepared_meals", ("meal", "cooked", "curry", "soup", "rice", "biryani", "stew",
-                        "sandwich", "pizza", "roast", "casserole", "dinner", "lunch",
-                        "leftover")),
-    ("fresh_produce", ("produce", "vegetable", "veggie", "fruit", "tomato", "potato",
-                       "onion", "carrot", "lettuce", "salad", "spinach", "apple",
-                       "banana", "orange", "berr", "mushroom", "pepper", "cabbage",
-                       "herb", "melon", "cucumber", "broccoli", "avocado", "lemon")),
-    ("bakery_items", ("bakery", "bread", "bagel", "bun", "roll", "pastry", "croissant",
-                      "cake", "muffin", "cookie", "biscuit", "doughnut", "donut",
-                      "loaf", "loaves")),
-    ("dairy_beverages", ("dairy", "milk", "cheese", "yogurt", "yoghurt", "butter",
-                         "cream", "juice", "beverage", "drink", "smoothie", "kefir")),
-    ("household_essentials", ("soap", "detergent", "hygiene", "shampoo", "sanitiser",
-                              "sanitizer", "cleaning", "cleaner", "tissue", "toothpaste",
-                              "diaper", "nappy", "paper towel", "bleach", "wipes")),
-    ("packaged_goods", ("packaged", "packet", "canned", "tin", "jar", "carton", "box",
-                        "pasta", "noodle", "flour", "grain", "cereal", "snack", "chips",
-                        "bottle", "oil", "sauce", "spice", "sugar", "salt", "coffee",
-                        "tea")),
-)
-
-# An order starts life proposed. Until the status transitions land that is the only
-# status one can be in, and these are the two that stop a second order for the same pair
-# and category being proposed on top of the first.
-LIVE_ORDER_STATUSES = ("proposed", "accepted")
-
-# Demo mode has no second account to match against, so the pipeline is walked through
-# against fabricated counterparts. Each one sits a fixed distance from the caller's own
-# confirmed pin, on a fixed bearing, so the numbers stay plausible wherever the pin was
-# dropped and a counterpart is always in the same place for a given caller. Every donor
-# category is covered by a recipient here and every recipient need by a donor, so
-# whichever role is signed in has something to match. They exist in demo mode only.
-DEMO_PEERS = (
-    {"id": 9001, "role": "recipient", "contact": "Dana Whitfield",
-     "business_name": "Harbour Lights Shelter", "street": "12 Harbour Lane",
-     "distance_km": 1.2, "bearing": 20,
-     "surplus_types": ("prepared_meals", "fresh_produce"),
-     "delivery_days": ("sat", "tue")},
-    {"id": 9002, "role": "recipient", "contact": "Marcus Ilori",
-     "business_name": "Riverside Community Pantry", "street": "88 Riverside Walk",
-     "distance_km": 2.8, "bearing": 115,
-     "surplus_types": ("packaged_goods", "household_essentials"),
-     "delivery_days": ("mon", "thu")},
-    {"id": 9003, "role": "recipient", "contact": "Priya Raghunathan",
-     "business_name": "Maple Court Seniors Centre", "street": "4 Maple Court",
-     "distance_km": 4.6, "bearing": 200,
-     "surplus_types": ("dairy_beverages", "prepared_meals"),
-     "delivery_days": ("sat", "wed")},
-    {"id": 9004, "role": "recipient", "contact": "Ruth Okonjo",
-     "business_name": "Westbrook Family Kitchen", "street": "301 Westbrook Road",
-     "distance_km": 7.9, "bearing": 285,
-     "surplus_types": ("fresh_produce", "dairy_beverages"),
-     "delivery_days": ("sun", "fri")},
-    {"id": 9005, "role": "donor", "contact": "Elena Marchetti", "firm_type": "retail",
-     "business_name": "Greenway Grocers", "street": "50 Greenway Parade",
-     "distance_km": 2.1, "bearing": 35,
-     "surplus_types": ("fresh_produce", "packaged_goods"),
-     "delivery_days": ()},
-    {"id": 9006, "role": "donor", "contact": "Tom Bexley", "firm_type": "eatery",
-     "business_name": "Corner Bakehouse", "street": "9 Corner Street",
-     "distance_km": 3.4, "bearing": 150,
-     "surplus_types": ("bakery_items", "prepared_meals"),
-     "delivery_days": ()},
-    {"id": 9007, "role": "donor", "contact": "Aisha Karim", "firm_type": "retail",
-     "business_name": "Lakeshore Market", "street": "220 Lakeshore Drive",
-     "distance_km": 5.7, "bearing": 240,
-     "surplus_types": ("dairy_beverages", "household_essentials"),
-     "delivery_days": ()},
-    {"id": 9008, "role": "donor", "contact": "Owen Trask", "firm_type": "eatery",
-     "business_name": "Sunlit Deli", "street": "77 Sunlit Avenue",
-     "distance_km": 9.3, "bearing": 320,
-     "surplus_types": ("dairy_beverages", "bakery_items"),
-     "delivery_days": ()},
-)
-
-
-def connect():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-def clean_selection(value, allowed, limit=MAX_PICKS):
-    """Normalise a 1..limit multi-select answer. None means it is not a valid answer.
-
-    A bare string is accepted so a caller that still sends a single value keeps working.
-    """
-    if isinstance(value, str):
-        value = [value]
-    if not isinstance(value, list):
-        return None
-    picked = []
-    for item in value:
-        if not isinstance(item, str):
-            return None
-        key = item.strip().lower()
-        if not key or key in picked:
-            continue
-        if key not in allowed:
-            return None
-        picked.append(key)
-    if not picked or len(picked) > limit:
-        return None
-    return picked
-
-
-def decode_list(value):
-    """Read a stored JSON list back as a list of strings."""
-    if isinstance(value, list):
-        return value
-    if not value:
-        return []
-    try:
-        parsed = json.loads(value)
-    except (TypeError, ValueError):
-        return []
-    if not isinstance(parsed, list):
-        return []
-    return [item for item in parsed if isinstance(item, str)]
-
-
-def seed_donor_metrics():
-    """The impact figures a new donor profile starts with."""
-    return {
-        "surplus_saved": round(random.uniform(*NEW_DONOR_SURPLUS_KG), METRIC_DECIMALS),
-        "meals_served": random.randint(*NEW_DONOR_MEALS),
-        "orders_completed": random.randint(*NEW_DONOR_ORDERS),
-    }
-
-
-def fill_donor_metrics(user):
-    """Give a donor profile the impact figures it is missing, in place.
-
-    Returns True when anything was filled. A profile created before the figures existed
-    gets them the first time it is read, so a donor never has to wait for a fresh
-    sign-in to see their own numbers. A recipient is left alone: the figures are the
-    donor's, and a recipient profile carries none of them.
-    """
-    if user.get("role") != "donor":
-        return False
-    missing = [field for field in DONOR_METRIC_FIELDS if user.get(field) is None]
-    if not missing:
-        return False
-    fresh = seed_donor_metrics()
-    for field in missing:
-        user[field] = fresh[field]
-    return True
-
-
-def init_db():
-    with connect() as conn:
-        conn.executescript(SCHEMA)
-        # Databases created while each question took a single answer carry singular
-        # columns; add the list columns and carry the old answers across as one-item lists.
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
-        if "delivery_days" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN delivery_days TEXT")
-        if "surplus_types" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN surplus_types TEXT")
-        # Accounts created before the dashboard map saved anything have no delivery
-        # location: add the columns so a confirmed location has somewhere to land.
-        for column, kind in (
-            ("delivery_address", "TEXT"),
-            ("delivery_lat", "REAL"),
-            ("delivery_lng", "REAL"),
-            ("delivery_confirmed_at", "TEXT"),
-        ):
-            if column not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
-        # The donor's impact figures live on the donor's profile too. A profile created
-        # before them gets the columns here and its first figures the first time it is
-        # read; a recipient's columns simply stay NULL.
-        for column, kind in (
-            ("surplus_saved", "REAL"),
-            ("meals_served", "INTEGER"),
-            ("orders_completed", "INTEGER"),
-        ):
-            if column not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
-        if "delivery_day" in columns or "surplus_type" in columns:
-            old_day = "delivery_day" if "delivery_day" in columns else "NULL"
-            old_type = "surplus_type" if "surplus_type" in columns else "NULL"
-            rows = conn.execute(
-                "SELECT id, %s AS delivery_day, %s AS surplus_type FROM users "
-                "WHERE delivery_days IS NULL AND surplus_types IS NULL" % (old_day, old_type)
-            ).fetchall()
-            for row in rows:
-                days = [row["delivery_day"]] if row["delivery_day"] else []
-                types = [row["surplus_type"]] if row["surplus_type"] else []
-                if not days and not types:
-                    continue
-                conn.execute(
-                    "UPDATE users SET delivery_days = ?, surplus_types = ? WHERE id = ?",
-                    (json.dumps(days), json.dumps(types), row["id"]),
-                )
-
-
-def hash_password(password, salt=None):
-    salt = salt or secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 120_000)
-    return digest.hex(), salt
-
-
-def verify_password(password, digest, salt):
-    candidate, _ = hash_password(password, salt)
-    return hmac.compare_digest(candidate, digest)
-
-
-def demo_lookup(email, phone):
-    """Return a demo user registered earlier in this process, if there is one."""
-    for user in DEMO_SESSIONS.values():
-        if email and user.get("email") == email:
-            return dict(user)
-        if phone and user.get("phone") == phone:
-            return dict(user)
-    return None
-
-
-def demo_display_name(contact):
-    """Turn an unknown email or phone into something friendly to greet."""
-    if contact and "@" in contact:
-        local = contact.split("@")[0]
-        parts = [p for p in re.split(r"[._-]+", local) if p]
-        if parts:
-            return parts[0].capitalize()
-    return "Res-Q user"
-
-
-def password_problem(password):
-    if len(password) < 8:
-        return "Please use at least 8 characters for your password."
-    if not re.search(r"[A-Z]", password):
-        return "Please include at least 1 uppercase letter in your password."
-    if not re.search(r"\d", password):
-        return "Please include at least 1 number in your password."
-    return None
-
-
-def clean_email(value):
-    return (value or "").strip().lower()
-
-
-def clean_phone(value):
-    return re.sub(r"[^\d]", "", value or "")
-
-
-def display_name(user):
-    """What to call an account in a match or an order: the business, if there is one."""
-    if not user:
-        return "Res-Q user"
-    business = (user.get("business_name") or "").strip()
-    if business:
-        return business
-    person = ("%s %s" % (user.get("first_name") or "", user.get("last_name") or "")).strip()
-    return person or "Res-Q user"
-
-
-def clean_id(value):
-    """A user id as it arrives over JSON: a whole number, a numeric string, or None."""
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value) if value.is_integer() else None
-    if isinstance(value, str):
-        text = value.strip()
-        if text.lstrip("+-").isdigit():
-            return int(text)
-    return None
-
-
-def text_answer(data, name):
-    """One text field out of a request body, as a string whatever the client sent.
-
-    A JSON body can carry a number, a list or an object where the form promised a string,
-    and ``value.strip()`` on one of those raises in the middle of a handler — which ends
-    the request with no answer at all instead of the field's own 400. Anything that is not
-    a string reads as absent, exactly like a key that was never sent.
-    """
-    value = data.get(name)
-    return value.strip() if isinstance(value, str) else ""
-
-
-def query_number(query, name, default, minimum, maximum):
-    """Read a bounded numeric query parameter; None when it is not a number at all.
-
-    A value outside the range is pulled to the nearest end rather than refused, so a
-    request that asks for everything simply gets the largest answer allowed.
-    """
-    raw = (query.get(name) or [""])[0].strip()
-    if not raw:
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        return None
-    if value != value:
-        return None
-    return max(minimum, min(maximum, value))
-
-
-def haversine_km(lat1, lng1, lat2, lng2):
-    """Great-circle distance between two points on the map, in kilometres."""
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    d_phi = phi2 - phi1
-    d_lambda = math.radians(lng2 - lng1)
-    a = (math.sin(d_phi / 2) ** 2
-         + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2)
-    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
-
-
-def location_of(record):
-    """The (lat, lng) a surplus item or shelter carries, under its "location" key."""
-    location = record.get("location")
-    if not isinstance(location, (list, tuple)) or len(location) != 2:
-        raise ValueError("a surplus item or shelter needs a location as (lat, lng)")
-    return float(location[0]), float(location[1])
-
-
-def address_text(record):
-    """A record's address as one line: its "address" text, or its stored parts joined."""
-    address = str(record.get("address") or "").strip()
-    if address:
-        return address
-    parts = [str(record.get(field) or "").strip() for field in ADDRESS_PART_FIELDS]
-    return ", ".join(part for part in parts if part)
-
-
-def geocode_address(address):
-    """The (lat, lng) a written address stands for, from the Nominatim geocoder.
-
-    The website's onboarding collects an address but no coordinates, so the same service
-    the root 'import requests.py' experiment called resolves it here, before any distance
-    is measured. Calls are spaced to the service's one-a-second policy and signed with an
-    identifying agent; a hit is remembered for the life of the process. Returns None when
-    the service cannot answer or knows no such place.
-    """
-    global GEOCODE_LAST_CALL_AT
-    key = " ".join(str(address).split()).lower()
-    if key in GEOCODE_CACHE:
-        return GEOCODE_CACHE[key]
-    wait = NOMINATIM_MIN_INTERVAL_SECONDS - (time.monotonic() - GEOCODE_LAST_CALL_AT)
-    if wait > 0:
-        time.sleep(wait)
-    GEOCODE_LAST_CALL_AT = time.monotonic()
-    url = NOMINATIM_SEARCH_URL % quote(key)
-    request = urllib.request.Request(
-        url, headers={"User-Agent": GEOCODER_USER_AGENT, "Accept": "application/json"}
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=GEOCODING_TIMEOUT_SECONDS) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(payload, list) or not payload:
-        return None
-    try:
-        lat = float(payload[0]["lat"])
-        lng = float(payload[0]["lon"])
-    except (KeyError, IndexError, TypeError, ValueError):
-        return None
-    if len(GEOCODE_CACHE) >= GEOCODE_CACHE_LIMIT:
-        GEOCODE_CACHE.clear()
-    GEOCODE_CACHE[key] = (lat, lng)
-    return lat, lng
-
-
-def pin_for(record):
-    """The (lat, lng) a record can be placed at, resolving a written address if needed.
-
-    Coordinates come first because they are exact: a "location" pair, like the
-    prototype's, or the delivery_lat/delivery_lng pair the dashboard map writes. A record
-    carrying only an address — what the website's onboarding collects — is geocoded
-    instead, so an address typed on the site feeds the same measurements a confirmed pin
-    does. Raises ValueError when no place can be found for the record.
-    """
-    if record.get("location") is not None:
-        return location_of(record)
-    lat, lng = record.get("delivery_lat"), record.get("delivery_lng")
-    if lat is not None and lng is not None:
-        return float(lat), float(lng)
-    address = address_text(record)
-    if address:
-        pin = geocode_address(address)
-        if pin is not None:
-            return pin
-        raise ValueError("could not place this address on the map: " + address)
-    raise ValueError("a record needs a location, a delivery pin or an address")
-
-
-def road_distance_km(lat1, lng1, lat2, lng2):
-    """Driving distance between two pins, in kilometres, from the OSRM router.
-
-    haversine_km measures through the earth; a delivery drives, so the hard filter
-    measures along the road instead — the call the root 'import requests.py' experiment
-    made, written with urllib so the backend still asks for nothing outside the standard
-    library. Returns None when the router cannot answer, leaving the caller to decide
-    what a missing road distance means.
-    """
-    key = (round(lat1, 5), round(lng1, 5), round(lat2, 5), round(lng2, 5))
-    if key in ROAD_DISTANCE_CACHE:
-        return ROAD_DISTANCE_CACHE[key]
-    # OSRM wants longitude before latitude, and the two pins joined by a semicolon.
-    url = OSRM_ROUTE_URL % (key[1], key[0], key[3], key[2])
-    try:
-        with urllib.request.urlopen(url, timeout=OSRM_TIMEOUT_SECONDS) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(payload, dict) or payload.get("code") != "Ok":
-        return None
-    try:
-        metres = float(payload["routes"][0]["distance"])
-    except (KeyError, IndexError, TypeError, ValueError):
-        return None
-    distance = round(metres / 1000.0, METRIC_DECIMALS)
-    if len(ROAD_DISTANCE_CACHE) >= ROAD_DISTANCE_CACHE_LIMIT:
-        ROAD_DISTANCE_CACHE.clear()
-    ROAD_DISTANCE_CACHE[key] = distance
-    return distance
-
-
-def pair_distance_km(surplus, shelter, fallback_to_straight_line=True):
-    """How far one surplus item sits from one shelter, measured along the road.
-
-    Road distance is the measurement; when the router cannot answer and the fallback is
-    allowed the great-circle distance stands in, and None comes back only when the road
-    distance was required and could not be had. Either record is placed by pin_for, so an
-    address is geocoded exactly when its coordinates are missing.
-    """
-    lat1, lng1 = pin_for(surplus)
-    lat2, lng2 = pin_for(shelter)
-    distance = road_distance_km(lat1, lng1, lat2, lng2)
-    if distance is None:
-        if not fallback_to_straight_line:
-            return None
-        distance = haversine_km(lat1, lng1, lat2, lng2)
-    return distance
-
-
-def hard_filter(surplus, shelter, max_distance_km=HARD_FILTER_RADIUS_KM,
-                fallback_to_straight_line=True):
-    """Whether a surplus item may go to a shelter at all, before any ranking.
-
-    The two gates the prototype applied, in the same order: the shelter has to accept
-    this kind of item ("item_type" against its "accepted_types"), and the business and
-    the shelter have to be within max_distance_km of each other along the road rather
-    than through the earth. Either side is placed by pin_for, so a record carrying only
-    the address typed on the website measures exactly like one carrying a pin.
-
-    The road measurement is an outbound call, so when the router cannot answer and
-    fallback_to_straight_line is on (the default) the great-circle distance stands in,
-    letting an offline run still filter instead of dropping every candidate. Pass
-    fallback_to_straight_line=False to insist on road distance only.
-    """
-    if surplus.get("item_type") not in (shelter.get("accepted_types") or ()):
-        return False
-    distance = pair_distance_km(surplus, shelter, fallback_to_straight_line)
-    if distance is None:
-        return False
-    return distance <= max_distance_km
-
-
-def match_score(surplus, shelter, distance_km):
-    """The weighted score one valid pair gets: the prototype's formula, kept whole.
-
-    distance_score * 0.3 + need_score * 0.4 + urgency_multiplier * 3.0, where the
-    distance score counts down from the filter radius, the need score is the shelter's
-    own 1-to-10, and the urgency multiplier is 1 / (hours to expiry + 0.1) — goods nearly
-    out of time outrank a comfortable run by design. Raises ValueError when the pair
-    carries no need score or no expiry time to work with.
-    """
-    try:
-        need_score = float(shelter["current_need_score"])
-        expiry_hours = float(surplus["expiry_hours"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("a scored pair needs a need score and an expiry time")
-    distance_score = max(0.0, DISTANCE_SCORE_CEILING_KM - distance_km)
-    urgency_multiplier = 1.0 / (expiry_hours + URGENCY_SMOOTHING_HOURS)
-    return round(
-        distance_score * DISTANCE_SCORE_WEIGHT
-        + need_score * NEED_SCORE_WEIGHT
-        + urgency_multiplier * URGENCY_WEIGHT,
-        SCORE_DECIMALS,
-    )
-
-
-def allocate_surplus(surplus_items, shelters, max_distance_km=HARD_FILTER_RADIUS_KM,
-                     fallback_to_straight_line=True):
-    """The prototype's greedy plan: score every valid pair, then hand out the best first.
-
-    Every pair that passes hard_filter is scored by match_score and sorted from the
-    highest score down, ties settled by the shorter drive. Walking that list once is the
-    whole allocation: the first time an item or a shelter appears it is taken, so no item
-    is promised twice and no shelter is asked to take two deliveries. A pair that cannot
-    be worked with — an address with no place on the map, goods without an expiry time —
-    is left out rather than stopping the rest of the plan.
-    """
-    candidates = []
-    for surplus in surplus_items:
-        for shelter in shelters:
-            try:
-                if not hard_filter(surplus, shelter, max_distance_km,
-                                   fallback_to_straight_line):
-                    continue
-                distance = pair_distance_km(surplus, shelter, fallback_to_straight_line)
-                if distance is None:
-                    continue
-                score = match_score(surplus, shelter, distance)
-            except ValueError:
-                continue
-            candidates.append({
-                "item_id": surplus.get("item_id"),
-                "business": surplus.get("business_name"),
-                "shelter_id": shelter.get("shelter_id"),
-                "shelter_name": shelter.get("name"),
-                "distance_km": round(distance, METRIC_DECIMALS),
-                "match_score": score,
-            })
-
-    candidates.sort(key=lambda candidate: (
-        -candidate["match_score"],
-        candidate["distance_km"],
-        str(candidate["item_id"]),
-        str(candidate["shelter_id"]),
-    ))
-
-    taken_items = set()
-    taken_shelters = set()
-    plan = []
-    for candidate in candidates:
-        if candidate["item_id"] in taken_items or candidate["shelter_id"] in taken_shelters:
-            continue
-        plan.append(candidate)
-        taken_items.add(candidate["item_id"])
-        taken_shelters.add(candidate["shelter_id"])
-    return plan
-
-
-def classify_surplus(item, quantity=""):
-    """The profile category a logged item belongs to, read from the words in it.
-
-    The item name is read first and the quantity only when the name said nothing, and
-    every keyword has to start a word, so "tomato" catches "tomatoes" without "oil"
-    firing on "boiled". Returns None when nothing points at a category.
-    """
-    for text in (item, quantity):
-        haystack = " ".join(str(text or "").lower().split())
-        if not haystack:
-            continue
-        for category, keywords in SURPLUS_KEYWORDS:
-            if any(re.search(r"\b" + re.escape(word), haystack) for word in keywords):
-                return category
-    return None
-
-
-def shelter_record(user, need_score=DEFAULT_SHELTER_NEED_SCORE):
-    """A registered account read as a shelter the allocator can score.
-
-    What a recipient needs ("surplus_types") is what a shelter accepts, and the shelter's
-    name is the recipient's business name where it has one. The prototype ranked shelters
-    on a 1-to-10 need score nothing collects yet, so every shelter carries the documented
-    middle of that scale until a caller has a better number to pass in.
-    """
-    shelter = {
-        "shelter_id": user.get("id"),
-        "name": user.get("business_name") or display_name(user),
-        "accepted_types": decode_list(user.get("surplus_types")),
-        "current_need_score": need_score,
-    }
-    for field in PIN_FIELDS + ADDRESS_PART_FIELDS:
-        if user.get(field) is not None:
-            shelter[field] = user[field]
-    return shelter
-
-
-def bounding_box(lat, lng, radius_km):
-    """A coarse box around a point, so the database discards the far away first.
-
-    Every candidate still gets measured properly; the box only keeps the rows the query
-    has to look at to those that could possibly be inside the radius. A degree of
-    longitude shrinks towards the poles, hence the cosine.
-    """
-    lat_delta = radius_km / KM_PER_DEGREE
-    width = KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01)
-    lng_delta = min(radius_km / width, 180.0)
-    return lat - lat_delta, lat + lat_delta, lng - lng_delta, lng + lng_delta
-
-
-def offset_point(lat, lng, distance_km, bearing_deg):
-    """A point at a bearing, distance_km from another: flat enough for demo data."""
-    angle = math.radians(bearing_deg)
-    width = KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01)
-    north = distance_km * math.cos(angle) / KM_PER_DEGREE
-    east = distance_km * math.sin(angle) / width
-    return lat + north, lng + east
-
-
-def shared_categories(mine, theirs):
-    """The categories both sides have, in the caller's own order, without repeats."""
-    return [name for name in mine if name in theirs]
-
-
-def routing_problem(user):
-    """Why this account cannot be matched or ordered with yet, as a 400 body, or None.
-
-    Matching measures between two confirmed pins. The address typed at onboarding is not
-    one — it was never turned into coordinates — so the dashboard map is the only place a
-    location with a point behind it comes from.
-    """
-    if user.get("delivery_lat") is None or user.get("delivery_lng") is None:
-        return {
-            "error": "Confirm your delivery location before matching: a match is a"
-                     " distance between two pins.",
-            "field": "delivery_lat",
-            "code": "no_location",
-        }
-    if not decode_list(user.get("surplus_types")):
-        return {
-            "error": "Save your goods profile first: matching pairs the categories you"
-                     " have or need.",
-            "field": "surplus_types",
-            "code": "no_categories",
-        }
-    return None
-
-
-def demo_peer_users(caller, lat, lng):
-    """The fabricated counterparts for this caller, keyed by id, other role only.
-
-    Each peer is placed relative to the caller's own confirmed pin, so the ranks and
-    distances move with the pin instead of being tied to one city, and the same peer id
-    resolves to the same place every time it is asked for.
-    """
-    peers = {}
-    for peer in DEMO_PEERS:
-        if peer["role"] == caller.get("role"):
-            continue
-        peer_lat, peer_lng = offset_point(lat, lng, peer["distance_km"], peer["bearing"])
-        first, _, last = peer["contact"].partition(" ")
-        place = [part for part in
-                 (peer["street"], caller.get("city"), caller.get("province")) if part]
-        peers[peer["id"]] = {
-            "id": peer["id"],
-            "role": peer["role"],
-            "first_name": first,
-            "last_name": last,
-            "business_name": peer["business_name"],
-            "email": None,
-            "phone": None,
-            "dial_code": None,
-            "street": peer["street"],
-            "sub_locality": None,
-            "locality": None,
-            "province": caller.get("province"),
-            "city": caller.get("city"),
-            "postal": None,
-            "firm_type": peer.get("firm_type"),
-            "delivery_days": list(peer["delivery_days"]),
-            "surplus_types": list(peer["surplus_types"]),
-            "delivery_address": ", ".join(place) or None,
-            "delivery_lat": peer_lat,
-            "delivery_lng": peer_lng,
-            "delivery_confirmed_at": None,
-            "demo": True,
-        }
-    return peers
-
-
-def users_by_ids(conn, ids):
-    """Load several accounts in one query, keyed by id."""
-    unique = [user_id for user_id in dict.fromkeys(ids) if user_id is not None]
-    if not unique:
-        return {}
-    rows = conn.execute(
-        "SELECT * FROM users WHERE id IN (%s)" % ", ".join("?" * len(unique)), unique
-    ).fetchall()
-    return {row["id"]: dict(row) for row in rows}
-
-
-def order_row(order_id, donor, recipient, category, scheduled_for, distance_km, created_at):
-    """One order in the shape it is stored in, so both modes hand back the same thing."""
-    return {
-        "id": order_id,
-        "donor_id": donor["id"],
-        "recipient_id": recipient["id"],
-        "category": category,
-        "status": "proposed",
-        "scheduled_for": scheduled_for,
-        "pickup_address": donor.get("delivery_address"),
-        "pickup_lat": donor.get("delivery_lat"),
-        "pickup_lng": donor.get("delivery_lng"),
-        "dropoff_address": recipient.get("delivery_address"),
-        "dropoff_lat": recipient.get("delivery_lat"),
-        "dropoff_lng": recipient.get("delivery_lng"),
-        "distance_km": distance_km,
-        "created_at": created_at,
-    }
+from seed import seed_test_accounts
+from security import hash_password, verify_password
+from surplus import forecast_surplus, train_surplus_model
+from weather import WeatherUnavailable, fetch_outlook, fetch_weather
 
 
 class ResQHandler(SimpleHTTPRequestHandler):
     server_version = "ResQ/1.0"
 
+    # Set for the length of one HEAD request, when an API route answers without its body.
+    head_only = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
 
     # ------------------------------------------------------------------ helpers
+    def cors_headers(self):
+        """The CORS headers this request has earned, or nothing at all.
+
+        Only an origin the allowlist names is answered, and the answer names that origin
+        rather than `*`, so a deployment never hands its API to a site nobody listed. The
+        pages authenticate with a bearer token in a header rather than with a cookie, so no
+        credentials ride along and no `Allow-Credentials` is needed; `Vary: Origin` is set
+        so a cache cannot serve one origin's answer to another.
+        """
+        origin = (self.headers.get("Origin") or "").strip()
+        if not origin_allowed(origin):
+            return {}
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": CORS_ALLOWED_METHODS,
+            "Access-Control-Allow-Headers": CORS_ALLOWED_HEADERS,
+            "Access-Control-Max-Age": str(CORS_MAX_AGE_SECONDS),
+            "Vary": "Origin",
+        }
+
+    def do_OPTIONS(self):
+        """Answer a CORS preflight: which methods and headers a cross-origin caller may use.
+
+        A browser asks this before any `POST` carrying `Authorization` — which every private
+        call here does — so a preflight that goes unanswered is a call that never happens.
+        An origin that is not allowed is answered too, with no CORS headers in it: the
+        browser then refuses the call, which is the whole point of an allowlist.
+        """
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        for name, value in self.cors_headers().items():
+            self.send_header(name, value)
+        self.end_headers()
+
     def send_json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in self.cors_headers().items():
+            self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(body)
+        # A HEAD request is answered with the headers the GET would send — content length
+        # included — and nothing after them; the body is what it asks not to be sent.
+        if not self.head_only:
+            self.wfile.write(body)
 
     def read_json(self):
-        # A header that is not a number cannot say how long the body is, and a negative
-        # one makes the read below run to end-of-stream; neither should be able to kill
-        # the request thread part-way through.
-        try:
-            length = int(self.headers.get("Content-Length") or 0)
-        except (TypeError, ValueError):
-            return None
-        if length <= 0:
+        length = int(self.headers.get("Content-Length") or 0)
+        if not length:
             return {}
-        if length > MAX_REQUEST_BODY_BYTES:
-            return None
         raw = self.rfile.read(length)
         try:
-            data = json.loads(raw.decode("utf-8"))
+            return json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
             return None
-        # Every endpoint here reads an object; a body of any other shape is malformed, not
-        # something to trip over halfway through a handler.
-        return data if isinstance(data, dict) else None
 
     def bearer_token(self):
         header = self.headers.get("Authorization") or ""
@@ -1065,6 +270,23 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return token
 
     # ------------------------------------------------------------------- routes
+    def do_HEAD(self):
+        """Answer an API route as its `GET` answers it, minus the body.
+
+        Without this the request falls through to the static handler, which looks for a
+        file named `/api/health` and answers `404` — so `curl -I` against a deployed URL,
+        or any uptime check that probes with `HEAD`, would report a working service as a
+        missing page. A page still gets the static handler's own `HEAD`, which knows how to
+        answer for a file without sending it.
+        """
+        if urlparse(self.path).path.startswith("/api/"):
+            self.head_only = True
+            try:
+                return self.do_GET()
+            finally:
+                self.head_only = False
+        return super().do_HEAD()
+
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
@@ -1083,6 +305,14 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_matches()
         if path == "/api/orders":
             return self.api_orders()
+        if path == "/api/history":
+            return self.api_history()
+        if path == "/api/weather":
+            return self.api_weather()
+        if path == "/api/surplus-forecast":
+            return self.api_surplus_forecast()
+        if path == "/api/surplus-outlook":
+            return self.api_surplus_outlook()
         if path.startswith("/api/"):
             return self.send_json(404, {"error": "Unknown endpoint."})
         return super().do_GET()
@@ -1099,10 +329,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_profile()
         if path == "/api/delivery-location":
             return self.api_delivery_location()
-        if path == "/api/submit-surplus":
-            return self.api_submit_surplus()
         if path == "/api/orders":
             return self.api_order_create()
+        if path == "/api/surplus-forecast":
+            return self.api_surplus_forecast()
         if path == "/api/dev/switch-role":
             return self.api_switch_role()
         return self.send_json(404, {"error": "Unknown endpoint."})
@@ -1113,12 +343,12 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
 
-        role = text_answer(data, "role").lower() or "donor"
+        role = (data.get("role") or "donor").strip().lower()
         if role not in ("donor", "recipient"):
             role = "donor"
 
-        first_name = text_answer(data, "firstName")
-        last_name = text_answer(data, "lastName")
+        first_name = (data.get("firstName") or "").strip()
+        last_name = (data.get("lastName") or "").strip()
         if not first_name or not last_name:
             return self.send_json(
                 400, {"error": "Please fill in your name to continue.", "field": "firstName"}
@@ -1130,8 +360,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if not isinstance(contact, dict):
             contact = {}
         kind = "phone" if (contact.get("type") == "phone") else "email"
-        value = text_answer(contact, "value")
-        dial_code = text_answer(contact, "dial") or None
+        value = (contact.get("value") or "").strip()
+        dial_code = (contact.get("dial") or "").strip() or None
         email = phone = None
 
         if kind == "email":
@@ -1161,7 +391,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     400, {"error": "That phone number looks too short.", "field": "phone"}
                 )
 
-        password = text_answer(data, "password")
+        password = data.get("password") or ""
         problem = password_problem(password)
         if problem:
             return self.send_json(400, {"error": problem, "field": "password"})
@@ -1183,19 +413,19 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "role": role,
                 "first_name": first_name,
                 "last_name": last_name,
-                "business_name": text_answer(data, "businessName") or None,
+                "business_name": (data.get("businessName") or "").strip() or None,
                 "email": email,
                 "phone": phone,
                 "dial_code": dial_code,
                 # The address rides along as well, so demo mode answers /api/me with the
                 # same shape persistent mode does; the dashboard map reads it to open on
                 # the address the account onboarded with.
-                "street": text_answer(address, "street") or None,
-                "sub_locality": text_answer(address, "subLocality") or None,
-                "locality": text_answer(address, "locality") or None,
-                "province": text_answer(address, "province") or None,
-                "city": text_answer(address, "city") or None,
-                "postal": text_answer(address, "postal") or None,
+                "street": (address.get("street") or "").strip() or None,
+                "sub_locality": (address.get("subLocality") or "").strip() or None,
+                "locality": (address.get("locality") or "").strip() or None,
+                "province": (address.get("province") or "").strip() or None,
+                "city": (address.get("city") or "").strip() or None,
+                "postal": (address.get("postal") or "").strip() or None,
                 "firm_type": None,
                 "delivery_days": [],
                 "surplus_types": [],
@@ -1210,6 +440,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
             for field in DONOR_METRIC_FIELDS:
                 if metrics[field] is not None:
                     user[field] = metrics[field]
+            remember_demo_account(user)
             token = "demo-" + secrets.token_urlsafe(12)
             DEMO_SESSIONS[token] = user
             return self.send_json(201, {"ok": True, "demo": True, "token": token, "user": user})
@@ -1257,16 +488,16 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     role,
                     first_name,
                     last_name,
-                    text_answer(data, "businessName") or None,
+                    (data.get("businessName") or "").strip() or None,
                     email,
                     phone,
                     dial_code,
-                    text_answer(address, "street") or None,
-                    text_answer(address, "subLocality") or None,
-                    text_answer(address, "locality") or None,
-                    text_answer(address, "province") or None,
-                    text_answer(address, "city") or None,
-                    text_answer(address, "postal") or None,
+                    (address.get("street") or "").strip() or None,
+                    (address.get("subLocality") or "").strip() or None,
+                    (address.get("locality") or "").strip() or None,
+                    (address.get("province") or "").strip() or None,
+                    (address.get("city") or "").strip() or None,
+                    (address.get("postal") or "").strip() or None,
                     digest,
                     salt,
                     metrics["surplus_saved"],
@@ -1286,8 +517,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
 
-        contact = text_answer(data, "contact")
-        password = text_answer(data, "password")
+        contact = (data.get("contact") or "").strip()
+        password = data.get("password") or ""
         if not contact or not password:
             return self.send_json(
                 400,
@@ -1297,8 +528,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 },
             )
 
-        # Demo mode: sign anyone in. A contact registered earlier in this run keeps its
-        # details; anything else gets a session so no account has to be created first.
+        # Demo mode: sign anyone in. A contact registered earlier in this run signs in as
+        # the account it registered, role and all, whether or not that session is still
+        # open; anything else gets a donor session so no account has to be created first.
         if not PERSIST:
             email = clean_email(contact) if "@" in contact else None
             phone = None if email else clean_phone(contact)
@@ -1377,10 +609,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return self.send_json(200, {"ok": True, "user": self.donor_user_with_metrics(row)})
 
     def api_logout(self):
-        # The token may arrive in the body instead of the header, so it is read the way
-        # every other text field is: anything that is not a string counts as absent,
-        # rather than being bound into the delete below.
-        token = self.bearer_token() or text_answer(self.read_json() or {}, "token")
+        token = self.bearer_token() or (self.read_json() or {}).get("token", "")
         if token:
             if not PERSIST:
                 DEMO_SESSIONS.pop(token, None)
@@ -1389,6 +618,332 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
                 conn.commit()
         return self.send_json(200, {"ok": True})
+
+    # -------------------------------------------------------------------- history
+    def signed_in_history(self):
+        """`(signed_in, days)` for the bearer token: the account's logged days, oldest first.
+
+        The log is read the same way from either mode — demo mode answers the process's own
+        store for the session's account, persistence the account's own rows through the
+        session's token — and the connection is opened and closed in here, so nothing above
+        has to know which mode this server is running in.
+        """
+        token = self.bearer_token()
+        if not token:
+            return False, []
+        if not PERSIST:
+            user = DEMO_SESSIONS.get(token)
+            if user is None:
+                return False, []
+            return True, read_history(user)
+        with connect() as conn:
+            row = self.user_for_token(conn, token)
+            if row is None:
+                return False, []
+            return True, read_history(row, conn)
+
+    def api_history(self):
+        """The account's own logged days, newest first, and what they can answer.
+
+        The log is the kitchen's own: a donor reads back the days they logged — served, the
+        sky over them and the surplus that came out — and those are the same rows the
+        analyser's model reads its past from. That is why the derived numbers the next
+        forecast will be made with travel beside the rows: the answer says what the log
+        says, rather than making the caller derive it again. A recipient has none of this,
+        the way they have none of the impact figures: the log belongs to the kitchen that
+        cooked.
+        """
+        signed_in, days = self.signed_in_history()
+        if not signed_in:
+            return self.send_json(
+                401, {"error": "Your session has expired. Please sign in again."}
+            )
+        # A reading looks back six weeks at most — far enough for the fourteen-day window,
+        # the week-old lag and the day-old lag — so a longer log is read for its own sake
+        # rather than every row of it being summarised.
+        recent = days[-HISTORY_READ_DAYS:]
+        return self.send_json(
+            200,
+            {
+                "ok": True,
+                "history": {
+                    "days": list(reversed(recent)),
+                    "summary": history_summary(recent),
+                    "features": features_from_history(recent),
+                    "window_days": HISTORY_READ_DAYS,
+                },
+            },
+        )
+
+    def history_features(self, cleaned, on_date=None):
+        """Fill a forecast's numeric features from the caller's own logged days.
+
+        Only the features the caller did not send are filled, so an explicit value always
+        wins, and the answer says which ones came from the log. With no account, or an
+        account that has logged nothing, nothing is filled and the model's own defaults
+        stand — which is exactly what they are a fallback for, rather than the answer every
+        kitchen gets.
+        """
+        signed_in, days = self.signed_in_history()
+        if not signed_in or not days:
+            return None
+        recent = days[-HISTORY_READ_DAYS:]
+        derived = features_from_history(recent, on_date)
+        filled = []
+        for name in ("expected_customers", "surplus_yesterday", "surplus_last_week",
+                     "surplus_rolling_14"):
+            value = derived.get(name)
+            if value is None or name in cleaned:
+                continue
+            cleaned[name] = value
+            filled.append(name)
+        if not filled:
+            return None
+        return {
+            "days": len(recent),
+            "first_date": recent[0]["date"],
+            "last_date": recent[-1]["date"],
+            "derived": derived,
+            "filled_features": filled,
+        }
+
+    # ------------------------------------------------------------------- forecast
+    def query_point(self, query):
+        """Read a lat/lng pair out of a query string, or the 400 it deserves.
+
+        Returns `(lat, lng, None)` for a point on the globe and `(None, None, body)` for
+        anything else. Both weather readings are made *at* a point, and they are checked
+        the way the delivery location checks them: a point the site itself would refuse to
+        store is a point nobody has an address for, so nothing is read there.
+        """
+        try:
+            lat = float((query.get("lat") or [""])[0])
+            lng = float((query.get("lng") or [""])[0])
+        except (TypeError, ValueError):
+            return None, None, {
+                "error": "lat and lng have to be numbers: the weather is read at a point.",
+                "field": "lat",
+            }
+        if lat != lat or lng != lng or not -90 <= lat <= 90 or not -180 <= lng <= 180:
+            return None, None, {
+                "error": "Those coordinates are not a place on the map.",
+                "field": "lat",
+            }
+        return lat, lng, None
+
+    def weather_unavailable(self, err):
+        """The one 502 both weather readings answer with when the sky cannot be read."""
+        return self.send_json(502, {"error": str(err), "code": "weather_unavailable"})
+
+    def model_dependencies_missing(self):
+        """The one 503 both surplus endpoints answer with, install line and all."""
+        return self.send_json(
+            503,
+            {
+                "error": "The surplus model needs pandas and scikit-learn, which are"
+                         " not installed on this server. Install them (pip install"
+                         " pandas scikit-learn) and restart it.",
+                "code": "model_dependencies_missing",
+            },
+        )
+
+    def api_weather(self):
+        """The real sky at a point, in the vocabulary the analyser was trained on.
+
+        The reading comes from Open-Meteo — keyless, like the map's tiles — and
+        `weather.py` is the one place that decides which of Sunny, Cloudy and Rainy a WMO
+        code becomes. An unreachable service is answered as 502 rather than guessed at,
+        because a forecast drawn under an invented sky is worse than one that says the sky
+        could not be read.
+        """
+        lat, lng, problem = self.query_point(parse_qs(urlparse(self.path).query))
+        if problem:
+            return self.send_json(400, problem)
+
+        try:
+            weather = fetch_weather(lat, lng)
+        except WeatherUnavailable as err:
+            # The message says what went wrong in the service's own terms; the dashboard
+            # puts it on the analyser's banner rather than running the model under a sky
+            # nobody read.
+            return self.weather_unavailable(err)
+        return self.send_json(200, {"ok": True, "weather": weather})
+
+    def api_surplus_outlook(self):
+        """The week's surplus at a point: each day's own sky, run through the model.
+
+        This is what the analyser's weekly chart is drawn from. The weather is what makes
+        one day differ from the next — and the day's own name brings the model's weekend
+        bump with it — so the week is read as one daily outlook and every day is forecast
+        with its own day and its own sky, today first, at the same point the banner's sky
+        was read at. `days` defaults to a week and is pulled into what the service will
+        answer, so a caller cannot ask for a week that does not exist. An unreachable
+        service, or a run without pandas and scikit-learn, is answered as 502 and 503
+        respectively: a chart drawn under invented skies is worse than one that says the
+        week could not be read.
+        """
+        query = parse_qs(urlparse(self.path).query)
+        lat, lng, problem = self.query_point(query)
+        if problem:
+            return self.send_json(400, problem)
+        days = query_number(query, "days", WEATHER_OUTLOOK_DAYS, 1, WEATHER_MAX_OUTLOOK_DAYS)
+        if days is None:
+            return self.send_json(
+                400,
+                {"error": "days has to be a whole number of days.", "field": "days"},
+            )
+
+        try:
+            outlook = fetch_outlook(lat, lng, int(days))
+        except WeatherUnavailable as err:
+            return self.weather_unavailable(err)
+
+        # Every day is read against the same log, at its own date: today's own day is what
+        # the lagged surpluses and the rolling window can answer, and the days after it take
+        # their weekday's customer count and the fourteen-day mean, which is the kitchen's
+        # measured level rather than an invented future. What the log cannot answer for a
+        # day that has not happened yet — that day's yesterday — is left to the model's
+        # imputer, which is what it is there for.
+        signed_in, logged = self.signed_in_history()
+        logged = logged[-HISTORY_READ_DAYS:] if signed_in else []
+
+        series = []
+        model = None
+        try:
+            for day in outlook["days"]:
+                features = {}
+                if logged:
+                    features = {
+                        name: value
+                        for name, value in features_from_history(logged, as_day(day["date"])).items()
+                        if value is not None
+                    }
+                answer = forecast_surplus(
+                    day_of_week=day["day_of_week"], weather=day["label"], **features
+                )
+                series.append(
+                    dict(day, predicted_surplus_kg=answer["predicted_surplus_kg"])
+                )
+                # Every day carries the same cached pipeline and its score, so the week
+                # carries them once rather than seven times over.
+                model = {"mae_kg": answer["mae_kg"], "model": answer["model"]}
+        except ImportError:
+            return self.model_dependencies_missing()
+
+        answer = {"ok": True, "outlook": dict(outlook, days=series, **(model or {}))}
+        if logged:
+            answer["outlook"]["history"] = {
+                "days": len(logged),
+                "first_date": logged[0]["date"],
+                "last_date": logged[-1]["date"],
+            }
+        return self.send_json(200, answer)
+
+    def forecast_param_problem(self, data):
+        """Validate one forecast request's answers before the model sees them.
+
+        Returns the cleaned arguments, or an error body the caller sends back as
+        its 400. The labels have to come from the vocabularies the training data
+        was built on — seven day names, three weather words — because anything
+        else would be forecast against silently. Numeric features are refused when
+        they are not numbers or sit below zero, rather than guessed at.
+        """
+        cleaned = {}
+        raw_dow = (data.get("day_of_week") or "").strip()
+        if raw_dow and raw_dow not in SURPLUS_DAYS:
+            return None, {
+                "error": "day_of_week has to be a day name, Monday through Sunday.",
+                "field": "day_of_week",
+            }
+        if raw_dow:
+            cleaned["day_of_week"] = raw_dow
+        raw_weather = (data.get("weather") or "").strip()
+        if raw_weather and raw_weather not in SURPLUS_WEATHERS:
+            return None, {
+                "error": "weather has to be Sunny, Cloudy or Rainy: the conditions"
+                         " the model was trained on.",
+                "field": "weather",
+            }
+        if raw_weather:
+            cleaned["weather"] = raw_weather
+        for name in ("expected_customers", "surplus_yesterday", "surplus_last_week",
+                     "surplus_rolling_14"):
+            if name not in data:
+                continue
+            try:
+                value = float(data[name])
+            except (TypeError, ValueError):
+                return None, {
+                    "error": name + " has to be a number.",
+                    "field": name,
+                }
+            if value != value or value < 0:
+                return None, {
+                    "error": name + " has to be 0 or more.",
+                    "field": name,
+                }
+            cleaned[name] = value
+        return cleaned, None
+
+    def api_surplus_forecast(self):
+        """Today's surplus, forecast by the pipeline in surplus.py.
+
+        The model is trained on synthetic daily history once and cached, so the
+        first request pays for the forest and the rest do not. Every feature is
+        optional: a parameter that is not a usable number is refused rather than
+        guessed at, because a forecast nobody can trace to its inputs is not one
+        worth drawing on the analyser screen.
+        """
+        if self.command == "POST":
+            data = self.read_json()
+            if data is None:
+                return self.send_json(400, {"error": "Malformed request body."})
+        else:
+            data = {}
+            query = parse_qs(urlparse(self.path).query)
+            for name in ("day_of_week", "weather", "on_date"):
+                value = (query.get(name) or [""])[0].strip()
+                if value:
+                    data[name] = value
+            for name in ("expected_customers", "surplus_yesterday", "surplus_last_week",
+                         "surplus_rolling_14"):
+                raw = (query.get(name) or [""])[0].strip()
+                if raw:
+                    data[name] = raw
+
+        cleaned, problem = self.forecast_param_problem(data)
+        if problem:
+            return self.send_json(400, problem)
+
+        # The day being forecast, when the caller names it: the analyser sends the date its
+        # own address is on, so the log is read for that day rather than for the server's.
+        # A caller that sends the date and not the day gets the day off the date.
+        on_date = None
+        raw_date = (data.get("on_date") or "").strip()
+        if raw_date:
+            on_date = as_day(raw_date)
+            if on_date is None:
+                return self.send_json(
+                    400,
+                    {
+                        "error": "on_date has to be an ISO date, like 2026-10-11.",
+                        "field": "on_date",
+                    },
+                )
+            cleaned.setdefault("day_of_week", on_date.strftime("%A"))
+
+        history = self.history_features(cleaned, on_date)
+        try:
+            forecast = forecast_surplus(**cleaned)
+        except ImportError:
+            # Surplus.py raises the plain ImportError with install instructions when
+            # pandas is missing; scikit-learn's missing import is a ModuleNotFoundError,
+            # which subclasses it. Either way the answer is the same 503.
+            return self.model_dependencies_missing()
+        answer = {"ok": True, "forecast": forecast}
+        if history is not None:
+            answer["history"] = history
+        return self.send_json(200, answer)
 
     # ------------------------------------------------------------------ matching
     def api_matches(self):
@@ -1506,192 +1061,6 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return entry
 
     # -------------------------------------------------------------------- orders
-    # ------------------------------------------------------- surplus submission
-    def api_submit_surplus(self):
-        """Take one logged surplus item and answer with the shelter that should get it.
-
-        The Log surplus form sends what the donor typed, and the account behind the token
-        supplies the pickup point unless the form typed a different one. Every registered
-        recipient counts as a shelter — what a recipient needs ("surplus_types") is what a
-        shelter accepts — and the ones that can be placed on the map go through the same
-        filter, score and greedy allocation the rest of the pipeline uses. The best pair
-        comes back with its shelter name and score, or a plain reason nothing matched.
-        """
-        data = self.read_json()
-        if data is None:
-            return self.send_json(400, {"error": "Malformed request body."})
-
-        token = self.bearer_token()
-        if not PERSIST:
-            session_user = DEMO_SESSIONS.get(token)
-            if session_user is None:
-                return self.send_json(
-                    401,
-                    {
-                        "error": "Your session has expired. Please sign in again.",
-                        "code": "no_session",
-                    },
-                )
-            me = dict(session_user)
-        else:
-            with connect() as conn:
-                row = self.user_for_token(conn, token)
-            if row is None:
-                return self.send_json(
-                    401,
-                    {
-                        "error": "Your session has expired. Please sign in again.",
-                        "code": "no_session",
-                    },
-                )
-            me = dict(row)
-
-        item = text_answer(data, "item")[:MAX_ITEM_CHARS]
-        if not item:
-            return self.send_json(
-                400,
-                {"error": "Name the item being logged so it can be matched.", "field": "item"},
-            )
-        quantity = text_answer(data, "quantity")[:MAX_QUANTITY_CHARS]
-
-        # The category decides which shelters can take the item at all. The form collects
-        # none, so it is read from the words typed; a caller that knows better can send
-        # "category" and it is used as given.
-        category = text_answer(data, "category").lower()
-        if category and category not in DONOR_SURPLUS:
-            return self.send_json(
-                400,
-                {
-                    "error": "That is not a surplus category we match on.",
-                    "field": "category",
-                    "code": "bad_category",
-                },
-            )
-        if not category:
-            category = classify_surplus(item, quantity)
-            if not category:
-                profile_types = decode_list(me.get("surplus_types"))
-                category = profile_types[0] if profile_types else None
-        if not category:
-            uncategorised = {
-                "ok": True,
-                "match": None,
-                "item": item,
-                "reason": "Could not tell what kind of surplus this is. Name the item"
-                          " more plainly, or set the goods profile on your account.",
-            }
-            if not PERSIST:
-                uncategorised["demo"] = True
-            return self.send_json(200, uncategorised)
-
-        expiry_hours = data.get("expiryHours")
-        if expiry_hours in (None, ""):
-            expiry_hours = DEFAULT_SURPLUS_EXPIRY_HOURS
-        else:
-            try:
-                expiry_hours = float(expiry_hours)
-            except (TypeError, ValueError):
-                expiry_hours = None
-            if expiry_hours is None or expiry_hours <= 0:
-                return self.send_json(
-                    400,
-                    {
-                        "error": "expiryHours has to be a number of hours above zero.",
-                        "field": "expiryHours",
-                    },
-                )
-
-        typed = text_answer(data, "location")[:MAX_ADDRESS_CHARS]
-        surplus = {
-            "item_id": me.get("id"),
-            "business_name": me.get("business_name"),
-            "item_type": category,
-            "expiry_hours": expiry_hours,
-        }
-        # A pickup point typed into the form wins over the account's own saved address,
-        # because that is where the goods actually are; the account's confirmed pin is
-        # used otherwise, and it needs no geocoding at all.
-        if typed and typed != (me.get("delivery_address") or "").strip():
-            surplus["address"] = typed
-        else:
-            for field in PIN_FIELDS + ADDRESS_PART_FIELDS:
-                if me.get(field) is not None:
-                    surplus[field] = me[field]
-        try:
-            lat, lng = pin_for(surplus)
-        except ValueError:
-            return self.send_json(
-                400,
-                {
-                    "error": "That pickup point is not a place the map knows. Confirm your"
-                             " delivery location on the dashboard, or type an address it can"
-                             " find.",
-                    "field": "location",
-                    "code": "no_pickup",
-                },
-            )
-
-        if PERSIST:
-            with connect() as conn:
-                rows = conn.execute(
-                    "SELECT * FROM users WHERE role = 'recipient' AND id != ?",
-                    (me.get("id"),),
-                ).fetchall()
-            shelters = [shelter_record(dict(row)) for row in rows]
-        else:
-            # The fabricated counterparts are the other role's, and a shelter is always a
-            # recipient, so they are read as a donor's peers wherever the item came from.
-            peers = demo_peer_users(
-                {"role": "donor", "city": me.get("city"), "province": me.get("province")},
-                lat, lng,
-            )
-            shelters = [shelter_record(peer) for peer in peers.values()]
-
-        placed = []
-        unplaced = 0
-        for shelter in shelters:
-            try:
-                pin_for(shelter)
-            except ValueError:
-                unplaced += 1
-                continue
-            placed.append(shelter)
-        takers = [shelter for shelter in placed
-                  if category in (shelter.get("accepted_types") or ())]
-        plan = allocate_surplus([surplus], placed) if takers else []
-
-        payload = {
-            "ok": True,
-            "item": item,
-            "category": category,
-            "expiry_hours": expiry_hours,
-            "pickup": {"lat": round(lat, METRIC_DECIMALS), "lng": round(lng, METRIC_DECIMALS)},
-            "shelters_considered": len(placed),
-            "shelters_unplaced": unplaced,
-            "match": None,
-        }
-        if not PERSIST:
-            # Every other demo answer says so, and the shelters just scored against are
-            # the fabricated ones, so this answer is marked the same way.
-            payload["demo"] = True
-        if plan:
-            best = plan[0]
-            payload["match"] = {
-                "shelter_id": best["shelter_id"],
-                "shelter_name": best["shelter_name"],
-                "match_score": best["match_score"],
-                "distance_km": best["distance_km"],
-            }
-        elif not shelters:
-            payload["reason"] = "No registered shelter is on the network yet."
-        elif not takers:
-            payload["reason"] = ("No registered shelter is asking for "
-                                 + category.replace("_", " ") + " right now.")
-        else:
-            payload["reason"] = ("No shelter that needs this item is within "
-                                 + str(HARD_FILTER_RADIUS_KM) + " km of the pickup point.")
-        return self.send_json(200, payload)
-
     def api_orders(self):
         """Every delivery order the signed-in account is part of, newest first."""
         token = self.bearer_token()
@@ -1704,7 +1073,17 @@ class ResQHandler(SimpleHTTPRequestHandler):
                         "code": "no_session",
                     },
                 )
-            orders = list(reversed(DEMO_ORDERS.get(token, [])))
+            # An order belongs to the two accounts on it, not to the session that proposed
+            # it, so it is found by those accounts rather than by the token that created it.
+            mine = account_key(DEMO_SESSIONS[token])
+            orders = []
+            for entry in reversed(DEMO_ORDERS):
+                side = demo_order_side(entry, mine)
+                if side is None:
+                    continue
+                order = dict(entry["order"])
+                order["viewer_side"] = side
+                orders.append(order)
             return self.send_json(
                 200, {"ok": True, "demo": True, "count": len(orders), "orders": orders}
             )
@@ -1729,8 +1108,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                            + [order["recipient_id"] for order in rows])
             people = users_by_ids(conn, account_ids)
             orders = [
-                self.order_payload(dict(order), people.get(order["donor_id"]),
-                                   people.get(order["recipient_id"]))
+                order_payload(dict(order), people.get(order["donor_id"]),
+                              people.get(order["recipient_id"]),
+                              "donor" if order["donor_id"] == me["id"] else "recipient")
                 for order in rows
             ]
 
@@ -1831,7 +1211,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 },
             )
 
-        category = text_answer(data, "category").lower()
+        category = (data.get("category") or "").strip().lower()
         if not category:
             return self.send_json(
                 400,
@@ -1855,7 +1235,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
         # A scheduled day is the recipient's to prefer, so a day they did not ask for is
         # refused rather than quietly booked.
-        scheduled_for = text_answer(data, "scheduledFor").lower() or None
+        scheduled_for = (data.get("scheduledFor") or "").strip().lower() or None
         if scheduled_for is not None:
             if scheduled_for not in DELIVERY_DAYS:
                 return self.send_json(
@@ -1895,12 +1275,15 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 ).fetchone()
             open_order = open_row["id"] if open_row else None
         else:
+            # The same pair and category, judged by the two accounts rather than by the
+            # ids they would carry in a table: every demo account's id is 0, so a pair of
+            # them is nothing to compare against.
+            pair = {account_key(me), account_key(peer)}
             open_order = next(
-                (order["id"] for order in DEMO_ORDERS.get(token, [])
-                 if order["category"] == category
-                 and order["status"] in LIVE_ORDER_STATUSES
-                 and {order["donor"]["user_id"], order["recipient"]["user_id"]}
-                 == {me["id"], peer["id"]}),
+                (entry["order"]["id"] for entry in DEMO_ORDERS
+                 if entry["order"]["category"] == category
+                 and entry["order"]["status"] in LIVE_ORDER_STATUSES
+                 and demo_order_pair(entry) == pair),
                 None,
             )
         if open_order is not None:
@@ -1918,8 +1301,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 next(DEMO_ORDER_SEQ), donor, recipient, category, scheduled_for, distance,
                 datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             )
-            order = self.order_payload(stored, donor, recipient)
-            DEMO_ORDERS.setdefault(token, []).append(order)
+            order = order_payload(
+                stored, donor, recipient,
+                "donor" if me.get("role") == "donor" else "recipient",
+            )
+            remember_demo_order(order, donor, recipient)
             return self.send_json(201, {"ok": True, "demo": True, "order": order})
 
         with connect() as conn:
@@ -1947,35 +1333,15 @@ class ResQHandler(SimpleHTTPRequestHandler):
             conn.commit()
             stored = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
         return self.send_json(
-            201, {"ok": True, "order": self.order_payload(dict(stored), donor, recipient)}
+            201,
+            {
+                "ok": True,
+                "order": order_payload(
+                    dict(stored), donor, recipient,
+                    "donor" if me.get("role") == "donor" else "recipient",
+                ),
+            },
         )
-
-    def order_payload(self, order, donor, recipient):
-        """One order as a dashboard reads it: who is on each side, and where."""
-        distance = order.get("distance_km")
-        return {
-            "id": order["id"],
-            "status": order["status"],
-            "category": order["category"],
-            "scheduled_for": order["scheduled_for"],
-            "distance_km": (round(float(distance), METRIC_DECIMALS)
-                            if distance is not None else None),
-            "created_at": order["created_at"],
-            "donor": {
-                "user_id": order["donor_id"],
-                "name": display_name(donor),
-                "address": order["pickup_address"],
-                "lat": order["pickup_lat"],
-                "lng": order["pickup_lng"],
-            },
-            "recipient": {
-                "user_id": order["recipient_id"],
-                "name": display_name(recipient),
-                "address": order["dropoff_address"],
-                "lat": order["dropoff_lat"],
-                "lng": order["dropoff_lng"],
-            },
-        }
 
     # ------------------------------------------------------------------ dev helper
     def api_switch_role(self):
@@ -1996,7 +1362,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
         data = self.read_json()
         if data is None:
             return self.send_json(400, {"error": "Malformed request body."})
-        role = text_answer(data, "role").lower()
+        role = (data.get("role") or "").strip().lower()
         if role not in ("donor", "recipient"):
             return self.send_json(
                 400,
@@ -2051,7 +1417,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 )
 
         role = session_user.get("role", "donor")
-        firm_type = text_answer(data, "firmType").lower()
+        firm_type = (data.get("firmType") or "").strip().lower()
         # Both questions take up to MAX_PICKS answers. The singular keys are still read so
         # a page from before the multi-select change keeps working.
         raw_days = data.get("deliveryDays", data.get("deliveryDay"))
@@ -2166,7 +1532,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     },
                 )
 
-        address = text_answer(data, "address")
+        address = (data.get("address") or "").strip()
         if not address:
             return self.send_json(
                 400,
@@ -2223,19 +1589,95 @@ class ResQHandler(SimpleHTTPRequestHandler):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
 
-def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+def prepare_state():
+    """Everything the process does once, before it answers anything.
+
+    The tables when accounts are being stored, and the five test donors when seeding is
+    on. Both entry points call this — `main()` below for the standard library's server and
+    `wsgi.py` for the one a host runs — so a deployed API starts with exactly the state a
+    local one does, and the report is printed once rather than per request.
+    """
     if PERSIST:
         init_db()
-    server = ThreadingHTTPServer(("127.0.0.1", port), ResQHandler)
+    if not SEED_ON_START:
+        return None
+    # Demo mode keeps the accounts and their logs in the process; persistence writes them
+    # to the tables, which is why the connection is opened only for it.
     if PERSIST:
-        print("Res-Q backend on http://127.0.0.1:%d" % port, flush=True)
+        with connect() as seeded:
+            seed_report = seed_test_accounts(seeded)
+    else:
+        seed_report = seed_test_accounts()
+    print(
+        "Test accounts: %d donors, %d recipient created, %d already there,"
+        " %d days logged"
+        % (len(seed_report["created"]),
+           1 if seed_report["recipient_created"] else 0,
+           len(seed_report["skipped"]), seed_report["days_written"]),
+        flush=True,
+    )
+    if seed_report["weather_from_archive"] or seed_report["weather_from_pattern"]:
+        print(
+            "  weather: %d donors from the Open-Meteo archive, %d from the fallback"
+            " pattern" % (seed_report["weather_from_archive"],
+                          seed_report["weather_from_pattern"]),
+            flush=True,
+        )
+    if seed_report["delivery"] is not None:
+        print(
+            "  delivery: order %s accepted, %s to %s"
+            % (seed_report["delivery"], seed_report["delivery_from"],
+               seed_report["delivery_to"]),
+            flush=True,
+        )
+    accounts = list(seed_report["created"])
+    if seed_report["recipient_created"]:
+        accounts.append(seed_report["recipient_created"])
+    if accounts:
+        print(
+            "  sign in as " + ", ".join(accounts) + " with the password "
+            + seed_report["password"],
+            flush=True,
+        )
+    return seed_report
+
+
+def hosted_port():
+    """The port a host asked for, or `None` when nothing usable was asked for.
+
+    `$PORT` is the variable a host hands over, and a *port number* is the only thing that
+    counts: an empty value, something that is not a number, and `0` — which asks the
+    operating system to choose — are all treated as nobody having asked. Shells and CI
+    runners do set `PORT` to one of those, and a local run that quietly moved to a random
+    port because of it would look like the server had simply failed to start.
+    """
+    raw = (os.environ.get("PORT") or "").strip()
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return None
+
+
+def main():
+    # By hand the server stays on the loopback address and port 8080, which is where the
+    # pages and the README expect to find it. A host — Render and most others — hands the
+    # port over in $PORT and reaches the service from outside, so that is when the socket
+    # moves to 0.0.0.0. RESQ_HOST and RESQ_PORT override either choice deliberately.
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else (
+        hosted_port() or int(os.environ.get("RESQ_PORT") or 8080)
+    )
+    host = os.environ.get("RESQ_HOST") or ("0.0.0.0" if hosted_port() else "127.0.0.1")
+    prepare_state()
+    server = ThreadingHTTPServer((host, port), ResQHandler)
+    if PERSIST:
+        print("Res-Q backend on http://%s:%d" % (host, port), flush=True)
         print("  mode: PERSISTENT — accounts are stored in %s" % DB_PATH, flush=True)
     else:
-        print("Res-Q backend on http://127.0.0.1:%d" % port, flush=True)
+        print("Res-Q backend on http://%s:%d" % (host, port), flush=True)
         print(
             "  mode: DEMO — nothing is written to a database and no detail is\n"
-            "        rejected as a duplicate. Set RESQ_PERSIST=on to store accounts.",
+            "        rejected as a duplicate. Accounts registered in this run sign back\n"
+            "        in for as long as the process runs. Set RESQ_PERSIST=on to store\n"
+            "        accounts in a database.",
             flush=True,
         )
     try:

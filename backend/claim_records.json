@@ -1,0 +1,31 @@
+[
+  {
+    "record_id": "1b84b40cd8734bb6a5a51283aff1e02c",
+    "claimed_at": "2026-10-10T17:58:44Z",
+    "post": {
+      "id": "f0d8d38f-2db5-4647-8eae-1707af280d2e",
+      "donor_name": "Runthrough Grocer",
+      "item_name": "Trays of roasted vegetable lasagne",
+      "quantity": "4 trays, still warm",
+      "location": "100 Queen St W, Toronto, ON, M5H 2N2",
+      "goods_type": "prepared_meals",
+      "created_at": "2026-10-09T15:31:05.509936+00:00"
+    },
+    "recipient": {
+      "id": 0,
+      "first_name": "Alex",
+      "last_name": "Rivera",
+      "business_name": "Rivera Fresh Market",
+      "email": "alex@riverafresh.example.com",
+      "phone": null,
+      "dial_code": null,
+      "city": "New York",
+      "province": "NY",
+      "postal": "10014",
+      "delivery_address": null,
+      "delivery_lat": null,
+      "delivery_lng": null,
+      "delivery_confirmed_at": null
+    }
+  }
+]

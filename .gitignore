@@ -11,6 +11,9 @@ __pycache__/
 # Local preview runner workspace (logs and notes, not part of the site)
 .freebuff/
 
+# macOS folder metadata
+.DS_Store
+
 # Scratch scripts kept on disk but never part of the repo: the matching prototype and the
 # geocoding experiments at the root were never meant to ship. The leading slash keeps them
 # anchored here, so a real backend/allocation.py would still be tracked.

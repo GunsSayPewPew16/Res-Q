@@ -57,25 +57,48 @@ role chosen at the start.
    a donor, `res_q_dashboard_recipient.html` for a recipient. Both are layout
    skeletons around the parts that are wired: the delivery card, which opens the
    map overlay described under [The delivery map](#the-delivery-map), the donor's
-   *Log surplus* panel, which writes a row into Supabase, and the two screens that
-   read that table back — the donor's *Surplus Received* and the recipient's
-   *Feed*, both described under [The surplus board](#the-surplus-board-supabase) —
-   while the boxes, the metric row and the queue rail around them still hold no data
-   of their own. The slim navigation rail both pages share has four rows, labelled
-   Dashboard, Feed, Surplus Received and Incoming Deliveries, with Received
-   Deliveries in the first slot below the rail's divider; the slot under it stays a
-   bare pipeline pulse. Dashboard is the default selection; Surplus Received opens
-   the donor's own logged surplus and the recipient's Feed opens the live board,
-   while the remaining items — Incoming Deliveries, or the Received Deliveries
-   slot — still wipe the working area for a blank screen of their own. Picking
-   Dashboard brings the dashboard back. The donor names its own sections; the
-   recipient page still carries the donor's earlier set until its own names arrive.
-   The right-hand panel of the donor's lower grid carries the impact figures under
-   a *Donor Metrics* heading — surplus saved in kilos, meals served and orders
-   completed — read from that donor's own stored figures, so the same numbers are
-   there on every load. The selected item fills with the site's accent orange and its label
-   turns black, the way the landing cards invert when they are hovered, while every
-   other item keeps the dark tone with a neutral label. The bell in the header
+   compose box, which now opens the donor's *Feed* and writes a row into Supabase,
+   and the screens that read that table back — the *Feed* both
+   roles now share, and the donor's *Surplus Analyser*, all described under
+   [The surplus board](#the-surplus-board-supabase) —
+   while the boxes around them — the working board, the orders that have finished,
+   the donor's routing map — still hold no data of their own. The recipient's own
+   routing card is the fifth wired part: its *Delivery status* section draws the
+   delivery that account is waiting on, and it is described under
+   [The delivery map](#the-delivery-map) too. Each page owns its own rail,
+   markup and slots included, so relabelling one role's sections cannot move the
+   other's: the rail runs **across the top** of the page as a row of tabs rather than
+   down the side, and every tab names the section it opens in `data-view`, so the
+   mapping from tab to screen is one table in each script. Both open with the same
+   two tabs, Dashboard and Feed, and then name their own work: the donor's runs
+   Surplus Analyser, Ongoing Deliveries, Finished Deliveries, and the recipient's
+   runs Incoming Deliveries, Delivery Status, Received Deliveries.
+   The tab being read is the one lit shape in the rail — filled with the mint accent,
+   its label turned to ink — while every other tab is its label and nothing else,
+   which is what keeps a five-tab rail from reading as five buttons. On a narrow
+   screen the tabs wrap onto their own line and scroll sideways rather than out of
+   reach. Dashboard is the default selection; Feed opens the shared
+   board on either dashboard — with the donor's compose box above it, which is where
+   a donor logs an item now — Surplus Analyser opens the predictor boxes and, under
+   them, the donor's own logged surplus,
+   and the remaining tabs — the recipient's two section tabs and its received-
+   deliveries tab, the donor's Ongoing and Finished Deliveries — still wipe
+   the working area for a blank screen of their own. Picking Dashboard brings the
+   dashboard back.
+   The Dashboard screen is one arrangement on both dashboards, borrowed from the
+   reference layout: a title row with the single action the screen offers (the
+   donor's *Log surplus* opens the Feed, the recipient's *Browse the board* does the
+   same), the figures this role keeps beside the delivery card, then the filter row
+   and the working board under it. The figures are a donor's impact record — surplus
+   saved in kilos, meals served and orders completed, read from that donor's own
+   stored profile, so the same numbers are there on every load — and the recipient's
+   three counters, which hold placeholder bars because nothing reads them yet. The
+   board under the filters is the **one light surface on the page**: three small
+   filter labels over a mint box headed *Pending orders*, which holds the orders
+   still waiting and, inset into its right-hand side, the selected order's details.
+   Below it sit the routing map and a panel still waiting for content of its own, and
+   under those the *Latest completed orders* cards — one per finished order, empty
+   until an order finishes. The bell in the header
    opens a small notifications panel under it rather than a browser alert, and the
    account pill beside it opens the same kind of panel; nothing feeds either list
    yet, so both are left empty on purpose.
@@ -95,14 +118,15 @@ the matching logic, and invites visitors into the flow above.
 | File | Purpose |
 | --- | --- |
 | `frontend/index.html` | Landing page — the site's entry point and default document |
-| `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on) |
+| `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on). The HTTP handler and the routes; everything it calls lives in the topic modules beside it |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a labelled navigation rail, an impact panel showing the donor's own stored figures, the *Log surplus* form that posts to the surplus board, the *Surplus Received* section that reads the donor's own rows back, and the delivery-location card |
-| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same page for recipients, carrying the same labelled rail; its *Feed* section is the live surplus board with a claim button on every open post |
-| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts, claims, and writes the allocator's pick back onto a row, streams changes, and formats a post in the site's tone |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes, plus the delivery-location card |
+| `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same arrangement for recipients, carrying the same top rail under its own section names (*Incoming Deliveries*, *Delivery Status*, *Received Deliveries*) and the same Dashboard screen with its own counters; its *Feed* section is that same live board in three views (all posts, open, and the posts tagged with the goods this recipient needs), with a claim button on every open post |
+| `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, holds the six goods categories one time, and draws every post as the one shared card both roles see |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
-| `supabase/migrations/20261009000000_add_match_to_surplus_posts.sql` | The three columns that carry the allocator's pick, and the same update guard widened by exactly those — run once, after the first one |
+| `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` | The `goods_type` tag column, its constraint to the six categories and the claim-guard update that freezes it — run once against the project, after the file above |
+| `supabase/clear_surplus_posts.sql` | Empties the board between demos: one `delete` run by hand as the project owner, since the publishable key the pages hold cannot delete |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
 visitor's role when signed in, and to the landing page otherwise. Each page works
@@ -117,12 +141,11 @@ So a recipient who follows a donor dashboard link lands on the recipient one
 rather than a page built for somebody else.
 
 ## The delivery map
-
 Both dashboards carry one card that acts: **confirm delivery location**. It opens
 an almost full-screen overlay holding a map, a search bar and a pin. The card
-itself rests dark on the same notched silhouette as the cards beside it and fills
-with the accent orange while hovered — or while keyboard-focused — the way the
-landing page's capability cards do.
+itself rests as a panel beside the figures — dark, with a line around it — and
+fills with the mint accent while hovered — or while keyboard-focused — with
+everything inside it turned to ink.
 
 - It opens **on the location the account confirmed**, with the pin already on it,
   zoomed in. An account that has not confirmed one yet opens on the address it gave
@@ -158,18 +181,49 @@ account that a later routing pass would read: the pair of coordinates saved with
 enough to drop a pin for either side of a delivery. Saving it leaves the address the
 account originally onboarded with untouched, so the two never overwrite each other.
 
-The map is [Leaflet](https://leafletjs.com) drawing **OpenStreetMap's own tiles**, and
-both lookups — the address search and the reverse lookup behind a moved pin — are
-OpenStreetMap's **Nominatim** service. All three are free and keyless, so the overlay
-needs no account, no API key and no card. Leaflet is fetched from a CDN the first time
-the overlay opens, so the dashboards themselves stay light.
+### The route the recipient is waiting on
+
+The recipient's **Delivery status** card carries the same map, in its own panel rather
+than an overlay: same painted tiles, same ink teardrop at the pickup, with the drop-off
+drawn as an open mint ring instead of a second teardrop, so the two ends of one delivery
+are told apart at a glance. It reads `GET /api/orders`, takes the newest order the
+signed-in account is the **recipient** side of — `viewer_side` says which end the caller
+is on, because a demo account carries no id of its own to compare — and draws the drive
+between the two pins **the order itself carries**, so the route is the delivery that was
+agreed rather than a fresh look at the two profiles. The chip in the card's corner names
+what is on the books: an order agreed reads `confirmed`, one only proposed reads
+`proposed`, each with the distance between the pins and the day it is booked for.
+
+The road comes from [OSRM](https://project-osrm.org)'s keyless demo router, the one free
+service that answers with a real drive rather than a straight line, and the legend under
+the map says where the line came from — the kilometrage and minutes by road, OSRM, and
+the tiles' own credit — instead of leaving MapLibre's attribution strip to run under the
+card's chip. Until a delivery is on the books the card keeps its drawn shape and says
+so, and if the router cannot be read the two pins are still joined, by the direct line
+between them, with the legend saying that is what it drew: a route the router did not
+draw is not passed off as one it did.
+
+The map is [MapLibre GL](https://maplibre.org) drawing **OpenFreeMap** vector tiles —
+OpenStreetMap data, painted by a style that lives in the page rather than recoloured
+afterwards: the ground is the ramp's sage, every road is one warm-white thread whose
+weight alone says how big the street is, and the names carry a pale halo so they stay
+readable where a white road runs under them. Painting the tiles feature by feature is
+what the look needs — a picture of a map could only be filtered towards it. The
+delivery pin is drawn in the page rather than fetched: an ink teardrop with a mint
+ring and core, and MapLibre's own controls are cut to match — ink zoom buttons with
+mint glyphs, an ink attribution strip. Both lookups — the address search and the
+reverse lookup behind a moved pin — are OpenStreetMap's **Nominatim** service. All of
+it is free and keyless, so the overlay needs no account, no API key and no card.
+MapLibre is fetched from a CDN the first time the overlay opens, so the dashboards
+themselves stay light.
 
 Both OSM services are shared public infrastructure, so the overlay stays a good
 citizen: lookups run once per search and once per settled pin movement rather than on
 every keystroke (Nominatim's policy forbids type-ahead against their public instance,
 and the reverse lookup is debounced behind the drag and asked for no more than two
-attempts at one spot), the map keeps the attribution
-Leaflet draws for the tiles, and heavy or automated use would need a self-hosted tile
+attempts at one spot), the overlay keeps the attribution
+MapLibre draws for the tiles — as the route card credits the same tiles in the legend's
+own line — and heavy or automated use would need a self-hosted tile
 server or a commercial provider rather than these endpoints.
 
 If the library, the tiles or a lookup cannot be reached, the overlay says which one
@@ -191,46 +245,103 @@ is logged rather than waiting for a page to be reloaded.
 | `item_name` | `text` | What the item is |
 | `quantity` | `text` | How much of it, said the way a shop says it — "24 kg across 6 crates" |
 | `location` | `text` | Where it can be collected from |
+| `goods_type` | `text` | Which of the six goods categories the post is for, or `null` on a post logged before the category existed |
 | `status` | `text` | `pending` or `claimed`, defaulting to `pending` |
 | `created_at` | `timestamptz` | Defaulting to `now()`; the board reads newest-first |
-| `matched_shelter` | `text` | The shelter the allocator picked for the item, written back onto the post by the page that submitted it |
-| `match_score` | `numeric` | The score that pick was made on — the prototype's weighted total |
-| `match_distance_km` | `numeric` | The road distance the score was measured over |
 
 Apply them once against the project, in order: paste
-`supabase/migrations/20261008000000_create_surplus_posts.sql` and then
-`supabase/migrations/20261009000000_add_match_to_surplus_posts.sql` into **SQL Editor →
-New query → Run** in the Supabase dashboard, or point the Supabase CLI at the project
-and run `supabase db push`. Both files are written to be safe to run more than once, and
-a project that has run only the first keeps working exactly as it did: the board simply
-shows no pick, and the form says which file to run when a pick cannot be written.
+`supabase/migrations/20261008000000_create_surplus_posts.sql` into **SQL Editor →
+New query → Run** in the Supabase dashboard, then
+`supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` the same
+way — or point the Supabase CLI at the project and run `supabase db push`. Both files
+are written to be safe to run more than once. The second one only has to be applied
+once: until it is, the compose box still logs posts, but it logs them untagged and
+says so on the line under the fields, so a half-migrated project loses the category
+rather than the ability to post.
 
-Two screens use it, and both are on a dashboard rather than behind the API:
+Emptying the board is a separate, deliberate act rather than a migration:
+`supabase/clear_surplus_posts.sql` deletes every row and is run by hand the same way.
+It has to be run as the project owner, because the pages hold a key that may read the
+board, add a post and claim one — and delete nothing — so no page and no script with
+that key can clear the board on its own. Open dashboards empty themselves as soon as
+the delete lands, the same realtime path a new post takes.
 
-- **Log surplus** — the donor's panel on the dashboard. Item, quantity and pickup
-  location, with the pickup address prefilled from the account's own confirmed
-  location, and *Submit to feed* inserts the row. Nothing is optimistic: the chip
-  beside the heading reads *logged* only once the database has answered with the row
-  it wrote, and a refusal is shown with its reason instead of a success message. The
-  same click asks the backend's allocator which shelter should take the item, and the
-  answer is written back onto that row — shelter, score and road distance — so the pick
-  outlives the donor's browser instead of being a message only they ever saw. The panel
-  under the form says what the board did with it: *pick saved to the feed*, or that the
-  pick did not land and why.
-- **The board itself** — the recipient's *Feed*, and the donor's *Surplus Received*,
-  which is the same table read back through that donor's own name. Each post carries
-  its item, quantity, donor, pickup location, age and status, and — once the allocator
-  has answered the submission — the shelter it picked, on the card as `PICKED <shelter>
-  · <score>`. An open post has one
-  action, **Claim**, which writes `status = 'claimed'`; the card then keeps its place
-  with a claimed chip and no button, so the board reads as a record of what was
-  offered rather than quietly emptying. A claim only ever matches a post that is still
-  `pending`, so the second visitor to click the same item is told *already claimed* and
-  the card is re-read instead of the claim being overwritten.
+The board is the *Feed* on **both** dashboards — donors and recipients are looking at
+the same list of everything published, newest first. The three screens that use it all
+sit on a dashboard rather than behind the API:
 
-Both screens are live. While one of them is on screen it subscribes to Postgres
+- **Log surplus** — the compose box that opens the donor's own *Feed*, above the
+  board it posts to, so posting and watching the post land are one screen. It is laid
+  out as the reference's compose row: the silhouette avatar, the one line a post
+  starts on, then a row of controls with the one button at the far right. The controls
+  are the site's own — an item, a quantity, the goods category the post is for and a
+  pickup location, the pickup address prefilled from the account's own confirmed
+  location — and *Post* inserts the row. The category is the third pill in the row and
+  the only one that opens anything: a long pill on the quantity and address silhouette
+  that drops the goods profile's own list under it, the six categories with their
+  emoji and their hint line. It is asked for rather than guessed, because an untagged
+  post belongs to no category and so never reaches a *For You* view. Nothing is
+  optimistic: the line under the fields says the item is on the board only once the
+  database has answered with the row it wrote, a refusal is shown with its reason
+  instead of a success message, and the board beside it refreshes at that moment
+  rather than waiting for the subscription to echo the row back.
+- **The board itself** — the *Feed* on either dashboard, drawn as a feed. Every post
+  is a card on the site's own palette: the logging donor's avatar, then their
+  name with a handle-and-age line beside it, the item as the card's heading, the
+  quantity picked out in the accent above the muted pickup address, and a bottom row
+  carrying the post's own facts — its age, its status — and the one action the reader
+  has on it, a *Claim* that rests dark with cream text and fills with the accent on
+  hover, the way the hero cards do. Above the cards sits the board's tab bar: three
+  views of the same list — the whole board, a narrowed one by authorship or status
+  (*My posts* for a donor, *Open* for a recipient) and *For You*, the posts tagged with
+  the goods the reader picked in their goods profile — all filtered from the rows
+  already read so switching is instant, while the chip at the right keeps counting the
+  whole board either way. Each card carries the category it is filed under beside its
+  status, which is what makes the *For You* view legible: the filter chooses between
+  tagged posts, so it shows which tag it chose. A
+  donor's own posts are marked *your post* so they are easy to pick out among everyone
+  else's. The two copies differ only in what they offer: a recipient's card has one
+  action, **Claim**, which
+  writes `status = 'claimed'`, and a donor's has none, because taking surplus is the
+  recipient's side of the exchange. A claimed card keeps its place with a claimed chip
+  and no button, so the board reads as a record of what was offered rather than
+  quietly emptying. A claim only ever matches a post that is still `pending`, so the
+  second visitor to click the same item is told *already claimed* and the card is
+  re-read instead of the claim being overwritten. A claim is also an accepted order,
+  and it adds one to that donor's orders figure on their dashboard's effect panel —
+  see [the impact figures](#how-the-pieces-connect).
+- **Surplus Analyser** — the donor's own rows, the same table narrowed to that
+  donor's name, with the status each one has reached. It is the donor's log rather
+  than the shared board, which is why it lives beside the feed instead of in it.
+  The screen opens on the surplus predictor's layout: the forecast banner and the
+  weekly yield chart both carry live data, while the category split is still held open
+  by bare placeholder bars. Running the analyser reads the **live weather** at the
+  account's own address and forecasts **today's** surplus from that day, that sky and the
+  days the kitchen has **logged** — the model's own defaults stand in only when there is
+  no log to read — then reads the same point's seven-day outlook to draw the chart: one
+  bar per day, today first, which is where the model's own weekend bump turns up. See
+  [the live weather](#the-live-weather) and [the logged days](#the-logged-days). The
+  section is the donor's own; the recipient dashboard has no analyser.
+
+### For You, and what a post is tagged with
+
+*For You* is the board read as one account's own slice of it. A post carries the goods
+category it is for — one of the same six the goods profile offers, written into
+`goods_type` by the compose box — and the tab keeps the posts whose category is one of
+the two the reader picked in their profile: what they handle as a donor, what they need
+as a recipient. A donor whose goods are fresh produce and packaged goods sees the board
+narrowed to those two; anyone reading it with no categories picked is told to pick
+them rather than shown an empty list, and a post logged before the tag existed belongs
+to no category, so it stays on the whole board and out of every *For You*. The six
+categories live once, in `resq_supabase.js`, so the compose box's picker, the card's
+chip and the tab's filter cannot drift apart — and the table constrains the column to
+the same six, so a post cannot be filed under a category nothing else knows.
+
+Every one of those screens is live. While one is on screen it subscribes to Postgres
 changes on the table over Supabase Realtime, so a post logged anywhere appears in an
-open feed on its own and a claim flips the card in every other open feed. A timer
+open feed on its own and a claim flips the card in every other open feed — including
+the donor's copy of the board, which is the same list being watched from the other
+side. A timer
 re-reads the table every 20 seconds as well, which is what covers a project where the
 realtime publication was not set up — the board is then still live, just a little
 later. The subscription and the timer both stop when the section is left.
@@ -238,13 +349,12 @@ later. The subscription and the timer both stop when the section is left.
 The pages hold the project's **publishable** key, which is the key meant to sit in a
 page: it can only ever act as the anonymous role, and what that role may do is decided
 by the table's row level security policies. Those policies are exactly the three the
-dashboard needs — anybody may read the board, add a post, set a status, and (while the
-post is still open) record the allocator's pick — and nothing else: no deletes, and no
-access to anything but this table. Because Res-Q runs its own sign-in rather than
-Supabase Auth, a post is attributed to the name on the donor's own profile rather than
-to a Supabase user, and the table's update trigger refuses any change other than a
-status and those pick columns, so a claimed row cannot be rewritten into a different one
-and a claimed post keeps the pick it was claimed with. The publishable key is safe to be seen; the secret key is never used by
+dashboard needs — anybody may read the board, add a post, and set a status — and
+nothing else: no deletes, and no access to anything but this table. Because Res-Q runs
+its own sign-in rather than Supabase Auth, a post is attributed to the name on the
+donor's own profile rather than to a Supabase user, and the table's update trigger
+refuses any change other than a status, so a claimed row cannot be rewritten into a
+different one. The publishable key is safe to be seen; the secret key is never used by
 the pages and is not in this repository. This is still a public board, though — a
 deployment that has to know *who* posted would move the writes behind the backend,
 where the secret key can be held and a rate limit put in front of it.
@@ -259,6 +369,17 @@ python3 backend/server.py                   # demo mode: nothing is stored
 RESQ_PERSIST=on python3 backend/server.py   # persistent: accounts go to backend/resq.db
 ```
 
+Demo mode seeds five test donors with six weeks of logs each, one recipient and the one
+delivery between them on startup — see [the logged days](#the-logged-days) for who they
+are and their password — so the analyser has a real past to forecast from and the
+recipient's console has a route to draw from the moment the server is up. `RESQ_SEED=off`
+starts without them, and with persistence on they are written only when `RESQ_SEED=on`
+asks.
+
+To run it the way a host will, see [Deployment](#deployment):
+`gunicorn -c gunicorn_config.py wsgi:application` from `backend/` is the same API behind
+the same routes, serving the same pages, and it is worth running once before deploying.
+
 Then visit <http://localhost:8080/>. The server returns the landing page as the
 default document, so reloading keeps the visitor there. The landing page's
 *Onboarding* button opens `res_q_homepage.html`, and that form hands the visitor
@@ -268,19 +389,342 @@ Opening the pages straight from disk works for the layouts, but the forms cannot
 save anything, because there is no server to talk to.
 
 The surplus board needs one step of its own, done once against your Supabase project:
-apply `supabase/migrations/20261008000000_create_surplus_posts.sql` and then
-`supabase/migrations/20261009000000_add_match_to_surplus_posts.sql`, as described
-under [The surplus board](#the-surplus-board-supabase). Until the first is applied, the
-donor's form and both boards say so plainly — *surplus_posts is not in the project* —
-rather than failing quietly; until the second is, the item is still logged and matched,
-and only the pick fails to reach the board. That board is read and written from the browser, so nothing about
+apply `supabase/migrations/20261008000000_create_surplus_posts.sql`, as described
+under [The surplus board](#the-surplus-board-supabase). Until it is applied, the donor's
+form and both boards say so plainly — *surplus_posts is not in the project* — rather
+than failing quietly. That board is read and written from the browser, so nothing about
 it lives in the backend's database and it behaves the same in demo mode as it does with
 persistence on.
 
+## Deployment
+
+The API and the pages are one service. `backend/server.py` serves the front-end from
+`frontend/` and answers `/api/*` out of the same process, so a host that can run Python is
+the whole of what this needs to be reachable on the internet — which is why `render.yaml`
+in the repository root asks for exactly one web service, and why the URL it hands back is a
+working site on its own: the landing page at `/`, the liveness probe at `/api/health`, the
+rest of the API under `/api/`.
+
+### The entry point a host uses
+
+Run by hand, the API *is* the standard library's HTTP server (`python3 backend/server.py`).
+A host brings its own server instead, and that server speaks WSGI, so `backend/wsgi.py`
+adapts the same handler to it: every WSGI request is written back out as the HTTP request
+the handler already parses, and what it answers is handed back as a WSGI response. Nothing
+is reimplemented in there — no route, no static file, no CORS rule exists twice — so a
+deployed API and a local one answer identically. Gunicorn then runs it:
+
+```bash
+cd backend
+pip install -r requirements.txt
+gunicorn -c gunicorn_config.py wsgi:application   # $PORT when set, else 127.0.0.1:8080
+```
+
+| File | What it is for |
+| --- | --- |
+| `render.yaml` | The Blueprint: one Python web service, with its build command, start command, health check and environment |
+| `backend/requirements.txt` | Gunicorn, and the surplus calculator's pandas and scikit-learn — a deployment that left those out would answer `503` on the analyser |
+| `backend/gunicorn_config.py` | The server's settings, each one with the reason it holds the value it does |
+| `backend/wsgi.py` | The API as a WSGI application, and the startup a worker does before its first request |
+| `backend/.python-version` | The Python version the host builds with |
+| `backend/Procfile` | The same start command, for a host that reads a Procfile instead of a Blueprint |
+
+**One worker, and that is a requirement rather than a preference.** Demo mode keeps its
+accounts, sessions and logged days in the process's memory, so a second worker would hold a
+second, separate copy of all of it — sign in through one and the next request could reach a
+worker that has never heard of that session. Requests are taken four at a time by threads
+inside the one process instead, which is also what stops a route waiting on Open-Meteo from
+holding up a page load. The count lives in `gunicorn_config.py` rather than in the host's
+dashboard so that the reason stays attached to the number; it is the one setting to revisit
+when the accounts move fully into a database.
+
+### On Render
+
+New → **Blueprint** → pick this repository → Apply. Render reads `render.yaml`, builds with
+`pip install -r requirements.txt` from `backend/`, and starts it with
+`gunicorn -c gunicorn_config.py wsgi:application`. Two values are deliberately not in the
+file and are filled in on the service's **Environment** page:
+
+| Variable | What it does |
+| --- | --- |
+| `RESQ_ALLOWED_ORIGINS` | Which origins may read this API from a browser — see below. Empty means none may, which is the right default for a service only its own pages call. |
+| `RESQ_PERSIST` / `RESQ_DB` | Set to `on`, with `RESQ_DB` on a mounted disk, to store accounts in SQLite. Left off, as committed, the deployment runs in demo mode. |
+
+`RESQ_SEED=on` — also in the file — is what makes a fresh deployment useful immediately:
+the worker creates the five test donors, their six weeks of logged days and the one agreed
+delivery as it starts, and
+prints their addresses and shared password to the service log. The archive weather read is
+made once per donor at that moment, so the first boot takes a few seconds longer than the
+ones after it.
+
+A **free** instance sleeps after fifteen minutes with no traffic and takes about a minute
+to wake, and its disk is ephemeral: anything written is gone on the next deploy, restart or
+wake-up. That is exactly why the deployment runs in demo mode — its state is the worker's
+memory, and the seed is what refills it — and why turning `RESQ_PERSIST=on` there would
+only appear to work. Persistent accounts want a paid instance with a disk mounted at
+`RESQ_DB`'s path.
+
+### The front-end on Vercel, talking back to Render
+
+The pages can be served by Vercel instead of (or as well as) by the API process. Import the
+repository, set **Root Directory** to `frontend`, leave the framework preset on *Other* and
+the build command empty — there is no build step, the pages are the files. Then two things
+have to agree:
+
+1. **The pages have to know where the API is.** Every call is written as
+   `fetch(apiUrl('/api/…'))`, and `frontend/resq_api.js` is the one line that decides which
+   origin those paths are asked of. It carries the Render service as committed, which is
+   what a Vercel front-end wants — an empty value means "the API is on this same origin",
+   which is how a Render-only deployment works, and how a local run works when the pages
+   are grabbed from the API's own process:
+
+   ```js
+   var RESQ_API_BASE = 'https://res-q-api.onrender.com';   // the API's origin
+   var RESQ_API_BASE = '';                                 // this page's own origin
+   ```
+
+   The one to keep is the one that matches how the pages are served. Because the committed
+   value names Render, a page opened from the local server talks to Render rather than to
+   the local API — which is why the local origins belong in `RESQ_ALLOWED_ORIGINS` beside
+   the deployed one, or `RESQ_API_BASE` wants emptying for that run.
+
+2. **The API has to allow that origin.** A browser will not let one site read another's API
+   unless the other site says it may, which is what `RESQ_ALLOWED_ORIGINS` is. It is a
+   comma-separated list, and an entry is either an exact origin or a wildcard for one
+   domain's subdomains — `*.vercel.app` is usually wanted beside the production URL, because
+   Vercel gives every preview deployment its own hostname:
+
+   ```
+   RESQ_ALLOWED_ORIGINS=https://res-q.vercel.app,*.vercel.app,http://localhost:8080,http://127.0.0.1:8080
+   ```
+
+   `localhost:8080` and `127.0.0.1:8080` are two different origins as far as a browser is
+   concerned, as is every port, so a local page served by `backend/server.py` needs its own
+   entry unless `RESQ_API_BASE` is emptied for that run. `RESQ_ALLOWED_ORIGINS` is read
+   once at startup, so the service has to restart for a change to it to be answered.
+
+   A single `*` is honoured only when it is written out, and an empty list allows nothing:
+   a deployment nobody configured stays same-origin only. What an allowed origin is granted
+   is narrow — the origin itself in `Access-Control-Allow-Origin`, `GET, POST, OPTIONS`,
+   and the two headers the pages actually send (`Authorization`, `Content-Type`) — and no
+   `Allow-Credentials`, because the session is a bearer token in a header rather than a
+   cookie, so a browser is never told to send one. `Vary: Origin` keeps a cache from serving
+   one origin's answer to another. A `POST` carrying `Authorization` is asked about first
+   with an `OPTIONS` preflight, which is answered for the same list and nothing else.
+
+Getting either half wrong looks the same in the browser — a failed call and a CORS line in
+the console — so the two are worth checking together: the origin in the console's error
+message is the one to put in `RESQ_ALLOWED_ORIGINS`, and the base in `resq_api.js` is what
+has to match it.
+
+There is a third arrangement that needs neither half: leave `RESQ_API_BASE` empty on Vercel
+and add a rewrite to `vercel.json` sending `/api/*` to the Render service. The pages then
+call their own origin, Vercel forwards the calls, and no cross-origin rule is involved at
+all. It costs a hop and hides the API's URL from the browser; naming the origin directly,
+as above, is the shorter path when both are yours.
+
+### Somewhere else entirely
+
+Nothing in the deployment is Render-specific: any host that runs
+`pip install -r requirements.txt` and then a process bound to `0.0.0.0:$PORT` will do, and
+`backend/Procfile` carries the same start command for the ones that read one. The two
+things a host has to get right are those — the `$PORT` it hands over, which both
+`gunicorn_config.py` and `server.py` read, and one worker, for the reason above.
+
+`backend/claim_recorder.py` is *not* part of this service and is not deployed with it: it
+is a companion process on its own port that records which recipient claimed which post. It
+lives in `backend/` because that is where this project's Python lives, and nothing in the
+API imports it.
+
 ## Backend and API
 
-The backend listens on `127.0.0.1:8080`. `GET /api/health` reports which mode it
-is in.
+The backend is split so it can be read a topic at a time. Only the HTTP handler and
+the routes live in `backend/server.py` — everything it calls sits in the module that
+owns the topic, and `config.py` owns every constant, limit, vocabulary and demo store:
+
+| Module | What it holds |
+| --- | --- |
+| `backend/config.py` | Every constant the API reads and answers with — field lists, vocabularies, limits, the demo stores |
+| `backend/db.py` | The SQLite connection (`connect`) and the schema plus in-place migration (`init_db`) |
+| `backend/helpers.py` | Request cleaning: selections, stored JSON lists, contacts, ids, bounded query numbers, and how an account is named |
+| `backend/security.py` | Password hashing (PBKDF2-HMAC-SHA256) and the password checks |
+| `backend/geo.py` | Haversine distance, the bounding-box pre-filter, the demo offset point |
+| `backend/accounts.py` | The donor impact figures (seed/fill), demo account and demo peer stores |
+| `backend/matching.py` | What makes two accounts deliverable: shared categories, confirmed pins |
+| `backend/orders.py` | The order's stored shape and the shape a dashboard reads it back in, shared by both modes, and the two keys a demo run files an order's sides under |
+| `backend/surplus.py` | The surplus calculator: the regression pipeline, trained once and cached, forecasting per request |
+| `backend/history.py` | The logged days — one row per kitchen per day — and the features the model reads out of them |
+| `backend/seed.py` | The five test donors, the one recipient and the agreed delivery between them, with the donors' six weeks of logs and the weather taken from Open-Meteo's archive |
+| `backend/weather.py` | The live conditions at a point — now, day by day for the week ahead, and the days behind it — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
+| `backend/wsgi.py` | The same handler as a WSGI application, which is how a host runs it; see [Deployment](#deployment) |
+
+The server itself still uses only the standard library, so nothing has to be
+installed for the site, the accounts and the matching to work: `requirements.txt` names
+Gunicorn, which is the server a host runs it on, and pandas and scikit-learn, which only
+the surplus calculator wants. The live weather wants nothing installed either —
+`weather.py` calls Open-Meteo with `urllib` — and `surplus.py` imports its two inside its
+functions, so a local run that has not installed them still serves everything else and the
+forecast answers `503` with the install line in the message. A hosted build installs all
+three, because a deployment whose analyser answered `503` would be missing the site's
+central feature.
+
+Run by hand the backend listens on `127.0.0.1:8080`; under a host it listens on the
+address the host asks for — `$PORT`, on `0.0.0.0` — and either can be overridden with
+`RESQ_HOST` and `RESQ_PORT`. `$PORT` counts only when it is a port number: an empty value
+or a `0` in the environment is somebody else's variable rather than a host's instruction,
+and both entry points ignore it rather than binding somewhere nothing is looking.
+`GET /api/health` reports which mode it is in.
+
+### The surplus calculator
+
+`backend/surplus.py` is the predictor the Surplus Analyser screen is built around,
+kept as close to identical as possible to the original `surplus.py` notebook script
+it came from: 200 synthetic days of kitchen history — customers served by day and
+weather, a weekday rhythm with a weekend bump — ending in a random-forest regressor
+through an impute → scale / one-hot pipeline, with the mean absolute error it scores
+at printed when the file is run on its own (`python3 backend/surplus.py`).
+
+The row it forecasts is **today's**: the day the kitchen is cooking on, and the surplus
+it is holding now. The module exposes two calls:
+
+- `train_surplus_model()` — the original script verbatim, seed and features and split
+  unchanged, returning the fitted pipeline and its MAE (9.2 kg on the held-out tail).
+- `forecast_surplus(**features)` — the call a request reaches. Every feature is
+  optional; anything left out is filled with a usable default, and the labels default
+  to **today's** own day and a clear sky. The clear sky is a fallback rather than a
+  reading — the dashboard reads the real one at the account's address and passes it in
+  as `weather` — so a request that omits it is one that had no address to read. The
+  pipeline is trained on the first call and cached in the process, so the forest is not
+  rebuilt per request.
+
+`GET` or `POST /api/surplus-forecast` calls it. Accepts `day_of_week` (a day name),
+`weather` (Sunny, Cloudy or Rainy) and the four numeric features
+(`expected_customers`, `surplus_yesterday`, `surplus_last_week`, `surplus_rolling_14`),
+any of them, in the query string or a JSON body. A label outside the vocabularies the
+training data was built on is refused with `400` rather than forecast against
+silently, and the answer carries the prediction, the MAE it comes with and the model
+and features that produced it. With pandas or scikit-learn missing, it is `503`,
+`model_dependencies_missing`, with the install line in the message.
+
+### The live weather
+
+The analyser forecasts today's surplus, so the sky in that row has to be today's too.
+`GET /api/weather?lat=..&lng=..` reads it from [Open-Meteo](https://open-meteo.com/) —
+keyless, like the map's vector tiles and the address lookups, so nothing has to be
+registered to run this server. Coordinates are required and are checked the way the
+delivery location checks them: a point the site itself would refuse to store is a point
+nobody has an address for, so nothing is read there. The reading is today's own summary
+— the WMO code the day is filed under — with the sky right now carried beside it, in
+the address's own timezone, because "today" is the address's day and not UTC's.
+
+The model was trained on three words for the sky, so the table in `backend/weather.py`
+is the one place that turns a WMO code into them: clear and mainly clear are **Sunny**,
+partly cloudy, overcast and fog are **Cloudy**, and everything that falls out of the sky
+— drizzle, rain, showers, snow, thunderstorms — is **Rainy**. Snow answered as rain and
+fog as cloud is information dropped, because the model has no word for either, so the
+answer carries the raw code, its own summary and the day's rainfall beside the label for
+anything that wants to show the weather rather than feed it to the model.
+
+The dashboard reads it at the account's own address: the **delivery location confirmed
+on the Dashboard** when there is one, and the address typed at onboarding — geocoded
+with the same Nominatim lookup the map's search uses — when there is not. A run with no
+address at all, or with the service unreachable (`502`, `weather_unavailable`), still
+forecasts, and says on the banner and in the conditions panel that the sky could not be
+read rather than passing a made-up one off as a reading.
+
+The day the forecast row carries comes from that same reading: the date Open-Meteo files
+today under **at the address**, so the day the kitchen is actually cooking on is the day
+being forecast, and the reader's own clock is only the fallback for a run that had no
+reading to take a date from.
+
+**The week ahead** is the same point read again as a run of days:
+`GET /api/surplus-outlook?lat=..&lng=..` asks for that daily outlook — seven days by
+default, and never more than the sixteen the service will answer at all — then runs
+**each day through the same model** under that day's own name and that day's own sky.
+That is what gives the analyser's chart its shape: the sky moves from day to day, and
+`Saturday` and `Sunday` carry the model's weekend bump by themselves. Nothing between the
+bars is interpolated, averaged or smoothed — every bar is one forecast of one day — and
+the reading behind each label travels with it (the WMO code, its summary, and the day's
+high, low and rainfall) beside the prediction for anything that wants both.
+
+The chart draws those bars across the week's **own** range rather than up from zero:
+seven days of one kitchen's surplus sit within a few kilos of each other, so a
+zero-based axis would draw seven identical bars and hide the shape the chart exists to
+show. The range is named under the chart and the two bars that matter — today's and the
+week's heaviest — carry their figures, which is what makes the axis readable from the
+panel itself; a week that really is flat is drawn flat rather than exaggerated into a
+shape it does not have.
+
+### The logged days
+
+A forecast is only as good as the past it is made from, so the past is stored: one row
+per kitchen per day, holding what that kitchen served, the sky over it and the surplus
+that came out of the day. In persistent mode those rows are the `surplus_history` table,
+keyed by the account and unique per date, so a kitchen's own past cannot be logged twice;
+in demo mode they live in the process, filed under the contact the account signed in with,
+because demo users all carry id `0` and there is no table to key them by.
+
+`backend/history.py` derives the model's own features from those rows rather than from a
+second copy of the same week: the surplus **yesterday**, the same weekday's surplus a week
+ago, the mean of the **fourteen days before** the day being forecast, and the customer
+count that weekday has actually run at. Every one of them is read *before* the day being
+forecast — the window the training data built them in — and a feature the log cannot
+answer comes back as nothing rather than as a zero: a day that has not happened yet has no
+yesterday to read, and the model's imputer is there for exactly that. A value the caller
+sends still wins over the log, so an explicit `surplus_yesterday` is never overwritten.
+
+The day itself can be named: `POST /api/surplus-forecast` takes an optional `on_date` (an
+ISO day) and reads the log for *that* day rather than for the server's, which is what lets
+the dashboard read the log for the date its own address is on. `GET /api/history` answers
+the signed-in account's own days, newest first, with the summary and the derived features
+beside them: what the log says, rather than making anything else derive it again.
+
+**Five test donors ship with the server**, so the calculator can be exercised against a
+real past instead of its own defaults. Each one has six weeks of days ending yesterday:
+
+| Sign in as | Kitchen | Where | Serves per day |
+| --- | --- | --- | --- |
+| `dana@resq.test` | Whitfield Bakery | 60 Queen St W, Toronto | 170–250 |
+| `omar@resq.test` | Haddad Grocers | 1180 Ste-Catherine O, Montréal | 200–300 |
+| `priya@resq.test` | Raman Kitchens | 87 Elm St, Toronto | 110–190 |
+| `luis@resq.test` | Ortega Deli | 601 Biscayne Blvd, Miami | 230–330 |
+| `mei@resq.test` | Chen Noodle House | 55 Bay St, Toronto | 90–170 |
+
+The password is `ResqDemo1!` for all five. They are created when the server starts in
+demo mode — nothing is written to disk there — and with persistence on only when
+`RESQ_SEED=on` asks for it, so a database nobody meant to touch is never written to
+uninvited. `RESQ_SEED=off` turns it back off in demo mode. Each donor arrives working: a
+goods profile, a confirmed pin at its own address and its impact figures, because a test
+account that has to be walked through onboarding first is not one.
+
+**One recipient and one delivery ship beside them**, so the recipient's console has a
+delivery to read rather than an empty frame:
+
+| Sign in as | Organisation | Where | Takes deliveries on |
+| --- | --- | --- | --- |
+| `noor@resq.test` | Fort York Food Bank | 40 Fort York Blvd, Toronto | Tue, Thu |
+
+The same password signs it in and the same switches create it. It arrives the same way a
+donor does — a goods profile, a confirmed pin at its own address, no impact figures, since
+those are the kitchen's own. The delivery already on the books is Whitfield Bakery's
+packaged goods, 2.21 km from the food bank, booked for one of the two days the food bank
+asked for, and it is **agreed rather than proposed**, because a delivery nobody has
+settled is not one a route would be drawn for. Both ends are filed under the account on
+them rather than under the session that wrote it, so the food bank reads its own delivery
+back the way any other order would be read — which is what the *Delivery status* card
+opens on, described under [The delivery map](#the-delivery-map). Seeding again adds
+nothing: an account that exists is skipped, a day already logged is left alone, and the
+delivery is not doubled.
+
+The **weather in those logs is real**: each donor's days carry the conditions Open-Meteo's
+archive actually recorded at that donor's coordinates, so the history is a record rather
+than an invention. If the archive cannot be reached the days fall back to a deterministic
+pattern, and a day from that pattern carries no WMO code — which is what marks it as not a
+measurement. The customers and the surplus are the fixture's own, generated from the same
+shape the model was trained on (a weekday rhythm, the weekend bump, a little noise),
+because a test that ran against some other shape would prove nothing about this model.
+Everything is seeded per donor, so the same five kitchens come back the same way every
+time; seeding again adds nothing, since a day already logged is left alone.
 
 ### Demo mode (default)
 
@@ -288,7 +732,11 @@ Nothing is written to a database and no detail is ever rejected as a duplicate,
 so the whole site can be walked through repeatedly without inventing a fresh
 email address each time. Sessions and the details you type live in memory for
 the life of the process; any email or phone plus any password signs you in, and
-restarting the server forgets everything. A session keeps the whole onboarding
+restarting the server forgets everything. Signing out ends the session but not the
+account, so the details you registered with sign back in as the role, the profile and
+the metrics they registered with — a recipient signs back in as that recipient, not as
+a fresh donor — which is what lets one machine walk the whole donor-then-recipient
+journey. A session keeps the whole onboarding
 answer set, address included, and holds the delivery location a person confirms, and a
 donor's three impact figures, the same way, so `/api/me` answers with the same shape it
 does in persistent mode — which
@@ -313,10 +761,13 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `POST` | `/api/profile` | Save the goods profile — establishment type and up to 2 surplus categories for donors, up to 2 delivery days and up to 2 required goods for recipients. Answers beyond the limit are rejected with `400`. The page sends the visitor to the dashboard for their role once this returns 200 |
 | `POST` | `/api/delivery-location` | Save the delivery location the dashboard pin points at, from an `address` plus `lat`/`lng`. Needs a bearer token (`401`), and answers `400` for an empty address, coordinates that are not numbers or are off the globe, or a malformed body. Overwrites any earlier confirmation and only ever writes the caller's own row; the refreshed user comes back in the response |
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
-| `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first |
+| `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
-| `POST` | `/api/submit-surplus` | Score a newly logged surplus item against the registered shelters and answer with the one that should take it. Needs a bearer token (`401`). The item's category is read from the words typed, or sent as `category`, or taken from the donor's goods profile; the pickup point is the form's `location` or the account's own confirmed pin. Answers `400` for a missing `item`, an unknown `category`, a bad `expiryHours`, or a pickup point the map cannot find, and `200` with `match: null` plus a `reason` when nothing can take the item. A match carries `shelter_name`, `match_score` and `distance_km` |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
+| `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the six-week window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
+| `GET` | `/api/weather` | The real conditions at a point, in the analyser's own vocabulary. Requires `lat`/`lng`, and answers `400` for a missing, non-numeric or off-globe pair. Reads Open-Meteo — keyless — and returns the model's label for today, the WMO code and summary behind it, the day's high/low and rainfall, the current temperature and wind, the address's timezone and the source. Answers `502` `weather_unavailable` when the service cannot be reached, rather than a default sky |
+| `GET` | `/api/surplus-outlook` | The week's surplus at a point, which is what the analyser's chart is drawn from: one forecast per day, today first. Requires `lat`/`lng` (`400` as above) and takes an optional `days` — a whole number, defaulting to 7 and pulled to the 16-day ceiling the weather service answers at, `400` when it is not a number. Each day carries its own date, day name, Open-Meteo conditions and the model's prediction, with the model and its MAE once for the whole week. Answers `502` `weather_unavailable` when the outlook cannot be read, and `503` `model_dependencies_missing` without pandas or scikit-learn |
+| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather`, `on_date` (the ISO day being forecast, which the log is read for) and up to four numeric features, in the query string or a JSON body. With a bearer token, any numeric feature the caller leaves out is **filled from that account's own logged days**, and the answer carries the log it read and which features came from it; an explicit value always wins. The dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy, a number sitting below zero or an unreadable `on_date`, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed |
 
 ### Matching and delivery orders
 
@@ -345,24 +796,14 @@ bearing from the caller's own pin, with every donor category covered by a recipi
 and every recipient need by a donor, so the pipeline can be walked through wherever the
 pin was dropped. They carry `"demo": true` in the response and are never written
 anywhere. Demo orders live on the session token, the way the demo sessions themselves
-do, and go when the process does.
+do, and go when the process does — except the one the fixture seeds, which is filed by
+its two accounts so the recipient can read it back without a second store to keep.
 
-`POST /api/submit-surplus` is the same pipeline reached from the Log surplus form on the
-donor dashboard. The item's category is read from the words typed — a small keyword
-reader, falling back to the donor's own goods profile — the pickup point is the address
-in the form or the account's confirmed pin, and every registered recipient is read as a
-shelter: what a recipient needs is what it accepts, and it is placed by its confirmed
-pin or the address it onboarded with. The hard filter, the score and the greedy
-allocation run against those shelters and the best one comes back with its name, score
-and road distance. In demo mode those shelters are the fabricated peers and the answer
-is marked `"demo": true`, the way every other demo response is. The two inputs the score
-weights that nothing collects yet are not left blank: a shelter nobody has rated
-carries the middle of the 1-to-10 need scale, and logged goods are taken to keep for a
-day. No match is a `200` with a reason rather than an error, because "nobody needs this
-today" is an answer the form can show.
-
-Nothing calls either endpoint yet: wiring the rails and the impact panel to
-`/api/matches` and `/api/orders` is the next piece of work on the pages.
+`GET /api/orders` is what the recipient dashboard's *Delivery status* card reads: it
+takes the newest order the caller is the recipient side of and draws the drive between
+its two pins, described under [The delivery map](#the-delivery-map). Nothing calls
+`/api/matches` from a page yet: wiring the rails and the donor's impact panel to it is
+the next piece of work.
 
 How the pieces connect:
 
@@ -401,6 +842,14 @@ How the pieces connect:
   come out of the pipeline yet, and a profile created before the columns existed is
   given its figures the first time it is read. That is what keeps the three figures the
   same on every load instead of changing under whoever is reading them.
+  The orders figure is the one that then moves, because the board is where an order is
+  accepted: **every post of that donor's a recipient claims adds one to it.** The count
+  is read from the board's own rows rather than written back to the profile, so it
+  needs no second write against another account, it cannot drift from the claims that
+  were really made, and it behaves the same in demo mode as with persistence on. While
+  Dashboard is the section in front of the donor it is watched and re-read like the
+  board's own screens are, so a claim made in another browser moves the figure there
+  without a reload.
 - **The confirmed delivery location.** `/api/delivery-location` writes four fields on
   the signed-in account: `delivery_address`, `delivery_lat`, `delivery_lng` and
   `delivery_confirmed_at`. The dashboard map reads them back from `/api/me` when it
@@ -414,17 +863,39 @@ How the pieces connect:
 
 ## Design language
 
-The site is deliberately dark and technical:
+Both dashboards wear the new palette and type, drawn from a swatch sheet and a
+serif specimen the project owner supplied: they are the first pages rolled over,
+and the landing and onboarding pages still carry the earlier dark-and-technical
+treatment until the same pass reaches them.
+
+The dashboards are dark, quiet and editorial rather than technical:
+
+- One green ramp, six steps deep: page `#051F20`, frame `#0B2B26`, raised
+  `#163832`, line `#235347`, sage `#8EB69B`, mint `#DAF1DE`. The mint is the
+  accent — actions, the one lit rail tab, and the one light surface a screen is
+  allowed — while the sage carries every secondary label, so nothing shouts twice.
+- Tailwind tokens are declared inline in each page's `tailwind.config`, and the ramp
+  is also re-declared over Tailwind's own neutral scale. The pieces drawn at runtime
+  — a feed card, a status chip, the goods menu — are written with `neutral-*`, so
+  re-hueing the page happens in one place instead of in every string.
+- Type carries the hierarchy: a high-contrast display serif for names and headings
+  and Inter for the body, the labels and the data. Crake is a commercial webfont, so
+  the display stack asks for it first and falls back to Bodoni Moda, a free serif of
+  the same family — a licensed copy dropped in beside the pages takes over with no
+  further edit. No monospace micro-labels, no uppercase headline blocks.
+- Notched corners are gone. One canvas holds the page, everything inside it inherits
+  that radius minus the gutter so the corners stay concentric, and a panel's only
+  hover gesture is a two-pixel lift by one rung of the ramp.
+- Layouts use a split panel: a branded left half and a single-column form on
+  the right.
+
+The landing and onboarding pages are still deliberately dark and technical:
 
 - Near-black background (`#0c0c0c`), raised card surfaces (`#141414`) and a
   single safety-orange accent (`#ff4500`) used for actions and labels.
-- Tailwind tokens are declared inline in each page's `tailwind.config`, so all
-  three pages share one palette.
 - Notched cards (`clip-path` corner cuts), oversized black-weight headings in
   uppercase, and monospace micro-labels such as `// 01. SELECT FIRM
   CLASSIFICATION` carry the operator-console feel.
-- Layouts use a split panel: a branded left half and a single-column form on
-  the right.
 
 ## Status
 
@@ -437,19 +908,23 @@ is needed twice; flip `RESQ_PERSIST=on` for the real thing.
 What it deliberately lacks: email verification, password reset, rate limiting and
 account recovery. The accounts' database is a local file, so taking this live would
 mean moving to a managed database and giving the auth a real review. The matching
-pipeline is real on the backend now — `/api/matches` and `/api/orders` — but no page
-calls it yet, so what the marketing page shows remains illustrative, and the donor's
+pipeline is real on the backend now — `/api/matches` and `/api/orders` — and the
+recipient's dashboard reads its own deliveries from the second of those and draws the
+route between their two pins; nothing calls `/api/matches` from a page yet, so what the
+marketing page shows remains illustrative, and the donor's
 impact figures are still placeholders rather than a count of the deliveries that ran.
 
 The surplus board is further along than the rest: its table is a real Postgres one in
-a managed project, and it is the part of the site two visitors can already see at the
-same time. It writes with the anonymous role and trusts the name on the profile, so
+a managed project, it is the part of the site two visitors can already see at the same
+time, and both roles read the same list of published posts rather than one seeing the
+board and the other seeing only their own rows. It writes with the anonymous role and trusts the name on the profile, so
 anything that had to belong to a particular account would need those writes moved
 behind the backend first.
 
 The dashboards are part wired, part skeleton: the rails name their sections and switch
-between them, four parts are wired end to end — the delivery card, the donor's *Log
-surplus* panel, and the two screens that read the surplus board — and the boxes, metric
+between them, five parts are wired end to end — the delivery card, the recipient's
+route card, the donor's *Log
+surplus* compose box on its feed screen, and the three screens that read the surplus board — and the boxes, metric
 row and queue rail around them still hold no data of their own. The map needs no key,
 so it works as soon as the server is running: pick a spot, confirm it, and the address
 and its coordinates are stored on the account and waiting there the next time the map

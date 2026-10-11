@@ -1,0 +1,4 @@
+# The command a host runs to start this API. Render is configured by render.yaml instead,
+# which carries the same line, but a Procfile is also read by Heroku, Railway and Fly, and
+# it is the shortest statement of how the deployed process is started.
+web: gunicorn -c gunicorn_config.py wsgi:application

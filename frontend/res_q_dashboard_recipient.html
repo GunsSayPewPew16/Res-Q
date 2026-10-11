@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Res-Q | Recipient Dashboard</title>
+    <!-- Crake is a commercial high-contrast serif by Narrow Type, so its webfonts are not
+         in this repository. The display stack asks for Crake first — an installed copy
+         wins, and a licensed woff2 dropped in beside these pages takes over with no other
+         edit — and falls back to Bodoni Moda, a free high-contrast serif of the same
+         family, so the screens can be judged before that licence is settled. Inter
+         carries the body, the labels and the data. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <!-- Where the API is (see resq_api.js). Loaded first so every page builds its API URLs the same way. -->
+    <script src="resq_api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -11,95 +22,360 @@
             theme: {
                 extend: {
                     colors: {
-                        background: '#0c0c0c',
-                        cardbg: '#141414',
-                        cardhover: '#1c1c1c',
-                        accent: '#ff4500',
-                        cream: '#f4f4f0',
-                        muted: '#888888'
+                        background: '#051F20',
+                        cardbg: '#0B2B26',
+                        cardhover: '#163832',
+                        accent: '#DAF1DE',
+                        cream: '#DAF1DE',
+                        muted: '#8EB69B',
+
+                        /* The green ramp, named the way the palette names it: page, frame,
+                           raised, line, sage, mint. The markup mostly carries the raw values,
+                           so these exist for anything that would rather read by name.
+
+                           Under them, Tailwind's own neutral scale is redefined as the same
+                           ramp. The pieces drawn at runtime — a feed card, a status chip, the
+                           category menu — are written with neutral-*, and redefining the scale
+                           re-hues all of them in one place instead of in every string, while
+                           every /opacity and divide-* rule keeps working. 600 is the one tone
+                           not in the six swatches: it is the midpoint between line and sage,
+                           used only where something has to sit visibly above the surface. */
+                        ink: '#051F20',
+                        canvas: '#0B2B26',
+                        raised: '#163832',
+                        line: '#235347',
+                        sage: '#8EB69B',
+                        mint: '#DAF1DE',
+                        neutral: {
+                            100: '#DAF1DE',
+                            200: '#DAF1DE',
+                            300: '#DAF1DE',
+                            400: '#8EB69B',
+                            500: '#8EB69B',
+                            600: '#6E9A80',
+                            700: '#235347',
+                            800: '#235347',
+                            900: '#051F20',
+                            950: '#051F20'
+                        }
                     },
                     fontFamily: {
                         sans: ['Inter', 'system-ui', 'sans-serif'],
+                        display: ['Crake', 'Bodoni Moda', 'ui-serif', 'Didot', 'Georgia', 'serif']
                     }
                 }
             }
         }
     </script>
     <style>
-        /* Custom notched corners to mimic the Apptronik reference style */
-        .notched-card {
-            background-color: #141414;
-            border-radius: 1.5rem;
+        /* THE DASHBOARD'S SHAPE LANGUAGE.
+
+           The old notched clip-paths are gone. A corner on this screen is a radius, and
+           every radius is derived from one number so the blocks stay concentric with the
+           canvas they sit in:
+
+           1. one canvas. The page is an inset rounded frame rather than a full-bleed
+              column, with a gutter between the frame and everything inside it.
+           2. nested radii. A block sitting in that gutter inherits the canvas radius minus
+              the gutter, so its corner stays concentric with the canvas corner instead of
+              crossing it. A block inside that block steps down again.
+           3. one hover gesture. A panel lifts two pixels and warms by one rung of the ramp —
+              never a colour inversion, which is what the old orange cards did. */
+
+        :root {
+            --canvas-r: clamp(1.5rem, 3.5vw, 2.75rem);
+            /* The gutter steps with the padding on <body>, so the nesting stays concentric
+               at every width: 0.75rem against the page's p-3, 1.25rem against its md:p-5. */
+            --gutter: 0.75rem;
+            --step: 0.75rem;
+        }
+        @media (min-width: 768px) {
+            :root { --gutter: 1.25rem; --step: 0.9rem; }
+        }
+
+        .organic-canvas { border-radius: var(--canvas-r); }
+        /* The max() floors matter at narrow widths: the canvas radius clamps down to 1.5rem
+           while the gutter only drops to 0.75rem, and without a floor the subtraction would
+           flatten a nested block to a near-square corner. */
+        .organic-block { border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter))); }
+        .organic-inner { border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step))); }
+        .organic-chip { border-radius: 9999px; }
+
+        /* A panel: an ink block with a line around it, on the canvas. */
+        .panel {
+            background-color: #051F20;
+            border: 1px solid #235347;
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+            transition: background-color 0.4s ease, border-color 0.4s ease, transform 0.4s ease;
+        }
+        /* A block that sits one rung above the canvas rather than a panel on it. */
+        .panel-raised {
+            background-color: #163832;
+            border: 1px solid #235347;
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+        }
+        .panel-lift:hover {
+            background-color: #163832;
+            border-color: #8EB69B;
+            transform: translateY(-2px);
+        }
+
+        /* The light surface. One per screen, at most: it is the strongest thing on the page
+           and stops reading as an accent the moment there are two of them competing. */
+        .surface-light {
+            background-color: #DAF1DE;
+            color: #051F20;
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+        }
+
+        /* The rail's tabs. The item being read is the one lit shape in the rail; every
+           other one is its label and nothing else, which is what keeps a five-row rail
+           from reading as five buttons. */
+        .nav-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+            padding: 0.5rem 1.125rem;
+            font-size: 0.875rem;
+            color: #8EB69B;
+            border-radius: 9999px;
+            transition: color 0.3s ease, background-color 0.3s ease;
+        }
+        .nav-item:hover { color: #DAF1DE; }
+        .nav-item.is-on {
+            background-color: #DAF1DE;
+            color: #051F20;
+        }
+
+        /* A feed card: the board's own block, held still rather than lifting on hover — a
+           board of cards should not move under the cursor — with a claimed row settling a
+           rung down instead. */
+        .feed-card {
+            background-color: #0B2B26;
+            border: 1px solid #235347;
+            border-radius: max(0.9rem, calc(var(--canvas-r) - var(--gutter) - 0.4rem));
             position: relative;
-            transition: all 0.3s ease;
-            clip-path: polygon(
-                0 0, 
-                calc(100% - 35px) 0, 
-                100% 35px, 
-                100% 100%, 
-                0 100%
-            );
+            transition: border-color 0.3s ease, background-color 0.3s ease;
         }
-        .notched-card:hover {
-            background-color: #1c1c1c;
-            transform: translateY(-4px);
+        .feed-card:hover {
+            background-color: #163832;
+            border-color: #8EB69B;
+        }
+        .feed-card.is-claimed {
+            background-color: #051F20;
+            border-color: #163832;
         }
 
-        /* Inverse notch variant */
-        .notched-card-alt {
-            background-color: #141414;
-            border-radius: 1.5rem;
+        /* The feed's avatar: a circle holding the head-and-shoulders silhouette the
+           reference draws, cropped by the circle the way it is there. */
+        .feed-avatar {
+            display: inline-flex;
+            align-items: flex-end;
+            justify-content: center;
+            flex: none;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 9999px;
+            border: 1px solid #235347;
+            overflow: hidden;
+        }
+        .feed-avatar svg {
+            width: 2rem;
+            height: 2rem;
+            display: block;
+        }
+
+        /* The board's tab bar: the view being read in mint with the rule under it, the
+           others sage until they are pointed at. */
+        .feed-tab {
             position: relative;
-            transition: all 0.3s ease;
-            clip-path: polygon(
-                35px 0, 
-                100% 0, 
-                100% 100%, 
-                0 100%, 
-                0 35px
-            );
+            padding-bottom: 10px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #8EB69B;
+            transition: color 0.3s ease;
         }
-        .notched-card-alt:hover {
-            background-color: #1c1c1c;
-            transform: translateY(-4px);
-        }
-
-        /* Orange accent CTA card with notch */
-        .notched-orange {
-            background-color: #ff4500;
-            border-radius: 1.5rem;
-            clip-path: polygon(
-                0 0, 
-                100% 0, 
-                100% calc(100% - 35px), 
-                calc(100% - 35px) 100%, 
-                0 100%
-            );
+        .feed-tab:hover { color: #DAF1DE; }
+        .feed-tab.is-active { color: #DAF1DE; }
+        .feed-tab.is-active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 2px;
+            border-radius: 2px;
+            background-color: #DAF1DE;
         }
 
-        /* The delivery card: the sibling silhouette at rest, and the landing page's
-           hero-card treatment while hovered or keyboard-focused — filled with the accent
-           orange and everything inside turned black. Declared after the notch rules above
-           so it wins the tie on specificity, the same way the hero cards do. */
-        .deliver-card {
-            background-color: #141414;
+        /* The one action a post can carry: a rung above the card at rest, filled with the
+           accent while hovered or keyboard-focused, the text turning to ink with it. */
+        .claim-btn {
+            background-color: #163832;
+            border: 1px solid #235347;
+            color: #DAF1DE;
         }
+        .claim-btn:hover,
+        .claim-btn:focus-visible {
+            background-color: #DAF1DE;
+            border-color: #DAF1DE;
+            color: #051F20;
+        }
+        .claim-btn:hover *,
+        .claim-btn:focus-visible * {
+            color: #051F20;
+        }
+
+        /* The delivery card: a panel at rest, and the accent-filled treatment while hovered
+           or keyboard-focused. */
+        .deliver-card { background-color: #051F20; }
         .deliver-card:hover,
         .deliver-card:focus-visible {
-            background-color: #ff4500;
+            background-color: #DAF1DE;
+            border-color: #DAF1DE;
         }
         .deliver-card:hover *,
         .deliver-card:focus-visible * {
-            color: #000000;
+            color: #051F20;
         }
         .deliver-card .deliver-chip {
-            background-color: rgba(255, 255, 255, 0.06);
-            border: 1px solid #262626;
+            background-color: #163832;
+            border: 1px solid #235347;
         }
         .deliver-card:hover .deliver-chip,
         .deliver-card:focus-visible .deliver-chip {
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: rgba(5, 31, 32, 0.14);
             border-color: transparent;
+        }
+
+        /* Decoration, kept as geometry: the brand's spark. */
+        .spark {
+            display: inline-block;
+            width: 0.9rem;
+            height: 0.9rem;
+            background: currentColor;
+            clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
+        }
+
+        /* THE DELIVERY MAP, dressed in the palette.
+
+           The colours live in the style itself (MAP_STYLE below) rather than in a filter over
+           somebody's tiles: vector tiles are painted per feature, so the land is the ramp's
+           sage, the roads are one uniform white thread whatever class the street is, and the
+           names sit on top in ink with a pale halo — the same relationship the reference map
+           has, and the reason the labels stay readable where a white road runs under them. */
+
+        .maplibregl-map {
+            font-family: inherit;
+        }
+
+        /* The map sizes itself from its container's box, and that container is stretched over
+           the overlay's map area by `absolute inset-0`. MapLibre's own stylesheet arrives
+           after this one and sets `.maplibregl-map { position: relative }`, which would drop
+           the stretch and collapse the map to nothing — an id rule keeps it winning. The
+           route card's map is pinned to its card the same way, for the same reason. */
+        #deliverMap,
+        #routeMap {
+            position: absolute;
+            inset: 0;
+        }
+
+        /* MapLibre's own controls, re-cut: the zoom buttons are ink panels with mint glyphs
+           and the credit line sits on ink, rather than the default white boxes. The rules are
+           scoped to the map's id for the same reason #deliverMap is: MapLibre's stylesheet
+           lands after this one, and only an id keeps these winning over it. */
+        #deliverMap .maplibregl-ctrl-group {
+            background-color: #051F20;
+            border: 1px solid #235347;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 6px 16px rgba(5, 31, 32, 0.35);
+        }
+        #deliverMap .maplibregl-ctrl-group button {
+            background-color: #051F20;
+            color: #DAF1DE;
+            border-bottom: 1px solid #235347;
+            width: 34px;
+            height: 34px;
+        }
+        #deliverMap .maplibregl-ctrl-group button:hover,
+        #deliverMap .maplibregl-ctrl-group button:focus {
+            background-color: #163832;
+            color: #DAF1DE;
+        }
+        #deliverMap .maplibregl-ctrl-group button + button {
+            border-top: 0;
+            border-bottom: 0;
+        }
+        /* The glyph is the button's own background image, so a mint glyph means swapping
+           that image for a mint one — not filtering the dark default, which inverts whatever
+           frame the compositor hands it. The + and − are drawn here to keep the whole control
+           inside the palette. */
+        #deliverMap .maplibregl-ctrl-icon {
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath stroke='%23DAF1DE' stroke-width='2' stroke-linecap='round' d='M14.5 8.5v12M8.5 14.5h12'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 29px 29px;
+        }
+        #deliverMap .maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath stroke='%23DAF1DE' stroke-width='2' stroke-linecap='round' d='M8.5 14.5h12'/%3E%3C/svg%3E");
+        }
+        .maplibregl-ctrl-attrib {
+            background: rgba(5, 31, 32, 0.88) !important;
+            color: #8EB69B !important;
+            font-size: 10px;
+            padding: 1px 0.5rem;
+            border-top-left-radius: 0.5rem;
+        }
+        .maplibregl-ctrl-attrib a { color: #DAF1DE; }
+
+        /* The delivery pin: an ink teardrop with a mint ring and core, drawn here rather than
+           fetched, so it is the palette's own. It is handed to MapLibre as a marker element,
+           and MapLibre's own marker defaults are turned off — the teardrop is the whole mark.
+           The box is taller than the pin so the teardrop's tip — six pixels past the square it
+           is rotated in — lands on the bottom edge the marker anchors to. */
+        .resq-pin-icon {
+            background: transparent;
+            border: 0;
+            width: 30px;
+            height: 36px;
+        }
+        .resq-pin {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            background-color: #051F20;
+            border: 3px solid #DAF1DE;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
+        }
+        .resq-pin span {
+            width: 7px;
+            height: 7px;
+            border-radius: 9999px;
+            background-color: #DAF1DE;
+        }
+
+        /* The drop-off end of a route: an open ring rather than a second teardrop, so the
+           two ends of one delivery are told apart at a glance — the tip is where the food
+           is picked up, the ring is where it is going. */
+        .resq-ring-icon {
+            background: transparent;
+            border: 0;
+            width: 26px;
+            height: 26px;
+        }
+        .resq-ring {
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            background-color: rgba(218, 241, 222, 0.20);
+            border: 3px solid #DAF1DE;
+            box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
         }
 
         /* Custom scrollbar for the long rails */
@@ -108,263 +384,689 @@
             height: 5px;
         }
         ::-webkit-scrollbar-track {
-            background: #0c0c0c;
+            background: #051F20;
         }
         ::-webkit-scrollbar-thumb {
-            background: #262626;
+            background: #235347;
             border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #ff4500;
+            background: #8EB69B;
         }
     </style>
     <!-- The shared Supabase client and the surplus_posts calls both dashboards make.
          It only defines window.ResQDB; the library itself is fetched on first use. -->
     <script src="resq_supabase.js"></script>
 </head>
-<body class="bg-[#0c0c0c] text-[#f4f4f0] font-sans antialiased selection:bg-[#ff4500] selection:text-white min-h-screen flex flex-col">
+<body class="bg-[#051F20] text-[#DAF1DE] font-sans antialiased selection:bg-[#DAF1DE] selection:text-[#051F20] min-h-screen p-3 md:p-5">
 
-    <!-- RECIPIENT DASHBOARD: the layout skeleton. Every box is kept as a box; the only
-         copy is the navigation rail's own labels, so this is the arrangement alone.
-         Dashboard is the default screen and the rest of the rail swaps it for a
-         blank section screen until those sections have content. -->
+    <!-- RECIPIENT DASHBOARD. One inset canvas holds the top rail and the working area, the
+         same arrangement the donor dashboard uses: the rail runs across the top of it, so
+         every screen is full width and the sections are reached by tabs rather than by a
+         column that eats a sixth of the page. The only copy the layout itself carries is the
+         rail's labels and the section headings; the panels below are placeholders waiting for
+         their own content. -->
 
-    <header class="sticky top-0 z-50 bg-[#0c0c0c]/90 backdrop-blur-md border-b border-neutral-800">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <a href="index.html" class="brand-home flex items-center space-x-3">
-                <span class="text-xs font-mono text-neutral-500">SYS.01 //</span>
-                <span class="text-2xl font-black tracking-tighter uppercase">Res-<span class="text-[#ff4500]">Q</span></span>
-                <span class="hidden xl:inline text-xs font-mono text-neutral-400 ml-2">// RECIPIENT INTAKE &amp; DELIVERY</span>
-            </a>
-            <div class="flex items-center space-x-3">
-                <!-- The bell opens a small notification panel under itself instead of a
-                     browser alert. Nothing feeds the list yet, so it is left empty on
-                     purpose: the panel carries its own frame and nothing else. -->
-                <div id="notifyWrap" class="relative">
-                    <button type="button" id="notifyButton" onclick="toggleHeaderPanel(this)" aria-label="System notifications" aria-expanded="false" aria-controls="notifyPanel" class="p-2.5 rounded-xl bg-[#141414] border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-all relative">
-                        <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ff4500]"></span>
-                        <span aria-hidden="true">🔔</span>
-                    </button>
+    <div class="organic-canvas bg-[#0B2B26] border border-[#235347] min-h-[calc(100vh-1.5rem)] md:min-h-[calc(100vh-2.5rem)] flex flex-col">
 
-                    <!-- Hangs off the bell's right edge and opens towards the left, the way
-                         the bell's own panel does on YouTube. -->
-                    <div id="notifyPanel" data-header-panel role="dialog" aria-label="Notifications" class="hidden absolute right-0 top-full mt-6 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
-                        <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
-                            <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Notifications</span>
-                            <span class="font-mono text-[10px] text-neutral-600">00</span>
-                        </div>
-                        <div class="p-4">
-                            <div class="h-32 rounded-xl bg-neutral-800/50 border border-neutral-800 flex items-center justify-center">
-                                <span class="font-mono text-[10px] uppercase tracking-widest text-neutral-600">No notifications yet</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="accountWrap" class="relative">
-                    <button type="button" id="accountButton" onclick="toggleHeaderPanel(this)" aria-haspopup="true" aria-expanded="false" aria-controls="accountPanel" class="flex items-center space-x-3 bg-[#141414] border border-neutral-800 rounded-full px-4 py-1.5 cursor-pointer hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700">
-                        <span id="userInitials" class="w-7 h-7 rounded-full bg-[#ff4500] flex items-center justify-center font-bold text-xs text-black font-mono">R</span>
-                        <span id="userName" class="text-xs font-mono text-neutral-300 hidden md:inline">SIGNED IN</span>
-                    </button>
+        <!-- TOP RAIL: the brand, the section tabs, and the account — one row, with the tabs
+             wrapping onto their own line on a narrow screen rather than scrolling out of
+             reach. The tabs name this role's own work — the deliveries coming in and the
+             status they have reached — so a recipient's rail never borrows the donor's
+             sections. Every tab carries the section it opens in data-view, so the mapping from
+             rail to screen lives in one table in the script below. -->
+        <header class="sticky top-0 z-50 bg-[#0B2B26]/95 backdrop-blur-md border-b border-[#235347]"
+                style="border-top-left-radius: var(--canvas-r); border-top-right-radius: var(--canvas-r);">
+            <div class="w-full px-4 md:px-6 py-3 flex flex-wrap items-center gap-3">
 
-                    <!-- The account pill opens the account menu: the one action an account
-                         really has, signing out, plus a temporary switch to the other
-                         dashboard so both roles can be previewed from one sign-in. -->
-                    <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-6 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-neutral-800 bg-[#141414] shadow-2xl shadow-black/60">
-                        <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-neutral-800">
-                            <span class="text-[10px] font-mono uppercase tracking-widest text-neutral-500">// Account</span>
-                            <span class="font-mono text-[10px] text-neutral-600">02</span>
-                        </div>
-                        <div class="p-4 space-y-3">
-                            <button type="button" onclick="logOut()" class="w-full px-4 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all">Log out</button>
-                            <!-- TEMPORARY: a preview convenience, not part of the product.
-                                 Demo mode only, and the backend says so if asked otherwise. -->
-                            <button type="button" onclick="switchDashboard()" class="w-full px-4 py-3 rounded-xl border border-neutral-800 text-neutral-400 text-xs font-black uppercase tracking-widest hover:border-neutral-600 hover:text-neutral-200 transition-all">Switch to donor dashboard <span class="text-neutral-600">(temp)</span></button>
-                            <span id="accountNote" class="block font-mono text-[10px] text-neutral-600"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                <a href="index.html" class="brand-home organic-chip flex items-center gap-2.5 px-3.5 py-2 bg-[#051F20] border border-[#235347] hover:border-[#8EB69B] transition-colors">
+                    <span class="spark text-[#DAF1DE]" aria-hidden="true"></span>
+                    <span class="font-display text-xl leading-none">Res-Q</span>
+                    <span class="hidden xl:inline text-[11px] text-[#8EB69B] ml-0.5">Recipient</span>
+                </a>
 
-        </div>
-    </header>
-
-    <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-10">
-
-        <!-- Dashboard grid: slim navigation rail on the left, working area on the right -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-            <!-- Left rail: the four section rows carry their labels, then the finished
-                 orders slot; the pipeline status stays a bare pulse. Every item but
-                 Dashboard swaps the working area for that section's blank screen. -->
-            <aside class="lg:col-span-2 bg-[#141414] border border-neutral-800 rounded-3xl p-5 flex flex-col justify-between lg:min-h-[520px]">
-                <nav class="space-y-2" aria-label="Dashboard sections">
-                    <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-[#ff4500] border border-[#ff4500] text-[11px] font-mono uppercase text-black transition-all">Dashboard</a>
-                    <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Feed</a>
-                    <a href="#" data-view="surplus-analyzer" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Surplus Analyzer</a>
-                    <a href="#" data-view="current-orders" onclick="openSection(this); return false;" class="nav-item flex items-center h-11 px-3 rounded-xl bg-neutral-800/30 border border-neutral-800/60 hover:border-neutral-700 text-[11px] font-mono uppercase text-neutral-400 transition-all">Current Orders</a>
+                <nav aria-label="Dashboard sections" class="order-last lg:order-none w-full lg:w-auto flex items-center gap-1 p-1 bg-[#051F20] border border-[#235347] organic-chip overflow-x-auto">
+                    <a href="#" data-view="dashboard" onclick="openSection(this); return false;" class="nav-item is-on">Dashboard</a>
+                    <a href="#" data-view="feed" onclick="openSection(this); return false;" class="nav-item">Feed</a>
+                    <a href="#" data-view="incoming-deliveries" onclick="openSection(this); return false;" class="nav-item">Incoming Deliveries</a>
+                    <a href="#" data-view="delivery-status" onclick="openSection(this); return false;" class="nav-item">Delivery Status</a>
+                    <button type="button" id="receivedDeliveries" data-view="received-deliveries" onclick="openSection(this)" class="nav-item">Received Deliveries</button>
                 </nav>
 
-                <div class="pt-5 mt-5 border-t border-neutral-800 space-y-3">
-                    <button type="button" id="finishedOrders" data-view="finished-orders" onclick="openSection(this)" class="w-full text-left p-3 flex items-center bg-neutral-800/50 rounded-2xl border border-neutral-800 hover:border-neutral-700 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 min-h-[58px]">
-                        <span class="text-[11px] font-mono uppercase text-neutral-400">Finished Orders</span>
-                    </button>
-                    <div class="p-3 bg-neutral-800/50 rounded-2xl border border-neutral-800 flex items-center min-h-[58px]">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <div class="ml-auto flex items-center gap-2">
+                    <!-- The bell opens a small notification panel under itself instead of a
+                         browser alert. Nothing feeds the list yet, so it is left empty on
+                         purpose: the panel carries its own frame and nothing else. -->
+                    <div id="notifyWrap" class="relative">
+                        <button type="button" id="notifyButton" onclick="toggleHeaderPanel(this)" aria-label="System notifications" aria-expanded="false" aria-controls="notifyPanel" class="w-11 h-11 organic-chip bg-[#051F20] border border-[#235347] text-[#8EB69B] hover:text-[#DAF1DE] hover:border-[#8EB69B] transition-all relative flex items-center justify-center">
+                            <span class="absolute top-3 right-3 w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
+                            <span aria-hidden="true">🔔</span>
+                        </button>
+
+                        <!-- Hangs off the bell's right edge and opens towards the left, the way
+                             the bell's own panel does on YouTube. -->
+                        <div id="notifyPanel" data-header-panel role="dialog" aria-label="Notifications" class="hidden absolute right-0 top-full mt-4 w-80 max-w-[calc(100vw-2rem)] overflow-hidden organic-inner border border-[#235347] bg-[#051F20] shadow-2xl shadow-black/60">
+                            <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-[#235347]">
+                                <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">Notifications</span>
+                                <span class="text-[10px] text-[#8EB69B]">00</span>
+                            </div>
+                            <div class="p-4">
+                                <div class="h-32 organic-inner bg-[#0B2B26] border border-[#235347] flex items-center justify-center">
+                                    <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">No notifications yet</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="accountWrap" class="relative">
+                        <button type="button" id="accountButton" onclick="toggleHeaderPanel(this)" aria-haspopup="true" aria-expanded="false" aria-controls="accountPanel" class="flex items-center gap-3 bg-[#051F20] border border-[#235347] organic-chip pl-1.5 pr-4 py-1.5 cursor-pointer hover:border-[#8EB69B] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8EB69B]">
+                            <span id="userInitials" class="w-7 h-7 organic-chip bg-[#DAF1DE] flex items-center justify-center font-medium text-xs text-[#051F20]">R</span>
+                            <span id="userName" class="text-xs text-[#8EB69B] hidden md:inline max-w-[12rem] truncate">SIGNED IN</span>
+                        </button>
+
+                        <!-- The account pill opens the account menu: the one action an account
+                             really has, signing out, plus a temporary switch to the other
+                             dashboard so both roles can be previewed from one sign-in. -->
+                        <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-4 w-72 max-w-[calc(100vw-2rem)] overflow-hidden organic-inner border border-[#235347] bg-[#051F20] shadow-2xl shadow-black/60">
+                            <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-[#235347]">
+                                <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">Account</span>
+                                <span class="text-[10px] text-[#8EB69B]">02</span>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <button type="button" onclick="logOut()" class="w-full px-4 py-3 organic-chip bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all">Log out</button>
+                                <!-- TEMPORARY: a preview convenience, not part of the product.
+                                     Demo mode only, and the backend says so if asked otherwise. -->
+                                <button type="button" onclick="switchDashboard()" class="w-full px-4 py-3 organic-chip border border-[#235347] text-[#8EB69B] text-sm hover:border-[#8EB69B] hover:text-[#DAF1DE] transition-all">Switch to donor dashboard <span class="text-[#8EB69B]/60">(temp)</span></button>
+                                <span id="accountNote" class="block text-[10px] text-[#8EB69B]/70"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </aside>
 
-            <!-- Working area: the dashboard itself. Dashboard is the default rail item,
-                 so this is what shows on load. -->
-            <div id="viewDashboard" class="lg:col-span-10 space-y-6">
+            </div>
+        </header>
 
-                <!-- Metric row -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="notched-card p-6 flex flex-col justify-between h-40">
-                        <span class="self-start block h-6 w-20 rounded-full bg-orange-950/50 border border-orange-900/50"></span>
-                        <div class="mt-4 flex-1 rounded-xl bg-neutral-800/50"></div>
+        <main class="flex-1 w-full max-w-[1500px] mx-auto px-4 md:px-8 py-6 md:py-8">
+
+            <!-- Dashboard: the default tab, and what the rail shows on load. -->
+            <div id="viewDashboard" class="space-y-6 md:space-y-8">
+
+                <!-- Title row: the screen's own name, and the way into the board. -->
+                <div class="flex flex-wrap items-end justify-between gap-4">
+                    <div class="space-y-2">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Recipient workspace</span>
+                        <h1 class="font-display text-4xl md:text-5xl leading-none">Dashboard</h1>
+                    </div>
+                    <button type="button" onclick="openNavSection('feed')" class="organic-chip inline-flex items-center gap-2 px-5 py-3 bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-colors">
+                        <span aria-hidden="true" class="text-base leading-none">+</span> Browse the board
+                    </button>
+                </div>
+
+                <!-- The recipient's own figures: what has been claimed, what is on its way and
+                     what has arrived. Nothing reads them yet, so the values are held open as
+                     placeholder bars rather than invented numbers. -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-stretch">
+
+                    <div class="lg:col-span-8 panel p-6 md:p-7 flex flex-col justify-between gap-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                            <div class="space-y-3">
+                                <span class="block text-xs text-[#8EB69B]">Orders claimed</span>
+                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                            </div>
+                            <div class="space-y-3">
+                                <span class="block text-xs text-[#8EB69B]">Deliveries in progress</span>
+                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                            </div>
+                            <div class="space-y-3">
+                                <span class="block text-xs text-[#8EB69B]">Deliveries completed</span>
+                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                            </div>
+                        </div>
+
+                        <!-- The last weeks read as a scale rather than as figures: one segment per
+                             week, the two most recent settled in the accent. -->
+                        <div class="flex items-center gap-2">
+                            <span class="h-1 flex-1 organic-chip bg-[#235347]"></span>
+                            <span class="h-1 flex-1 organic-chip bg-[#235347]"></span>
+                            <span class="h-1 flex-1 organic-chip bg-[#8EB69B]"></span>
+                            <span class="h-1 flex-1 organic-chip bg-[#DAF1DE]"></span>
+                        </div>
                     </div>
 
-                    <div class="notched-card p-6 flex flex-col justify-between h-40">
-                        <span class="self-start block h-6 w-20 rounded-full bg-emerald-950/50 border border-emerald-900/50"></span>
-                        <div class="mt-4 flex-1 rounded-xl bg-neutral-800/50"></div>
-                    </div>
-
-                    <!-- The delivery card is the one part of the skeleton that acts: it
-                         opens the map overlay where the pin is placed and fine-tuned. It
-                         rests dark on the same notched silhouette as its two neighbours
-                         and fills with the accent orange while hovered, the way the
-                         landing page's capability cards do. -->
-                    <button type="button" id="deliverCard" onclick="openDeliveryPicker()" class="notched-card deliver-card p-6 flex flex-col items-start justify-between h-40 w-full text-left text-[#f4f4f0] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40">
-                        <span aria-hidden="true" class="deliver-chip w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-300">
+                    <!-- The delivery card is the one panel here that acts: it opens the map overlay
+                         where the pin is placed and fine-tuned. It rests as a panel and fills with
+                         the accent while hovered. -->
+                    <button type="button" id="deliverCard" onclick="openDeliveryPicker()" class="lg:col-span-4 panel deliver-card p-6 flex flex-col items-start justify-between gap-6 min-h-[200px] w-full text-left text-[#DAF1DE] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8EB69B]">
+                        <span aria-hidden="true" class="deliver-chip w-10 h-10 organic-chip flex items-center justify-center text-[#8EB69B] transition-colors duration-300">
                             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.686-7-11a7 7 0 1 1 14 0c0 5.314-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
                         </span>
-                        <span class="text-sm font-black uppercase tracking-widest leading-none">confirm delivery location</span>
+                        <span class="space-y-2">
+                            <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Delivery</span>
+                            <span class="block font-display text-2xl leading-tight">Confirm delivery location</span>
+                        </span>
                     </button>
+
                 </div>
 
-                <!-- Map + intake request box, then the queue rail -->
-                <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-
-                    <div class="xl:col-span-8 space-y-6">
-
-                        <!-- Routing map panel -->
-                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
-                            <div class="w-full h-72 rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
-                        </div>
-
-                        <!-- Quick intake request panel -->
-                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative">
-                            <div class="border-b border-neutral-800 pb-4 mb-6"></div>
-                            <div class="min-h-[240px] rounded-xl bg-neutral-800/50"></div>
-                        </div>
-
+                <!-- The filter row, then the one light surface on the screen. The three labels are
+                     the box's own filters — labels only for now, with no field behind them — and
+                     the box under them is the working board: what is still on its way, with the
+                     selected order's details sitting inside it as a dark inset. -->
+                <div class="space-y-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center gap-2 text-sm text-[#8EB69B] mr-1">Active filters
+                            <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 organic-chip border border-[#235347] text-[10px] leading-none">i</span>
+                        </span>
+                        <span class="organic-chip px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">All categories</span>
+                        <span class="organic-chip px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">All locations</span>
+                        <span class="organic-chip px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">Next 7 days</span>
                     </div>
 
-                    <!-- Queue rail -->
-                    <div class="xl:col-span-4 space-y-6">
+                    <div class="surface-light p-5 md:p-7">
+                        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
-                        <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6 relative overflow-hidden">
-                            <div class="flex items-center justify-between pb-4 mb-6 border-b border-neutral-800">
-                                <span class="w-3 h-3 rounded-full bg-[#ff4500]"></span>
+                            <div class="xl:col-span-7 flex flex-col">
+                                <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#051F20]/15">
+                                    <h2 class="font-display text-2xl leading-none">Pending orders <span class="text-[#051F20]/45 text-lg">(0)</span></h2>
+                                    <span id="pendingState" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-[#051F20]/8 border border-[#051F20]/15 text-[#051F20]/70">idle</span>
+                                </div>
+
+                                <!-- The board itself: one row per order still on its way, and nothing
+                                     at all until the first claim is made. -->
+                                <div id="pendingOrdersList" class="flex-1 pt-5 space-y-3">
+                                    <span class="block text-sm text-[#051F20]/55">No orders waiting.</span>
+                                </div>
+
+                                <div class="mt-5 organic-inner border border-dashed border-[#051F20]/30 flex items-center justify-center gap-2 py-5 text-sm text-[#051F20]/70">
+                                    <span aria-hidden="true" class="text-base leading-none">+</span> Add order
+                                </div>
                             </div>
 
-                            <div class="space-y-4">
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-emerald-900/50 bg-emerald-950/60"></span>
+                            <div class="xl:col-span-5 organic-inner bg-[#051F20] text-[#DAF1DE] p-5 md:p-6 border border-[#235347] flex flex-col gap-4">
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Order details</span>
+                                    <span class="organic-chip px-3 py-1 text-[10px] border border-[#235347] text-[#8EB69B]">none</span>
                                 </div>
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-orange-900/50 bg-orange-950/60"></span>
+
+                                <div class="grid grid-cols-3 gap-3">
+                                    <span class="panel-raised h-20"></span>
+                                    <span class="panel-raised h-20"></span>
+                                    <span class="panel-raised h-20"></span>
                                 </div>
-                                <div class="p-4 rounded-2xl bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 transition-all h-[72px]">
-                                    <span class="block h-4 w-20 rounded-full border border-neutral-700 bg-neutral-800"></span>
+
+                                <div class="mt-auto pt-4 border-t border-[#235347] space-y-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
+                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="h-1.5 w-24 organic-chip bg-[#235347]"></span>
+                                        <span class="h-3.5 w-24 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                    </div>
                                 </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Where the deliveries are going: the routing map, with the queue rail beside it. -->
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6">
+
+                    <div class="xl:col-span-8 panel p-5 md:p-6">
+                        <div class="w-full h-72 organic-inner border border-[#235347] bg-[#0B2B26]"></div>
+                    </div>
+
+                    <div class="xl:col-span-4 panel p-5 md:p-6 space-y-3">
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
+                    </div>
+
+                </div>
+
+                <!-- What has already arrived: one card per finished order, oldest first. Empty
+                     until a delivery lands, so the cards hold their shape and nothing else. -->
+                <section class="space-y-4">
+                    <div class="flex flex-wrap items-end justify-between gap-4">
+                        <h2 class="font-display text-2xl md:text-3xl leading-none">Latest completed orders</h2>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-[#8EB69B]">Sort by</span>
+                            <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">Newest <span aria-hidden="true" class="text-[8px]">&#9660;</span></span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                        <article class="panel panel-lift p-5 flex flex-col gap-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="h-3 w-28 organic-chip bg-[#235347]"></span>
+                                <span class="w-8 h-8 organic-chip panel-raised"></span>
+                            </div>
+                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
+                            <div class="pt-3 border-t border-[#235347] space-y-2">
+                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
+                                <span class="block h-2 w-2/3 organic-chip bg-[#163832]"></span>
+                            </div>
+                        </article>
+
+                        <article class="panel panel-lift p-5 flex flex-col gap-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="h-3 w-32 organic-chip bg-[#235347]"></span>
+                                <span class="w-8 h-8 organic-chip panel-raised"></span>
+                            </div>
+                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
+                            <div class="pt-3 border-t border-[#235347] space-y-2">
+                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
+                                <span class="block h-2 w-1/2 organic-chip bg-[#163832]"></span>
+                            </div>
+                        </article>
+
+                        <article class="panel panel-lift p-5 flex flex-col gap-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="h-3 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="w-8 h-8 organic-chip panel-raised"></span>
+                            </div>
+                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
+                            <div class="pt-3 border-t border-[#235347] space-y-2">
+                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
+                                <span class="block h-2 w-3/4 organic-chip bg-[#163832]"></span>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- Feed: the live board. Every surplus post in the shared Supabase table, newest
+                 first, each one carrying the single action a recipient has on it — claiming it.
+                 A post a donor logs anywhere arrives here over Supabase Realtime while this
+                 screen is open, and a claim made by another recipient flips the card in place
+                 rather than leaving a button that no longer works. -->
+            <div id="viewFeed" class="hidden">
+                <div class="panel p-5 md:p-7">
+                    <!-- The board's tab bar: the view being read in mint under its rule, the
+                         others sage. All three views are real filters over the rows already read
+                         — the whole board, just what is still there to take, or the posts tagged
+                         with the goods this account asked for in its goods profile, which is what
+                         *For You* means — so switching is instant and the chip at the right keeps
+                         counting the whole board either way. The board's name moves to a
+                         screen-reader heading under the tabs. -->
+                    <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-6 border-b border-[#235347]">
+                        <div class="flex items-center gap-6" role="tablist" aria-label="Board views">
+                            <span class="sr-only">Live surplus feed</span>
+                            <button type="button" id="feedTabAll" role="tab" aria-selected="true" onclick="setFeedTab('all')" class="feed-tab is-active">All posts</button>
+                            <button type="button" id="feedTabOpen" role="tab" aria-selected="false" onclick="setFeedTab('open')" class="feed-tab">Open</button>
+                            <button type="button" id="feedTabForYou" role="tab" aria-selected="false" onclick="setFeedTab('foryou')" class="feed-tab">For You</button>
+                        </div>
+                        <span id="feedState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] bg-[#051F20] organic-chip px-2.5 py-1">idle</span>
+                    </div>
+                    <div id="feedList" class="bg-[#0B2B26] organic-inner border border-[#235347] p-4 space-y-3 min-h-[240px]">
+                        <span class="block text-[11px] text-[#8EB69B]">Waiting for the first post.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delivery Status: the tracking console. Laid out as a skeleton first — every
+                 box the reference layout draws is here in the dashboard's own shape language,
+                 and the copy that will fill it arrives later. One dark console panel holds
+                 everything: the title row with its three figure blocks, a full-width action
+                 banner, the three reading cards (the week heatmap, the delivery history, the
+                 route map) and the recent-activity table under its filter chips. -->
+            <div id="viewDeliveryStatus" class="hidden">
+                <div class="panel p-4 md:p-7 space-y-5">
+
+                    <!-- Title row: the section's name and, beside it, its three figure blocks
+                         (icon chip, one display figure, two muted lines under it). -->
+                    <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_repeat(3,minmax(220px,auto))] gap-4 md:gap-6 items-stretch">
+                        <div class="persona min-w-0 flex flex-col justify-between">
+                            <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Recipient workspace</span>
+                            <h2 class="font-display text-3xl md:text-5xl leading-[1.05] mt-2">Delivery Status</h2>
+                        </div>
+
+                        <div class="organic-inner bg-[#163832] border border-[#235347] p-4 flex items-center gap-4">
+                            <div class="w-12 h-12 shrink-0 organic-inner bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="M12 12v9M12 12 3 7.5M12 12l9-4.5"/></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
+                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
                             </div>
                         </div>
 
-                        <div class="notched-card-alt p-6 border border-neutral-800">
+                        <div class="organic-inner bg-[#163832] border border-[#235347] p-4 flex items-center gap-4">
+                            <div class="w-12 h-12 shrink-0 organic-inner bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
+                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                            </div>
+                        </div>
+
+                        <div class="organic-inner bg-[#163832] border border-[#235347] p-4 flex items-center gap-4">
+                            <div class="w-12 h-12 shrink-0 organic-inner bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 16V7h11v9M13 10h4l3 3v3h-2"/><circle cx="6.5" cy="17.5" r="1.75"/><circle cx="16.5" cy="17.5" r="1.75"/><path d="M2 16h2.5M9.5 17.5h5.25"/></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="block h-2 w-16 organic-chip bg-[#235347]"></span>
+                                <span class="block font-display text-3xl leading-none text-[#DAF1DE] mt-1.5">0</span>
+                                <span class="block h-1.5 w-24 organic-chip bg-[#235347] mt-2"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action banner: one full-width strip — an icon, a name line, two
+                         inline chips, then two chips on the right; the rightmost is the
+                         one mint-filled action the strip offers. -->
+                    <div class="organic-inner bg-[#163832] border border-[#235347] px-4 py-4 flex flex-wrap items-center gap-3 md:gap-4">
+                        <div class="w-10 h-10 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                            <svg viewBox="0 0 24 24" class="w-4.5 h-4.5" style="width:18px;height:18px" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <span class="block h-2.5 w-28 organic-chip bg-[#235347]"></span>
+                            <span class="block h-1.5 w-20 organic-chip bg-[#163832] border border-[#235347] mt-1.5"></span>
+                        </div>
+                        <div class="hidden md:flex items-center gap-3 ml-auto">
+                            <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#8EB69B]"></span>
+                                <span class="h-2 w-24 organic-chip bg-[#235347]"></span>
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347] hover:border-[#8EB69B] transition-colors cursor-default">
+                                <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                                <span class="h-2 w-20 organic-chip bg-[#235347]"></span>
+                            </span>
+                            <span class="surface-light organic-chip inline-flex items-center gap-2 px-4 py-2 text-xs">
+                                <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                                <span class="h-2 w-16 organic-chip bg-[#051F20]/25"></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- The three reading cards: the week's arrivals heatmap, the delivery
+                         history stack, and the route map. -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 md:gap-6">
+
+                        <!-- Heatmap card -->
+                        <article class="panel-raised p-5 space-y-4 md:col-span-2 xl:col-span-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="block h-2.5 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="block h-2 w-14 organic-chip bg-[#235347]"></span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-x-8 gap-y-3">
+                                <div>
+                                    <span class="block h-1.5 w-16 organic-chip bg-[#235347] mb-1.5"></span>
+                                    <span class="flex items-center gap-2"> <span class="font-display text-2xl leading-none text-[#DAF1DE]">0</span><span class="w-3 h-3 rounded-full border border-[#8EB69B] inline-block"></span></span>
+                                </div>
+                                <div>
+                                    <span class="block h-1.5 w-16 organic-chip bg-[#235347] mb-1.5"></span>
+                                    <span class="flex items-center gap-2"> <span class="font-display text-2xl leading-none text-[#DAF1DE]">0</span><span class="w-3 h-3 rounded-full border border-[#8EB69B] inline-block"></span></span>
+                                </div>
+                                <div>
+                                    <span class="block h-1.5 w-16 organic-chip bg-[#235347] mb-1.5"></span>
+                                    <span class="flex items-center gap-2"> <span class="font-display text-2xl leading-none text-[#DAF1DE]">0</span><span class="w-3 h-3 rounded-full border border-[#8EB69B] inline-block"></span></span>
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-[#235347] flex items-center gap-3">
+                                <span class="flex gap-1"> 
+                                    <span class="h-1.5 w-6 organic-chip bg-[#235347]"></span><span class="h-1.5 w-6 organic-chip bg-[#235347]"></span><span class="h-1.5 w-6 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="block h-1.5 flex-1 max-w-[220px] organic-chip bg-[#163832] border border-[#235347]"></span>
+                            </div>
+                            <div id="dsHeatmap" class="space-y-[5px]" role="img" aria-label="Weekly arrivals heatmap placeholder"></div>
+                        </article>
+
+                        <!-- Delivery-history card -->
+                        <article class="panel-raised p-5 space-y-4 md:col-span-1 xl:col-span-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="block h-2.5 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="inline-flex gap-1"><span class="w-1 h-1 rounded-full bg-[#8EB69B]"></span><span class="w-1 h-1 rounded-full bg-[#8EB69B]"></span><span class="w-1 h-1 rounded-full bg-[#8EB69B]"></span></span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="block h-2 w-24 organic-chip bg-[#235347]"></span>
+                                <span class="surface-light organic-chip inline-flex items-center px-3 py-1 text-[10px] uppercase tracking-[0.15em]">
+                                    <span class="h-1.5 w-10 organic-chip bg-[#051F20]/25"></span>
+                                </span>
+                            </div>
                             <div class="space-y-3">
-                                <div class="bg-neutral-800/50 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
-                                <div class="bg-neutral-800/50 p-3 rounded-xl border border-neutral-800 h-[44px]"></div>
+                                <div class="flex items-start gap-3">
+                                    <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span>
+                                    </span>
+                                    <div class="min-w-0 space-y-1.5 pt-0.5">
+                                        <span class="block h-2 w-28 organic-chip bg-[#235347]"></span>
+                                        <span class="block h-1.5 w-20 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                    </div>
+                                    <div class="ml-auto flex flex-col items-center gap-1 pt-1">
+                                        <span class="w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
+                                        <span class="w-px h-3 bg-[#235347]"></span>
+                                        <span class="w-2 h-2 rounded-full border border-[#8EB69B]"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#8EB69B]"></span>
+                                    </span>
+                                    <div class="min-w-0 space-y-1.5 pt-0.5">
+                                        <span class="block h-2 w-24 organic-chip bg-[#235347]"></span>
+                                        <span class="block h-1.5 w-16 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                    </div>
+                                    <div class="ml-auto flex flex-col items-center gap-1 pt-1">
+                                        <span class="w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
+                                        <span class="w-px h-3 bg-[#235347]"></span>
+                                        <span class="w-2 h-2 rounded-full border border-[#8EB69B]"></span>
+                                    </div>
+                                </div>
+                                <div class="border-t border-dashed border-[#235347] pt-3 space-y-3">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                            <svg viewBox="0 0 24 24" style="width:13px;height:13px" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8 7.5 16 16.5"/><path d="M9 17.5H6a2 2 0 0 1-2-2v-3M15 6.5h3a2 2 0 0 1 2 2v3"/></svg>
+                                        </span>
+                                        <span class="block h-2 w-32 organic-chip bg-[#235347]"></span>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-7 h-7 shrink-0 organic-chip bg-[#051F20] border border-[#235347] flex items-center justify-center text-[#8EB69B]">
+                                            <svg viewBox="0 0 24 24" style="width:13px;height:13px" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>
+                                        </span>
+                                        <div class="min-w-0 space-y-1.5">
+                                            <span class="block h-2 w-40 organic-chip bg-[#235347]"></span>
+                                            <span class="block h-1.5 w-24 organic-chip bg-[#163832] border border-[#235347]"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+
+                        <!-- Route-map card: the delivery this account is waiting on, drawn on
+                             the same map the delivery card opens — the donor's pickup, this
+                             account's own drop-off, and the drive between them. Until a
+                             delivery is on the books the card keeps its drawn shape, which
+                             is a picture of a route rather than a reading of one. -->
+                        <article class="relative panel-raised p-0 overflow-hidden md:col-span-1 xl:col-span-3 min-h-[300px]">
+                            <svg id="routeRest" class="absolute inset-0 w-full h-full" viewBox="0 0 300 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <g stroke="#235347" stroke-opacity="0.55" fill="none">
+                                    <path d="M0 60 H300" /><path d="M0 130 H300" /><path d="M0 210 H300" /><path d="M0 280 H300" />
+                                    <path d="M55 0 V320" /><path d="M140 0 V320" /><path d="M235 0 V320" />
+                                </g>
+                                <path d="M50 260 C110 250 108 170 150 150 C 195 128 205 90 248 62" stroke="#235347" stroke-width="10" fill="none" stroke-linejoin="round" opacity="0.4"/>
+                                <path d="M50 260 C110 250 108 170 150 150 C 195 128 205 90 248 62" stroke="#DAF1DE" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+                                <circle cx="248" cy="62" r="7" fill="#DAF1DE"/>
+                                <circle cx="248" cy="62" r="12" fill="#DAF1DE" fill-opacity="0.18"/>
+                                <circle cx="50" cy="260" r="7" fill="#0B2B26" stroke="#DAF1DE" stroke-width="2"/>
+                                <circle cx="150" cy="150" r="3" fill="#DAF1DE"/>
+                            </svg>
+
+                            <!-- The live map mounts here, and only when there is a delivery to
+                                 draw: an empty map of nowhere is not a reading either. -->
+                            <div id="routeMap" class="absolute inset-0 hidden"></div>
+
+                            <!-- What the card is showing, in the corner the drawn card kept
+                                 for its one chip: the delivery's state, its distance and the
+                                 day it is booked for. -->
+                            <div class="absolute top-3 right-3 organic-chip inline-flex items-center gap-2 px-3 py-2 bg-[#051F20]/90 border border-[#235347]">
+                                <span id="routeChipDot" class="w-1.5 h-1.5 rounded-full bg-[#235347]"></span>
+                                <span id="routeChipText" class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">no delivery yet</span>
+                            </div>
+
+                            <!-- Both ends of the route, named, with the line under them saying
+                                 where the route itself came from. -->
+                            <div id="routeLegend" class="absolute bottom-4 left-4 right-4 hidden">
+                                <div class="organic-inner bg-[#051F20]/90 border border-[#235347] px-3 py-2 space-y-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE] shrink-0"></span>
+                                        <span id="routeFrom" class="text-[11px] leading-snug text-[#DAF1DE] truncate"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full border border-[#8EB69B] shrink-0"></span>
+                                        <span id="routeTo" class="text-[11px] leading-snug text-[#8EB69B] truncate"></span>
+                                    </div>
+                                    <!-- Where the route itself came from, inside the panel
+                                         rather than on the map: a pale line over pale
+                                         tiles is a line nobody can read. -->
+                                    <p id="routeNote" class="text-[10px] text-[#8EB69B]/80 leading-relaxed pt-2 border-t border-[#235347]"></p>
+                                </div>
+                            </div>
+
+                            <p id="routeRestNote" class="absolute bottom-4 left-4 right-4 text-[11px] text-[#8EB69B] leading-relaxed">No delivery on the books yet. The route appears here once a delivery is confirmed.</p>
+                        </article>
+                    </div>
+
+                    <!-- Recent activity: filter chips over the deliveries table. The active
+                         chip is the one mint shape here; every row is placeholder cells until
+                         real orders arrive. -->
+                    <div class="panel-raised p-5 space-y-4">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span>
+                                <span class="block h-2.5 w-28 organic-chip bg-[#235347]"></span>
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="surface-light organic-chip inline-flex items-center px-3 py-1 text-[10px] uppercase tracking-[0.15em]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#051F20]/25"></span>
+                                </span>
+                                <span class="organic-chip inline-flex items-center px-3 py-1 bg-[#051F20] border border-[#235347]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="organic-chip inline-flex items-center px-3 py-1 bg-[#051F20] border border-[#235347]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="organic-chip inline-flex items-center px-3 py-1 bg-[#051F20] border border-[#235347]">
+                                    <span class="h-1.5 w-8 organic-chip bg-[#235347]"></span>
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2 ml-auto">
+                                <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">
+                                    <span class="h-2 w-16 organic-chip bg-[#235347]"></span>
+                                </span>
+                                <span class="surface-light organic-chip inline-flex items-center gap-2 px-3.5 py-2 text-xs">
+                                    <svg viewBox="0 0 24 24" style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                                    <span class="h-2 w-10 organic-chip bg-[#051F20]/25"></span>
+                                </span>
                             </div>
                         </div>
 
+                        <div class="organic-inner bg-[#051F20] border border-[#235347] p-3 overflow-x-auto">
+                            <div class="min-w-[760px]">
+                                <!-- The table's head: six columns drawn as one grid the rows repeat. -->
+                                <div class="grid grid-cols-[24px_1.2fr_1fr_1fr_1.2fr_1fr_.9fr] gap-3 pb-2 border-b border-[#163832]">
+                                    <span class="block h-4 w-full flex items-center justify-center">
+                                        <span class="w-3 h-3 rounded border border-[#235347] bg-[#051F20]"></span>
+                                    </span>
+                                    <span class="block h-2 w-16 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-14 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-14 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-14 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-10 organic-chip bg-[#235347] self-center"></span>
+                                    <span class="block h-2 w-12 organic-chip bg-[#235347] self-center"></span>
+                                </div>
+
+                                <div class="grid grid-cols-[24px_1.2fr_1fr_1fr_1.2fr_1fr_.9fr] gap-3 py-3 border-b border-[#163832] items-center">
+                                    <span class="flex items-center justify-center"><span class="w-3 h-3 rounded border border-[#235347] bg-[#051F20]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-20 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-16 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-10 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-20 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-14 organic-chip bg-[#235347]"></span></span>
+                                    <span class="surface-light organic-chip h-7 flex items-center justify-center px-3">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#051F20]/60"></span>
+                                        <span class="h-1.5 w-10 organic-chip bg-[#051F20]/25 ml-2"></span>
+                                    </span>
+                                </div>
+
+                                <div class="grid grid-cols-[24px_1.2fr_1fr_1fr_1.2fr_1fr_.9fr] gap-3 py-3 items-center">
+                                    <span class="flex items-center justify-center"><span class="w-3 h-3 rounded border border-[#235347] bg-[#051F20]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-24 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-12 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-12 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-16 organic-chip bg-[#235347]"></span></span>
+                                    <span class="block h-7 organic-chip bg-[#163832] border border-[#235347] flex items-center px-3"><span class="h-2 w-12 organic-chip bg-[#235347]"></span></span>
+                                    <span class="surface-light organic-chip h-7 flex items-center justify-center px-3">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#051F20]/60"></span>
+                                        <span class="h-1.5 w-10 organic-chip bg-[#051F20]/25 ml-2"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
-
             </div>
 
-            <!-- Feed: the live board. Every surplus post in the shared Supabase table,
-                 newest first, each one carrying the single action a recipient has on
-                 it — claiming it. A post a donor logs anywhere arrives here over
-                 Supabase Realtime while this screen is open, and a claim made by
-                 another recipient flips the card in place rather than leaving a
-                 button that no longer works. -->
-            <div id="viewFeed" class="hidden lg:col-span-10">
-                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
-                    <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-neutral-800">
-                        <span class="text-sm font-black uppercase tracking-widest text-[#f4f4f0]">Live surplus feed</span>
-                        <span id="feedState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500 bg-black/20 rounded-full px-2 py-1">idle</span>
-                    </div>
-                    <div id="feedList" class="bg-black/20 rounded-2xl border border-neutral-800 p-4 space-y-3 min-h-[240px]">
-                        <span class="block font-mono text-[11px] text-neutral-500">Waiting for the first post.</span>
-                    </div>
+            <!-- The remaining section screens: picking any other rail tab wipes the working
+                 area and opens this blank frame, which carries the tone and nothing else until
+                 that section has content of its own. -->
+            <div id="viewBlank" class="hidden">
+                <div class="panel p-6">
+                    <div class="w-full min-h-[520px] organic-inner border border-[#235347] bg-[#0B2B26]"></div>
                 </div>
             </div>
 
-            <!-- The remaining section screens: picking any other rail item wipes
-                 the dashboard and opens this blank frame, which carries the tone and
-                 nothing else until that section has content of its own. -->
-            <div id="viewBlank" class="hidden lg:col-span-10">
-                <div class="bg-[#141414] border border-neutral-800 rounded-3xl p-6">
-                    <div class="w-full min-h-[520px] rounded-2xl border border-neutral-800 bg-neutral-800/50"></div>
-                </div>
+        </main>
+
+        <footer class="w-full max-w-[1500px] mx-auto px-4 md:px-8 pb-8">
+            <div class="border-t border-[#235347] pt-6 text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]/70">Res-Q platform — AI for community services — Recipient</div>
+        </footer>
+
+    </div>
+
+    <!-- Delivery location overlay: an almost full-screen map. It opens on the address the
+         account onboarded with, an address from the bar drops the pin, and moving the pin
+         names the address under it. MapLibre is loaded from a CDN on first open so the
+         dashboards stay light. -->
+    <div id="deliverOverlay" class="hidden fixed inset-0 z-[90] bg-[#051F20]/85 backdrop-blur-sm p-3 sm:p-6" onclick="closeDeliveryBackdrop(event)">
+        <div class="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden organic-block border border-[#235347] bg-[#0B2B26]" role="dialog" aria-modal="true" aria-labelledby="deliverTitle">
+
+            <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-[#235347]">
+                <span id="deliverTitle" class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Confirm delivery location</span>
+                <button type="button" onclick="closeDeliveryPicker()" aria-label="Close the map" class="w-9 h-9 organic-chip border border-[#235347] text-[#8EB69B] hover:text-[#DAF1DE] hover:border-[#8EB69B] transition-all">&#10005;</button>
             </div>
 
-        </div>
-
-    </main>
-
-    <footer class="max-w-7xl mx-auto px-6 pb-10 w-full">
-        <div class="border-t border-neutral-800 pt-6 font-mono text-[10px] text-neutral-600">RES-Q PLATFORM — AI FOR COMMUNITY SERVICES — RECIPIENT</div>
-    </footer>
-
-    <!-- Delivery location overlay: an almost full-screen map. It opens on the address
-         the account onboarded with, an address from the bar drops the pin, and moving
-         the pin names the address under it. Leaflet is loaded from a CDN on first open
-         so the dashboards stay light. -->
-    <div id="deliverOverlay" class="hidden fixed inset-0 z-[90] bg-[#0c0c0c]/85 backdrop-blur-sm p-3 sm:p-6" onclick="closeDeliveryBackdrop(event)">
-        <div class="mx-auto flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-3xl border border-neutral-800 bg-[#141414]" role="dialog" aria-modal="true" aria-labelledby="deliverTitle">
-
-            <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-neutral-800">
-                <span id="deliverTitle" class="text-xs font-mono uppercase tracking-widest text-[#ff4500]">// CONFIRM DELIVERY LOCATION</span>
-                <button type="button" onclick="closeDeliveryPicker()" aria-label="Close the map" class="w-9 h-9 rounded-full border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600 transition-all">&#10005;</button>
-            </div>
-
-            <div class="px-5 py-4 border-b border-neutral-800">
-                <label for="deliverSearch" class="block text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">Delivery address</label>
+            <div class="px-5 py-4 border-b border-[#235347]">
+                <label for="deliverSearch" class="block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] mb-2">Delivery address</label>
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <input id="deliverSearch" type="text" autocomplete="off" placeholder="Type an address, then press Find" class="flex-1 bg-[#0c0c0c] border border-neutral-800 rounded-xl px-4 py-3 text-sm text-[#f4f4f0] placeholder-neutral-600 focus:outline-none focus:border-[#ff4500] transition-all">
-                    <button type="button" onclick="findDeliveryAddress()" class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all">Find</button>
+                    <input id="deliverSearch" type="text" autocomplete="off" placeholder="Type an address, then press Find" class="flex-1 bg-[#051F20] border border-[#235347] organic-inner px-4 py-3 text-sm text-[#DAF1DE] placeholder-[#8EB69B] focus:outline-none focus:border-[#8EB69B] transition-all">
+                    <button type="button" onclick="findDeliveryAddress()" class="px-6 py-3 organic-chip bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all">Find</button>
                 </div>
-                <p class="text-[10px] font-mono text-neutral-600 mt-2">Pick a match to drop the pin, then drag it &#8212; the address follows the pin.</p>
+                <p class="text-[10px] text-[#8EB69B] mt-2">Pick a match to drop the pin, then drag it &#8212; the address follows the pin.</p>
                 <div id="deliverResults" class="hidden space-y-2 mt-3 max-h-40 overflow-y-auto"></div>
             </div>
 
-            <div class="relative flex-1 min-h-[280px] bg-[#0c0c0c]">
+            <div class="relative flex-1 min-h-[280px] bg-[#051F20]">
                 <div id="deliverMap" class="absolute inset-0"></div>
-                <div id="deliverNotice" class="hidden absolute inset-x-0 bottom-0 m-4 rounded-2xl border border-orange-900/50 bg-[#141414]/95 px-4 py-3">
-                    <span class="block text-[10px] font-mono uppercase tracking-widest text-[#ff9b73] mb-1">// MAP UNAVAILABLE</span>
-                    <span id="deliverNoticeText" class="block text-xs text-neutral-400 leading-relaxed"></span>
+                <div id="deliverNotice" class="hidden absolute inset-x-0 bottom-0 m-4 organic-inner border border-[#235347] bg-[#0B2B26]/95 px-4 py-3">
+                    <span class="block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] mb-1">Map unavailable</span>
+                    <span id="deliverNoticeText" class="block text-xs text-[#8EB69B] leading-relaxed"></span>
                 </div>
             </div>
 
-            <div class="px-5 py-4 border-t border-neutral-800 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-                <div id="deliverReadout" class="font-mono text-[11px] text-neutral-400 leading-relaxed whitespace-pre-line">No pin yet &#8212; search an address or tap the map.</div>
+            <div class="px-5 py-4 border-t border-[#235347] flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+                <div id="deliverReadout" class="text-[11px] text-[#8EB69B] leading-relaxed whitespace-pre-line">No pin yet &#8212; search an address or tap the map.</div>
                 <div class="flex items-center gap-4 shrink-0">
-                    <span id="deliverSaveState" class="font-mono text-[10px] uppercase tracking-widest text-neutral-500"></span>
-                    <button type="button" id="deliverConfirm" onclick="confirmDeliveryLocation()" disabled class="px-6 py-3 rounded-xl bg-[#ff4500] text-black text-xs font-black uppercase tracking-widest hover:bg-[#ff5a1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Confirm location</button>
+                    <span id="deliverSaveState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]"></span>
+                    <button type="button" id="deliverConfirm" onclick="confirmDeliveryLocation()" disabled class="px-6 py-3 organic-chip bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all disabled:opacity-40 disabled:cursor-not-allowed">Confirm location</button>
                 </div>
             </div>
 
@@ -437,7 +1139,7 @@
             }
 
             // ...then let the backend settle the link, the header and which dashboard this is.
-            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+            fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
                         return { status: response.status, data: data };
@@ -469,43 +1171,30 @@
         })();
 
         // ---------------------------------------------------------------------------
-        // Navigation rail: Dashboard is the default and the only lit item on load.
-        // The selected item fills with the site's accent orange and its label turns
-        // black, the way the cards on the landing page invert when they are hovered;
-        // every other item keeps the dark tone with a neutral label. Picking any item
-        // other than Dashboard wipes the dashboard and opens that section's own screen,
-        // which is a blank frame for now; picking Dashboard brings it back.
+        // Navigation rail: Dashboard is the default and the only lit tab on load. The tab
+        // being read is the one lit shape in the rail — filled with the accent, its label
+        // turned to ink — and every other tab is its label and nothing else, which is what
+        // keeps a five-row rail from reading as five buttons. Picking any tab wipes the
+        // working area and opens that section's own screen, which is a blank frame for the
+        // sections that have no content yet; picking Dashboard brings it back.
         // ---------------------------------------------------------------------------
         function setActiveNav(element) {
             document.querySelectorAll('.nav-item').forEach(function (item) {
-                var on = item === element;
-                item.classList.toggle('bg-[#ff4500]', on);
-                item.classList.toggle('border-[#ff4500]', on);
-                item.classList.toggle('bg-neutral-800/30', !on);
-                item.classList.toggle('border-neutral-800/60', !on);
-                item.classList.toggle('hover:border-neutral-700', !on);
-                item.classList.toggle('text-black', on);
-                item.classList.toggle('text-neutral-400', !on);
+                item.classList.toggle('is-on', item === element);
             });
-            var finished = document.getElementById('finishedOrders');
-            var label = finished ? finished.querySelector('span') : null;
-            var picked = element === finished;
-            if (finished) {
-                finished.classList.toggle('bg-[#ff4500]', picked);
-                finished.classList.toggle('border-[#ff4500]', picked);
-                finished.classList.toggle('bg-neutral-800/50', !picked);
-                finished.classList.toggle('border-neutral-800', !picked);
-                finished.classList.toggle('hover:border-neutral-700', !picked);
-            }
-            if (label) {
-                label.classList.toggle('text-black', picked);
-                label.classList.toggle('text-neutral-400', !picked);
-            }
         }
 
         function openSection(element) {
             setActiveNav(element);
             showView(element.getAttribute('data-view'));
+        }
+
+        // The one action a screen's title row offers — read the board — reaches its screen
+        // through the rail, so the tab's own state stays the single source of truth for
+        // which section is open.
+        function openNavSection(name) {
+            var tab = document.querySelector('.nav-item[data-view="' + name + '"]');
+            if (tab) { openSection(tab); }
         }
 
         // Each labelled section owns a screen. Dashboard and the surplus feed have
@@ -514,9 +1203,10 @@
         // loader, which is what makes the feed live only while it is on screen.
         var SECTION_VIEWS = {
             dashboard: 'viewDashboard',
-            feed: 'viewFeed'
+            feed: 'viewFeed',
+            'delivery-status': 'viewDeliveryStatus'
         };
-        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewBlank'];
+        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewDeliveryStatus', 'viewBlank'];
 
         function showView(name) {
             var wanted = SECTION_VIEWS[name] || 'viewBlank';
@@ -525,7 +1215,56 @@
                 if (view) { view.classList.toggle('hidden', id !== wanted); }
             });
             if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
+            // The route map is read when its own screen opens rather than at load: the
+            // card is not on screen until then, and a map built off screen has no size.
+            if (wanted === 'viewDeliveryStatus') { openDeliveryStatus(); }
         }
+
+        // ---------------------------------------------------------------------------
+        // Delivery Status: its arriving-goods heatmap is drawn from one pattern table —
+        // ten rhythm rows, twenty half-day columns each, 0 resting to 4 its busiest
+        // half-day. Numbers would map through HEAT_SHADES; different values only ever
+        // re-tone this one place.
+        // ---------------------------------------------------------------------------
+        var DS_HEAT_PATTERN = [
+            '11220023312133002233',
+            '12331212230120233110',
+            '33012233123211203322',
+            '01120333102133021102',
+            '22011332213310222110',
+            '13302201123230021331',
+            '21033223013311203220',
+            '02113123230133021130',
+            '33210211123032011203',
+            '11203310212330220112'
+        ];
+        var DS_HEAT_SHADES = [
+            'rgba(142, 182, 155, 0.06)',
+            'rgba(142, 182, 155, 0.22)',
+            'rgba(142, 182, 155, 0.4)',
+            'rgba(218, 241, 222, 0.35)',
+            'rgba(218, 241, 222, 0.85)'
+        ];
+
+        (function buildDeliveryHeatmap() {
+            var grid = document.getElementById('dsHeatmap');
+            if (!grid) { return; }
+            while (grid.firstChild) { grid.removeChild(grid.firstChild); }
+
+            DS_HEAT_PATTERN.forEach(function (rowPattern) {
+                var row = document.createElement('div');
+                row.className = 'flex gap-[5px] px-3 md:px-5';
+
+                Array.prototype.forEach.call(rowPattern, function (digit) {
+                    var cell = document.createElement('span');
+                    cell.className = 'flex-1 h-5 rounded-[7px]';
+                    cell.style.backgroundColor = DS_HEAT_SHADES[digit] || DS_HEAT_SHADES[0];
+                    row.appendChild(cell);
+                });
+
+                grid.appendChild(row);
+            });
+        })();
 
         // ---------------------------------------------------------------------------
         // Header panels: the bell opens the notifications panel, which is still an empty
@@ -594,14 +1333,14 @@
         // can be walked through from one sign-in. That endpoint is demo mode only, and the
         // note under the buttons says so rather than the button appearing to do nothing.
         // ---------------------------------------------------------------------------
-        var SWITCH_URL = '/api/dev/switch-role';
+        var SWITCH_URL = apiUrl('/api/dev/switch-role');
         var OTHER_ROLE = 'donor';
 
         function setAccountNote(message, tone) {
             var note = document.getElementById('accountNote');
             if (!note) { return; }
             note.textContent = message;
-            note.className = 'block font-mono text-[10px] ' + (tone || 'text-neutral-600');
+            note.className = 'block text-[10px] ' + (tone || 'text-neutral-600');
         }
 
         function logOut() {
@@ -612,7 +1351,7 @@
             if (!token) { leave(); return; }
             // The session is dropped at the backend too, but nobody waits on that: someone
             // who asked to sign out is signed out here either way.
-            fetch('/api/logout', {
+            fetch(apiUrl('/api/logout'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -682,16 +1421,108 @@
         // sits underneath it back into the search bar, so the field always names the
         // spot the pin is on rather than the last place that was searched for.
         //
-        // Leaflet with OpenStreetMap's own tiles, and Nominatim for the address lookup
-        // both ways: free and keyless, so nothing here needs an account, a key or a
-        // card. Both are shared public services, so lookups run per search and per
-        // settled pin movement rather than per keystroke, and the tiles keep the
-        // attribution Leaflet draws for them.
+        // MapLibre GL with OpenFreeMap's vector tiles, and Nominatim for the address
+        // lookup both ways: free and keyless, so nothing here needs an account, a key or
+        // a card. Both are shared public services, so lookups run per search and per
+        // settled pin movement rather than per keystroke, and the map draws the credit
+        // line both of them need.
         // ---------------------------------------------------------------------------
-        var LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        var LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        var TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-        var TILE_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+        var MAPLIBRE_CSS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+        var MAPLIBRE_JS = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+        var MAP_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>';
+        // The map's whole look is painted here, from vector tiles rather than pictures: the
+        // ground is the ramp's sage, every road is one warm-white thread whose weight alone
+        // says how big the street is, and the names carry a pale halo so they stay readable
+        // over both — which is what the reference map is. A raster tile could only be tinted
+        // towards that; a vector style simply is it. The source is the openmaptiles schema
+        // OpenFreeMap publishes, keyless, and the glyphs under the labels come from the
+        // same place.
+        var MAP_STYLE = {
+            version: 8,
+            glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+            sources: {
+                openmaptiles: {
+                    type: 'vector',
+                    url: 'https://tiles.openfreemap.org/planet',
+                    attribution: MAP_CREDIT
+                }
+            },
+            layers: [
+                // The ground everything else sits on: the sage of the ramp, muted the way
+                // the reference map mutes its own.
+                { id: 'background', type: 'background',
+                  paint: { 'background-color': '#8CA083' } },
+
+                // Ground that is not just ground: parkland a shade lighter, woods and
+                // fields a shade apart, residential blocks barely lifted. This subtlety is
+                // what keeps the white roads the loudest thing on the map.
+                { id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park',
+                  paint: { 'fill-color': '#95A98C', 'fill-opacity': 0.75 } },
+                { id: 'landcover', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+                  filter: ['in', 'class', 'wood', 'grass', 'scrub', 'wetland', 'farmland'],
+                  paint: { 'fill-color': ['match', ['get', 'class'],
+                      'wood', '#849877', 'grass', '#93A78A', 'farmland', '#8FA586', '#8CA083'],
+                      'fill-opacity': 0.55 } },
+                { id: 'landuse', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+                  filter: ['in', 'class', 'residential', 'suburb', 'neighbourhood',
+                      'commercial', 'industrial', 'cemetery', 'hospital', 'school'],
+                  paint: { 'fill-color': '#8FA588', 'fill-opacity': 0.45 } },
+
+                // Water steps out of the green instead of into it: a muted slate-green,
+                // darker than the land, so a shoreline reads at a glance.
+                { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water',
+                  paint: { 'fill-color': '#7C948E' } },
+                { id: 'waterway', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway',
+                  paint: { 'line-color': '#7C948E',
+                      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 18, 3] } },
+
+                // The roads, every one of them the same warm white — the reference map's
+                // one strong line. Width alone says how big the street is; paths and
+                // tracks are dashed so foot traffic reads differently from wheels.
+                { id: 'road-path', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+                  filter: ['all', ['in', 'class', 'path', 'track', 'pedestrian'],
+                      ['!=', 'brunnel', 'tunnel']],
+                  layout: { 'line-cap': 'round', 'line-join': 'round' },
+                  paint: { 'line-color': '#F2F1E8', 'line-dasharray': [2, 2],
+                      'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 18, 1.6] } },
+                { id: 'road', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+                  // `none` is the not-any-of: no foot traffic, no ferries, no tunnels.
+                  filter: ['none',
+                      ['in', 'class', 'path', 'track', 'pedestrian', 'aerialway', 'ferry'],
+                      ['==', 'brunnel', 'tunnel']],
+                  layout: { 'line-cap': 'round', 'line-join': 'round' },
+                  paint: { 'line-color': '#F7F6EE',
+                      'line-width': ['interpolate', ['linear'], ['zoom'],
+                          6, ['match', ['get', 'class'], ['motorway', 'trunk'], 1.1,
+                              'primary', 0.8, 0.35],
+                          12, ['match', ['get', 'class'], ['motorway', 'trunk'], 3.4,
+                              'primary', 2.8, ['secondary', 'tertiary'], 2.2, 1.2],
+                          17, ['match', ['get', 'class'], ['motorway', 'trunk'], 13,
+                              'primary', 10.5, ['secondary', 'tertiary'], 8, 4]] } },
+
+                // The names: a street name runs along its street, a place name sits over
+                // its place, both on a pale halo so nothing turns unreadable where a white
+                // road passes underneath.
+                { id: 'road-label', type: 'symbol', source: 'openmaptiles',
+                  'source-layer': 'transportation_name', minzoom: 12,
+                  layout: { 'symbol-placement': 'line',
+                      'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],
+                      'text-font': ['Noto Sans Regular'],
+                      'text-size': ['interpolate', ['linear'], ['zoom'], 12, 9.5, 17, 12.5],
+                      'text-padding': 2 },
+                  paint: { 'text-color': '#2B3B2D',
+                      'text-halo-color': '#F0F3E8', 'text-halo-width': 1.2 } },
+                { id: 'place-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place',
+                  filter: ['in', 'class', 'city', 'town', 'village', 'suburb',
+                      'neighbourhood', 'hamlet'],
+                  layout: { 'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],
+                      'text-font': ['Noto Sans Bold'],
+                      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10.5, 15, 14],
+                      'text-letter-spacing': 0.06 },
+                  paint: { 'text-color': '#22322A',
+                      'text-halo-color': '#F0F3E8', 'text-halo-width': 1.4 } }
+            ]
+        };
         var LOOKUP_URL = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=';
         // addressdetails asks for the place's own parts back as well as its one-line
         // name, and accept-language pins the answer to the language this page is in.
@@ -699,7 +1530,7 @@
         var START_VIEW = [43.6532, -79.3832];
         var ADDRESS_LOOKUP_DELAY = 500;
         var ADDRESS_RETRY_DELAY = 900;
-        var SAVE_URL = '/api/delivery-location';
+        var SAVE_URL = apiUrl('/api/delivery-location');
 
         var deliverMap = null;
         var deliverMarker = null;
@@ -711,8 +1542,9 @@
         var deliverAddressState = 'none';
         var deliverHint = 'No pin yet — search an address or tap the map.';
         var addressLookupTimer = null;
-        var leafletRequested = false;
-        var leafletOnPage = false;
+        var maplibreRequested = false;
+        var maplibreOnPage = false;
+        var mapTroubleShown = false;
         var startPinDone = false;
         var savingLocation = false;
         var savedLocation = null;
@@ -856,7 +1688,7 @@
             var badge = deliverEl('deliverSaveState');
             if (!badge) { return; }
             badge.textContent = message;
-            badge.className = 'font-mono text-[10px] uppercase tracking-widest '
+            badge.className = 'text-[10px] uppercase tracking-widest '
                 + (tone || 'text-neutral-500');
         }
 
@@ -869,7 +1701,7 @@
                 && Math.abs(savedLocation.lat - deliverPinAt.lat) < 0.000001
                 && Math.abs(savedLocation.lng - deliverPinAt.lng) < 0.000001;
             if (confirmed) {
-                setSaveState('Saved to your account', 'text-[#ff9b73]');
+                setSaveState('Saved to your account', 'text-[#8EB69B]');
             } else {
                 setSaveState('Not saved yet');
             }
@@ -952,7 +1784,7 @@
             results.forEach(function (result) {
                 var button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'block w-full text-left px-4 py-3 rounded-xl border border-neutral-800 bg-[#0c0c0c] hover:border-[#ff4500] text-xs text-neutral-300 transition-all';
+                button.className = 'block w-full text-left px-4 py-3 rounded-xl border border-[#235347] bg-[#051F20] hover:border-[#8EB69B] text-xs text-neutral-300 transition-all';
                 button.textContent = result.display_name || query;
                 button.onclick = function () {
                     clearDeliveryResults();
@@ -1013,27 +1845,34 @@
         }
 
         function placeDeliveryPin(at, label) {
-            if (!deliverMap || !window.L) { return; }
+            if (!deliverMap || !window.maplibregl) { return; }
             // An unnamed pin has no address yet: keeping the previous one would let a
             // moved pin be confirmed against the address it used to sit on.
             deliverAddress = label || '';
             deliverAddressState = label ? 'named' : 'none';
-            var point = [at.lat, at.lng];
+            // MapLibre speaks longitude first, the other way round from the [lat, lng]
+            // the lookups answer in.
+            var point = [at.lng, at.lat];
             if (deliverMarker) {
-                deliverMarker.setLatLng(point);
+                deliverMarker.setLngLat(point);
             } else {
                 // Draggable, so the pin can be nudged onto the exact door; wherever it is
                 // left, the address is re-resolved from the spot it landed on.
-                deliverMarker = window.L.marker(point, { draggable: true, title: 'Delivery location' })
-                    .addTo(deliverMap);
+                deliverMarker = new window.maplibregl.Marker({
+                    element: deliveryPinElement(),
+                    anchor: 'bottom',
+                    draggable: true,
+                    title: 'Delivery location'
+                }).setLngLat(point).addTo(deliverMap);
                 deliverMarker.on('dragend', function () {
-                    var moved = deliverMarker.getLatLng();
+                    var moved = deliverMarker.getLngLat();
                     deliverPinAt = { lat: moved.lat, lng: moved.lng };
                     resolvePinAddress();
                 });
             }
             deliverPinAt = { lat: at.lat, lng: at.lng };
-            deliverMap.setView(point, Math.max(deliverMap.getZoom(), 16), { animate: false });
+            // Snapping is what a location picker wants anyway: no glide between spots.
+            deliverMap.jumpTo({ center: point, zoom: Math.max(deliverMap.getZoom(), 16) });
             hideDeliverNotice();
             renderDeliveryReadout();
         }
@@ -1104,16 +1943,31 @@
                 });
         }
 
+        // The pin the map draws: an ink teardrop with a mint ring and core, made here rather
+        // than fetched as an image, so it is the palette's own. Its box is taller than the
+        // teardrop because the tip — the point it names — sits at the bottom, which is where
+        // the marker anchors it.
+        function deliveryPinElement() {
+            var pin = document.createElement('div');
+            pin.className = 'resq-pin-icon';
+            pin.innerHTML = '<div class="resq-pin"><span></span></div>';
+            return pin;
+        }
+
         function initDeliveryMap() {
-            if (deliverMap || !window.L || !deliverEl('deliverMap')) { return; }
+            if (deliverMap || !window.maplibregl || !deliverEl('deliverMap')) { return; }
             try {
-                deliverMap = window.L.map(deliverEl('deliverMap'), {
-                    center: START_VIEW,
+                deliverMap = new window.maplibregl.Map({
+                    container: deliverEl('deliverMap'),
+                    style: MAP_STYLE,
+                    // The map speaks [lng, lat], the other way round from START_VIEW.
+                    center: [START_VIEW[1], START_VIEW[0]],
                     zoom: 12,
+                    attributionControl: false,
                     // A transition that cannot run leaves the view stuck halfway, which
                     // is what happens in renderers that never composite a frame. Snapping
                     // is what a location picker wants anyway.
-                    zoomAnimation: false
+                    fadeDuration: 0
                 });
             } catch (err) {
                 deliverMap = null;
@@ -1121,41 +1975,368 @@
                     + (err && err.message ? err.message : err));
                 return;
             }
-            var tiles = window.L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_CREDIT });
-            tiles.on('tileerror', function () {
+            deliverMap.addControl(new window.maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+            deliverMap.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), 'top-left');
+            deliverMap.on('error', function () {
+                // Tile and glyph failures arrive in bursts; one notice is the whole story.
+                if (mapTroubleShown) { return; }
+                mapTroubleShown = true;
                 showDeliverNotice('The map tiles could not be loaded. The pin still works, or try again once the connection is back.');
             });
-            tiles.addTo(deliverMap);
             deliverMap.on('click', function (event) {
-                placeDeliveryPin({ lat: event.latlng.lat, lng: event.latlng.lng }, '');
+                placeDeliveryPin({ lat: event.lngLat.lat, lng: event.lngLat.lng }, '');
                 resolvePinAddress();
             });
-            deliverMap.invalidateSize();
+            deliverMap.resize();
             placeStartingPin();
         }
 
-        // Leaflet comes from a CDN the first time the map opens. No key, no account.
-        function loadLeaflet() {
-            if (leafletOnPage) { initDeliveryMap(); return; }
-            if (leafletRequested) { return; }
-            leafletRequested = true;
+        // MapLibre comes from a CDN the first time a map is opened — its stylesheet and its
+        // script, since the pin and the controls are laid out by that stylesheet. The tiles
+        // are OpenFreeMap's keyless vector endpoint, so nothing here needs an account or a
+        // token. Two maps hang off this page — the one behind the delivery card and the one
+        // in the Delivery Status card — so the load is shared: whoever asks first fetches
+        // it, and everyone waiting is told when it is here.
+        var maplibreWaiters = [];
+
+        function withMaplibre(onReady, onFail) {
+            if (maplibreOnPage) { onReady(); return; }
+            maplibreWaiters.push({ ready: onReady, fail: onFail });
+            if (maplibreRequested) { return; }
+            maplibreRequested = true;
             var css = document.createElement('link');
             css.rel = 'stylesheet';
-            css.href = LEAFLET_CSS;
+            css.href = MAPLIBRE_CSS;
             document.head.appendChild(css);
             var script = document.createElement('script');
-            script.src = LEAFLET_JS;
+            script.src = MAPLIBRE_JS;
             script.async = true;
             script.onload = function () {
-                leafletOnPage = true;
+                maplibreOnPage = true;
                 hideDeliverNotice();
-                initDeliveryMap();
+                flushMaplibreWaiters('ready');
             };
             script.onerror = function () {
-                leafletRequested = false;
-                showDeliverNotice('The map library could not be loaded. Check the connection and try again.');
+                maplibreRequested = false;
+                flushMaplibreWaiters('fail');
             };
             document.head.appendChild(script);
+        }
+
+        function flushMaplibreWaiters(outcome) {
+            var waiting = maplibreWaiters.splice(0, maplibreWaiters.length);
+            waiting.forEach(function (waiter) {
+                if (outcome === 'ready') {
+                    waiter.ready();
+                } else if (waiter.fail) {
+                    waiter.fail();
+                } else {
+                    showDeliverNotice('The map library could not be loaded. Check the connection and try again.');
+                }
+            });
+        }
+
+        function loadMaplibre() { withMaplibre(initDeliveryMap); }
+
+        // ---------------------------------------------------------------------------
+        // The route map: the one delivery this account is expecting, drawn between the two
+        // pins the order itself carries. It is the same map the delivery card opens — same
+        // painted tiles, same teardrop at the pickup, the ring standing in for the drop-off
+        // — mounted into the Delivery Status card instead of the overlay, because a console
+        // reads the route beside the delivery rather than instead of the page.
+        //
+        // The road itself comes from OSRM's keyless demo router, which is the one free
+        // service that answers with a real drive rather than a straight line. If it cannot
+        // be read the two pins are still joined, by the direct line between them, and the
+        // card says so: a route the router did not draw is not passed off as one it did.
+        // ---------------------------------------------------------------------------
+        var ORDERS_URL = apiUrl('/api/orders');
+        var ROUTE_URL = 'https://router.project-osrm.org/route/v1/driving/';
+
+        var routeMap = null;
+        var routePickup = null;
+        var routeDropoff = null;
+        var routeOrder = null;
+        var routeReading = false;
+
+        function routeEl(id) { return document.getElementById(id); }
+
+        function setRouteChip(text, live) {
+            var label = routeEl('routeChipText');
+            var dot = routeEl('routeChipDot');
+            if (label) { label.textContent = text; }
+            if (dot) {
+                dot.className = 'w-1.5 h-1.5 rounded-full ' + (live ? 'bg-[#DAF1DE]' : 'bg-[#235347]');
+            }
+        }
+
+        function setRouteNote(text) {
+            var note = routeEl('routeNote');
+            if (note) { note.textContent = text || ''; }
+        }
+
+        function pointOf(end) {
+            if (!end || end.lat === null || end.lat === undefined
+                || end.lng === null || end.lng === undefined) {
+                return null;
+            }
+            var lat = Number(end.lat);
+            var lng = Number(end.lng);
+            if (isNaN(lat) || isNaN(lng)) { return null; }
+            return { lat: lat, lng: lng };
+        }
+
+        // Which deliveries are this account's to receive. The backend says which side of each
+        // order the caller is on, because a demo account carries no id of its own to compare.
+        function incomingOrders(orders) {
+            return (orders || []).filter(function (order) {
+                return order && order.viewer_side === 'recipient';
+            });
+        }
+
+        // The section's own loader. It reads once — the newest delivery is the one a console
+        // is about — and mounting waits for the section to be on screen, since a map built
+        // inside a hidden box is a map of nothing.
+        function openDeliveryStatus() {
+            if (!routeOrder) { loadRouteOrder(); return; }
+            if (!routeMap) { mountRouteMap(routeOrder); return; }
+            if (routeMap) { window.setTimeout(function () { routeMap.resize(); }, 0); }
+        }
+
+        function loadRouteOrder() {
+            var token = readStore(TOKEN_KEY);
+            if (!token || routeReading) { return; }
+            routeReading = true;
+            setRouteChip('reading the books', false);
+            // Handed back so the caller can wait for the card to have been filled in.
+            return fetch(ORDERS_URL, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    routeReading = false;
+                    if (res.status !== 200 || !res.data) {
+                        setRouteChip('unreachable', false);
+                        setRouteNote('The delivery list could not be read. Open the section again to retry.');
+                        return;
+                    }
+                    var order = incomingOrders(res.data.orders)[0];
+                    if (!order) {
+                        setRouteChip('no delivery yet', false);
+                        return;
+                    }
+                    routeOrder = order;
+                    paintRouteSummary(order);
+                    mountRouteMap(order);
+                })
+                .catch(function () {
+                    routeReading = false;
+                    setRouteChip('unreachable', false);
+                    setRouteNote('The delivery list could not be read. Open the section again to retry.');
+                });
+        }
+
+        function paintRouteSummary(order) {
+            var from = order.donor || {};
+            var to = order.recipient || {};
+            var fromText = routeEl('routeFrom');
+            var toText = routeEl('routeTo');
+            // One line each, with the whole address on the element's own title: the card is
+            // a map first, and a two-line address block would take a third of it.
+            if (fromText) {
+                fromText.textContent = 'Picked up at ' + (from.name || 'the donor')
+                    + (from.address ? ' \u00b7 ' + from.address : '');
+                fromText.title = fromText.textContent;
+            }
+            if (toText) {
+                toText.textContent = 'Delivered to ' + (to.name || 'you')
+                    + (to.address ? ' \u00b7 ' + to.address : '');
+                toText.title = toText.textContent;
+            }
+            var label = order.status === 'accepted' ? 'confirmed' : (order.status || 'proposed');
+            if (order.distance_km !== null && order.distance_km !== undefined) {
+                label += ' \u00b7 ' + order.distance_km + ' km';
+            }
+            if (order.scheduled_for) { label += ' \u00b7 ' + order.scheduled_for; }
+            setRouteChip(label, true);
+        }
+
+        // The drop-off end: an open ring, made here rather than fetched, so it is the
+        // palette's own mark the way the teardrop at the other end is.
+        function dropoffRingElement() {
+            var ring = document.createElement('div');
+            ring.className = 'resq-ring-icon';
+            ring.innerHTML = '<div class="resq-ring"></div>';
+            return ring;
+        }
+
+        function mountRouteMap(order) {
+            var container = routeEl('routeMap');
+            if (!container || !order) { return; }
+            if (routeMap) {
+                drawRoute(order);
+                window.setTimeout(function () { routeMap.resize(); }, 0);
+                return;
+            }
+            withMaplibre(function () {
+                try {
+                    container.classList.remove('hidden');
+                    routeMap = new window.maplibregl.Map({
+                        container: container,
+                        style: MAP_STYLE,
+                        center: [0, 0],
+                        zoom: 2,
+                        attributionControl: false,
+                        // The same snapping the delivery card uses: a transition that cannot
+                        // run leaves the view stuck halfway, and a route wants no animation.
+                        fadeDuration: 0
+                    });
+                } catch (err) {
+                    routeMap = null;
+                    container.classList.add('hidden');
+                    setRouteNote('The map could not start in this page: '
+                        + (err && err.message ? err.message : err));
+                    return;
+                }
+                // No attribution control here, unlike the delivery card's own map: this
+                // card has a chip along its top and its legend along its bottom, and
+                // MapLibre's strip ran under one of them whichever corner it took. The
+                // credit is the legend's own line instead — inside the panel, where it is
+                // as readable as the rest of the card — which is what `MAP_CREDIT_TEXT`
+                // below is for.
+                showRouteSurface();
+                drawRoute(order);
+                routeMap.resize();
+            }, function () {
+                showRouteSurface();
+                setRouteNote('The map library could not be loaded. Check the connection and try again.');
+            });
+        }
+
+        // The drawn shape goes, the legend arrives: the card is a reading from here on.
+        function showRouteSurface() {
+            var rest = routeEl('routeRest');
+            var legend = routeEl('routeLegend');
+            var restNote = routeEl('routeRestNote');
+            if (rest) { rest.classList.add('hidden'); }
+            if (restNote) { restNote.classList.add('hidden'); }
+            if (legend) { legend.classList.remove('hidden'); }
+        }
+
+        // Who the tiles and the road are credited to, as the card's own line rather than a
+        // control on the map. The tiles are OpenFreeMap's copy of OpenStreetMap data, and
+        // the road is OSRM's, so both are named wherever the route line is described.
+        var MAP_CREDIT_TEXT = '\u00a9 OpenStreetMap contributors \u00b7 tiles \u00a9 OpenFreeMap';
+
+        function drawRoute(order) {
+            var from = pointOf(order.donor);
+            var to = pointOf(order.recipient);
+            if (!from || !to) {
+                setRouteNote('This delivery is missing one of its two pins, so there is no '
+                    + 'route to draw. ' + MAP_CREDIT_TEXT);
+                return;
+            }
+            routePins(from, to);
+            fitRoute(from, to);
+            // The road itself is awaited so a caller — a reload after a connection comes
+            // back, or a test — can tell when the line on the map is the finished one.
+            return fetchRoadRoute(from, to).then(function (route) {
+                if (!routeMap) { return; }
+                putRoute(route ? route.coordinates
+                               : [[from.lng, from.lat], [to.lng, to.lat]]);
+                fitRoute(from, to);
+                if (route) {
+                    setRouteNote('Road route \u00b7 '
+                        + (route.metres / 1000).toFixed(1) + ' km by road \u00b7 about '
+                        + Math.max(1, Math.round(route.seconds / 60)) + ' min \u00b7 OSRM '
+                        + '\u00b7 ' + MAP_CREDIT_TEXT);
+                } else {
+                    setRouteNote('Shown as the direct line between the two pins \u2014 the road '
+                        + 'router could not be read. ' + MAP_CREDIT_TEXT);
+                }
+            });
+        }
+
+        function routePins(from, to) {
+            if (!routePickup) {
+                routePickup = new window.maplibregl.Marker(
+                    { element: deliveryPinElement(), anchor: 'bottom' });
+            }
+            routePickup.setLngLat([from.lng, from.lat]).addTo(routeMap);
+            if (!routeDropoff) {
+                routeDropoff = new window.maplibregl.Marker(
+                    { element: dropoffRingElement(), anchor: 'center' });
+            }
+            routeDropoff.setLngLat([to.lng, to.lat]).addTo(routeMap);
+        }
+
+        function fitRoute(from, to) {
+            var bounds = new window.maplibregl.LngLatBounds(
+                [from.lng, from.lat], [from.lng, from.lat]);
+            bounds.extend([to.lng, to.lat]);
+            // Snapping rather than animating, and padded per side: the chip sits along the
+            // top of the card and the legend along the bottom, and a route that ran under
+            // either of them would be a route nobody could follow. The top padding clears
+            // the chip *and* the teardrop's own height, since the pickup pin stands up from
+            // the coordinate that padding measures.
+            routeMap.fitBounds(bounds, {
+                padding: { top: 118, bottom: 132, left: 48, right: 48 },
+                duration: 0
+            });
+        }
+
+        // The drive between the two pins, from OSRM's demo router: keyless, and the only
+        // free service that answers with a road rather than a distance. Anything it cannot
+        // answer is `null`, which the caller draws as the direct line.
+        function fetchRoadRoute(from, to) {
+            var url = ROUTE_URL + from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat
+                + '?overview=full&geometries=geojson';
+            return fetch(url, { headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    if (response.status !== 200) { return null; }
+                    return response.json().catch(function () { return null; });
+                })
+                .then(function (data) {
+                    var route = data && data.routes && data.routes[0];
+                    if (!route || !route.geometry || !route.geometry.coordinates) {
+                        return null;
+                    }
+                    return {
+                        coordinates: route.geometry.coordinates,
+                        metres: route.distance,
+                        seconds: route.duration
+                    };
+                })
+                .catch(function () { return null; });
+        }
+
+        // The line itself: a wide casing with the route drawn over it, which is how the
+        // drawn card told a road from the ground behind it, in the same two colour steps.
+        function putRoute(coordinates) {
+            var shape = {
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates: coordinates }
+            };
+            var source = routeMap.getSource('delivery-route');
+            if (source) { source.setData(shape); return; }
+            routeMap.addSource('delivery-route', { type: 'geojson', data: shape });
+            routeMap.addLayer({
+                id: 'delivery-route-case',
+                type: 'line',
+                source: 'delivery-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#235347', 'line-width': 9, 'line-opacity': 0.5 }
+            });
+            routeMap.addLayer({
+                id: 'delivery-route',
+                type: 'line',
+                source: 'delivery-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#DAF1DE', 'line-width': 2.5 }
+            });
         }
 
         function openDeliveryPicker() {
@@ -1164,11 +2345,11 @@
             var wasOpen = !overlay.classList.contains('hidden');
             overlay.classList.remove('hidden');
             document.documentElement.style.overflow = 'hidden';
-            if (!wasOpen) { loadLeaflet(); }
+            if (!wasOpen) { loadMaplibre(); }
             var input = deliverEl('deliverSearch');
             if (input && !wasOpen) { input.focus(); }
             // The map is sized from its container, so it has to be told the overlay moved.
-            if (deliverMap) { window.setTimeout(function () { deliverMap.invalidateSize(); }, 0); }
+            if (deliverMap) { window.setTimeout(function () { deliverMap.resize(); }, 0); }
             // In case the profile arrived after the map was first built.
             placeStartingPin();
         }
@@ -1219,9 +2400,9 @@
         var feedPoll = null;
         var feedUnwatch = null;
 
-        var CHIP_IDLE = 'text-neutral-500 bg-black/20';
-        var CHIP_BUSY = 'text-[#ff9b73] bg-orange-950/60';
-        var CHIP_DONE = 'text-emerald-400 bg-emerald-950/60';
+        var CHIP_IDLE = 'text-neutral-500 bg-[#051F20]';
+        var CHIP_BUSY = 'text-[#DAF1DE] bg-[#235347]';
+        var CHIP_DONE = 'text-[#DAF1DE] bg-[#163832]';
 
         function resqDb() {
             return window.ResQDB || null;
@@ -1231,7 +2412,7 @@
             var chip = document.getElementById(id);
             if (!chip) { return; }
             chip.textContent = message;
-            chip.className = 'font-mono text-[10px] uppercase tracking-widest rounded-full px-2 py-1 '
+            chip.className = 'text-[10px] uppercase tracking-[0.2em] rounded-full px-2.5 py-1 '
                 + (tone || CHIP_IDLE);
         }
 
@@ -1254,6 +2435,53 @@
                 + ((error && error.message) || 'the request did not go through') + '.';
         }
 
+        // The board as it was last read, and which of its three views is on screen. The
+        // tab filters those rows rather than reading the table again, so switching is
+        // instant and the chip above still counts the whole board.
+        var feedRows = [];
+        var feedTab = 'all';
+        var FEED_TABS = { all: 'feedTabAll', open: 'feedTabOpen', foryou: 'feedTabForYou' };
+
+        function setFeedTab(name) {
+            feedTab = FEED_TABS[name] ? name : 'all';
+            Object.keys(FEED_TABS).forEach(function (key) {
+                var tab = document.getElementById(FEED_TABS[key]);
+                if (!tab) { return; }
+                tab.classList.toggle('is-active', feedTab === key);
+                tab.setAttribute('aria-selected', feedTab === key ? 'true' : 'false');
+            });
+            paintFeed();
+        }
+
+        // The goods categories this account picked in its goods profile — what it needs,
+        // as a recipient. *For You* is those categories and nothing else. The picks go
+        // through the shared vocabulary, which drops anything the profile holds that is
+        // not one of the six and keeps the order the categories are listed in.
+        function goodsTypes() {
+            var db = resqDb();
+            return (db && db.goodsTypes) || [];
+        }
+
+        function profileGoods() {
+            var picked = (resqProfile && resqProfile.surplus_types) || [];
+            return goodsTypes().filter(function (type) {
+                return picked.indexOf(type.value) !== -1;
+            }).map(function (type) { return type.value; });
+        }
+
+        // What each view says when it has nothing to draw.
+        function feedEmpty() {
+            if (feedTab === 'open') {
+                return 'Nothing is open right now \u2014 every post on the board has been claimed.';
+            }
+            if (feedTab === 'foryou') {
+                return profileGoods().length
+                    ? 'Nothing on the board is tagged with the goods you need right now.'
+                    : 'Your goods profile has no categories picked yet, so there is nothing to narrow the board to.';
+            }
+            return 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.';
+        }
+
         function loadFeed() {
             var db = resqDb();
             if (!db) { return; }
@@ -1264,10 +2492,8 @@
                     return;
                 }
                 var rows = res.data || [];
-                var open = rows.filter(function (row) { return row.status !== 'claimed'; }).length;
-                setChip('feedState', rows.length
-                    ? open + ' open / ' + rows.length + ' posted'
-                    : 'no posts', rows.length ? CHIP_DONE : CHIP_IDLE);
+                setChip('feedState', rows.length ? db.feedSummary(rows) : 'no posts',
+                    rows.length ? CHIP_DONE : CHIP_IDLE);
                 renderFeed(rows, '');
             });
         }
@@ -1276,70 +2502,44 @@
             var list = document.getElementById('feedList');
             if (!list) { return; }
             if (!rows) {
-                list.innerHTML = '<span class="block font-mono text-[11px] text-[#ff9b73]">'
+                feedRows = [];
+                list.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
                     + feedText(message) + '</span>';
                 return;
             }
+            feedRows = rows;
             if (!rows.length) {
-                list.innerHTML = '<span class="block font-mono text-[11px] text-neutral-500">'
+                list.innerHTML = '<span class="block text-[11px] text-neutral-500">'
                     + 'No surplus has been posted yet. A donor\u2019s logged item appears here on its own.'
                     + '</span>';
                 return;
             }
-            list.innerHTML = rows.map(feedCard).join('');
+            paintFeed();
         }
 
-        // What the allocator did with the item, once its answer reached the board: the
-        // shelter it picked and the score it was picked on. A post written before the
-        // match columns existed, or one whose submission never got an answer, simply has
-        // no line — the card reads exactly as it did before.
-        function pickLine(row) {
-            var shelter = row.matched_shelter ? String(row.matched_shelter).trim() : '';
-            if (!shelter) { return ''; }
-            var score = Number(row.match_score);
-            var scored = row.match_score !== null && row.match_score !== undefined
-                && row.match_score !== '' && isFinite(score);
-            return '<span class="block mt-1 text-neutral-500">PICKED ' + feedText(shelter)
-                + (scored ? ' \u00b7 ' + score.toFixed(2) : '') + '</span>';
-        }
-
-        // One card per post: what it is and how much, who is offering it and where
-        // from, the status, and — while it is still open — the claim button. A
-        // claimed post keeps its card and loses its button, so the board reads as a
-        // record rather than quietly shrinking.
-        function feedCard(row) {
+        // Draw the view the tab bar is on out of the rows last read: the whole board,
+        // or only what is still there to take. The cards themselves come from the
+        // shared renderer, with the one action a recipient has on an open post.
+        function paintFeed() {
+            var list = document.getElementById('feedList');
             var db = resqDb();
-            var claimed = row.status === 'claimed';
-            return '<div class="p-4 rounded-2xl border transition-all ' +
-                    (claimed ? 'bg-black/20 border-neutral-800'
-                        : 'bg-neutral-800/50 border-neutral-800 hover:border-neutral-700') + '">' +
-                '<div class="flex flex-wrap items-start justify-between gap-3">' +
-                    '<div class="min-w-0">' +
-                        '<span class="block text-sm font-black uppercase tracking-widest ' +
-                            (claimed ? 'text-neutral-500' : 'text-[#f4f4f0]') + '">' +
-                            feedText(row.item_name) + '</span>' +
-                        '<span class="block mt-1 font-mono text-[11px] text-neutral-400">' +
-                            feedText(db.postNeeds(row)) + '</span>' +
-                    '</div>' +
-                    '<span class="' + db.statusChip(row.status) + '">' +
-                        db.statusLabel(row.status) + '</span>' +
-                '</div>' +
-                '<div class="mt-3 flex flex-wrap items-end justify-between gap-3">' +
-                    '<div class="font-mono text-[10px] text-neutral-600">' +
-                        '<span class="block">FROM ' + feedText(row.donor_name) + '</span>' +
-                        '<span class="block mt-1">AT ' + feedText(row.location) + '</span>' +
-                        '<span class="block mt-1">LOGGED ' + feedText(db.formatWhen(row.created_at)) +
-                        '</span>' +
-                        pickLine(row) +
-                    '</div>' +
-                    (claimed ? ''
-                        : '<button type="button" data-claim="' + feedText(row.id) + '" ' +
-                            'onclick="claimSurplus(this)" class="px-5 py-3 rounded-xl bg-[#ff4500] ' +
-                            'text-black text-xs font-black uppercase tracking-widest ' +
-                            'hover:bg-[#ff5a1f] transition-all disabled:opacity-40 ' +
-                            'disabled:cursor-not-allowed">Claim</button>') +
-                '</div>' +
-            '</div>';
+            if (!list || !db) { return; }
+            var goods = profileGoods();
+            var rows = feedTab === 'open'
+                ? feedRows.filter(function (row) { return row.status !== 'claimed'; })
+                : (feedTab === 'foryou'
+                    // An untagged post belongs to no category, so it never reaches this view.
+                    ? feedRows.filter(function (row) { return goods.indexOf(row.goods_type) !== -1; })
+                    : feedRows);
+            if (!rows.length) {
+                list.innerHTML = '<span class="block text-[11px] text-neutral-500">'
+                    + feedEmpty()
+                    + '</span>';
+                return;
+            }
+            list.innerHTML = rows.map(function (row) {
+                return db.feedCard(row, { canClaim: true });
+            }).join('');
         }
 
         function claimSurplus(button) {
@@ -1365,7 +2565,17 @@
                     loadFeed();
                     return;
                 }
-                setChip('feedState', 'claimed', CHIP_DONE);
+                // The claim won. It is also an accepted order, and the recipient's own
+                // details go with the claimed post to the claim recorder so a rationing
+                // pass can read back who reached this item. The record carries the post
+                // row exactly as the board returned it, so every claimant of the same
+                // post — now or after a re-post — joins on the same post id.
+                var claimedRow = res.data;
+                db.recordClaim(claimedRow, resqProfile || null).then(function (rec) {
+                    setChip('feedState', rec.ok ? 'claimed \u00b7 recorded'
+                                                : 'claimed \u00b7 record failed',
+                            rec.ok ? CHIP_DONE : CHIP_BUSY);
+                });
                 loadFeed();
             }).catch(function () {
                 delete feedClaiming[id];
