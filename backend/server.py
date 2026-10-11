@@ -36,6 +36,7 @@ Endpoints
     POST /api/rations               ration the account's claims and publish its shares
     POST /api/surplus-categories    the account's own logged month, by goods category
     GET  /api/claims                the account's own claims, newest first
+    GET  /api/post-claims           the claims on the account's own board posts
     POST /api/claims                record the account's claim on one board row
     GET  /api/history               the account's own logged days, and what they answer
     GET  /api/weather               the real conditions at a point, in the analyser's words
@@ -148,7 +149,14 @@ from helpers import (
     query_number,
     utc_stamp,
 )
-from claims import caller_claims, record_from_post, remember, stamp
+from claims import (
+    caller_claims,
+    claimed_posts,
+    claims_on_posts,
+    record_from_post,
+    remember,
+    stamp,
+)
 from matching import routing_problem, shared_categories
 from orders import (
     demo_order_pair,
@@ -358,6 +366,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_rations()
         if path == "/api/claims":
             return self.api_claims()
+        if path == "/api/post-claims":
+            return self.api_post_claims()
         if path == "/api/history":
             return self.api_history()
         if path == "/api/weather":
@@ -1277,6 +1287,42 @@ class ResQHandler(SimpleHTTPRequestHandler):
             with connect() as conn:
                 records = caller_claims(me, conn)
         payload = {"ok": True, "count": len(records), "claims": list(reversed(records))}
+        if not PERSIST:
+            payload["demo"] = True
+        return self.send_json(200, payload)
+
+    def api_post_claims(self):
+        """The claims other shelters have made on this donor's own board posts.
+
+        The other side of `GET /api/claims`, which answers the claims an account *made*: a
+        shelter reads that one, and the donor of the item reads this one — the shelters
+        that reached for what it posted, with each one's own confirmed pin, because the
+        donor is the other end of that delivery and has to be able to route to it.
+
+        A claim carries the board row it claimed, and that row names the donor the way the
+        board does — by the name the post is filed under — so the two sides are joined on
+        it. Which means this only ever answers the caller's own posts: a name that owns
+        nothing on the board owns no claimants, and a shelter asking is told that rather
+        than shown somebody else's delivery.
+        """
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+
+        records = claims_on_posts(display_name(me))
+        if PERSIST:
+            with connect() as conn:
+                records = claims_on_posts(display_name(me), conn)
+
+        posts = claimed_posts(records, me)
+        payload = {
+            "ok": True,
+            "donor": display_name(me),
+            "count": len(records),
+            "posts": posts,
+        }
+        if not posts:
+            payload["note"] = "no shelter has claimed one of your posts yet"
         if not PERSIST:
             payload["demo"] = True
         return self.send_json(200, payload)

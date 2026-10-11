@@ -138,11 +138,11 @@ the matching logic, and invites visitors into the flow above.
 
 | File | Purpose |
 | --- | --- |
-| `frontend/index.html` | Landing page — the site's entry point and default document |
+| `frontend/index.html` | Landing page — the site's entry point and default document, carrying the route map under the hero |
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on). The HTTP handler and the routes; everything it calls lives in the topic modules beside it |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes — its second panel the last month's mix by goods category, weighed by the backend and labelled one bar per category — plus the delivery-location card; and the *Ongoing Deliveries* section, which is the rationing pass for this kitchen: three figures, a ring of one post's claimants with every slice labelled by shelter and share, and the queue under it |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels — the items of theirs a shelter has claimed, in a carousel of summaries with the selected one expanded beside its figures — the *Route to the shelter* panel under it, whose map draws the selected order and whose rail lists that order's claimants, each one drawing the route to its own shelter, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes — its second panel the last month's mix by goods category, weighed by the backend and labelled one bar per category — plus the delivery-location card; and the *Ongoing Deliveries* section, which is the rationing pass for this kitchen: three figures, a ring of one post's claimants with every slice labelled by shelter and share, and the queue under it |
 | `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same arrangement for recipients, carrying the same top rail under its own section names (*Incoming Deliveries*, *Delivery Status*, *Received Deliveries*) and the same Dashboard screen with its own counters; its *Feed* section is that same live board in three views (all posts, the posts nobody has claimed yet, and the posts tagged with the goods this recipient needs), with a claim button on every post — a claimed one included, because a post can be claimed by several recipients and it is the donor who rations between them |
 | `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` and `surplus_claims` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, reads back who has claimed what, streams changes to both tables, holds the six goods categories one time, and draws every post as the one shared card both roles see — including the line naming the first recipient to claim it and counting the rest |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
@@ -248,6 +248,21 @@ reverse lookup behind a moved pin — are OpenStreetMap's **Nominatim** service.
 it is free and keyless, so the overlay needs no account, no API key and no card.
 MapLibre is fetched from a CDN the first time the overlay opens, so the dashboards
 themselves stay light.
+
+The landing page carries the same map without an account: the section under the hero
+draws the fixture's own delivery — Whitfield Bakery to Fort York Food Bank — with the
+same teardrop at the pickup, the same ring for the drop-off and the same road from
+OSRM, its two ends named in the card's legend. It is a teaser rather than a console,
+so the map takes no pointer and carries no controls or attribution strip, and its
+style drops the two label layers the console paints: the ends are named in the legend,
+and a street name would have pulled font glyphs down with it. Nothing is fetched while
+the page loads — MapLibre, its stylesheet, the tiles and the road are all asked for
+only once that card has been approached, and its drawn shape holds the space until
+then; a card whose library or router cannot be read keeps that shape and says which of
+the two failed instead of showing an empty panel. The route is placed against the
+card's own furniture rather than against fixed figures, re-measured after the webfonts
+land, because a phone's legend is a third of the card and the two marks stand off the
+coordinates they name.
 
 Both OSM services are shared public infrastructure, so the overlay stays a good
 citizen: lookups run once per search and once per settled pin movement rather than on
@@ -920,6 +935,7 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `POST` | `/api/surplus-categories` | The last month of the caller's own surplus log, summarised by goods category: kilograms, entry count, share of the total and how each bar was read — `text`, `assumed`, `logged` or `mixed`. The caller's board rows arrive in the body as `posts` (`400` `no_posts` without the key) and are **filed into the log first**, each row once, under its own post id; the window (`days`, default 30, clamped to 1–365) is applied when the log is read rather than when the board is. Only rows carrying the caller's own business name are filed — the rest are reported as `skipped` — and the answer carries `filed` and `stored` beside the summary. A month of logged days is seeded into the log for the fixture kitchens, so the mix stands on a board that has been cleared |
 | `POST` | `/api/rations` | Run the same pass and publish the caller's own shares back to the board, writing `allocated_kg`, `allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at` onto each row it claimed — and nothing else about the row. Answers `503` `board_unconfigured` when `RESQ_SUPABASE_URL`/`RESQ_SUPABASE_KEY` are not set, and `200` with a per-post result otherwise — including when a row refuses the write, which the result says per post rather than failing the request |
 | `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
+| `GET` | `/api/post-claims` | The other side of the row above: the claims other shelters have made on the signed-in account's **own board posts**, gathered post by post, newest post first, each with the claimants on it — their name, address and confirmed pin, when they claimed it, and how far they are from the caller's own pin. Needs a bearer token (`401`); answers an empty list with a `note` for an account with nothing claimed. Only the caller's own posts are ever read, so a shelter that owns no posts is told that rather than shown somebody else's delivery |
 | `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201` |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 | `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the year-long window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
@@ -962,6 +978,23 @@ takes the newest order the caller is the recipient side of and draws the drive b
 its two pins, described under [The delivery map](#the-delivery-map). Nothing calls
 `/api/matches` from a page yet: wiring the rails and the donor's impact panel to it is
 the next piece of work.
+
+**The donor's side of the same board** reads it the other way round. The donor
+dashboard's *Pending orders* surface is the items of theirs a shelter has reached for:
+the rows the board marks `claimed`, newest first, in a carousel of summaries, with the
+selected one expanded beside its figures — how much is on the move, how many shelters
+are on it and how far the nearest one is. The board carries the item and its status but
+not *who* claimed it, because that record lives in this API, so the two halves are read
+separately and joined on the post id: the rows come from `surplus_posts` and the
+claimants from `GET /api/post-claims`. Under that surface the selected order is a
+delivery: the donor's own confirmed pin is the pickup, the shelter's is the drop-off, and
+the drive between them is drawn with the same map and the same OSRM router the
+recipient's console uses — nearest shelter first, and pressing another shelter in the
+rail beside the map redraws it to that one. A claim whose shelter has confirmed no
+location is listed as a card that says so rather than a route drawn to nowhere, and a
+claimed row with no claim on record — which is what an older row looks like on a
+deployment that has just started keeping claims — says that too instead of reading as
+zero claimants.
 
 ### The rationing pass
 
@@ -1210,6 +1243,6 @@ and its coordinates are stored on the account and waiting there the next time th
 opens. The surplus board needs its migration applied once before it will take a row.
 
 The layout of the site is still settling: the landing page keeps only teaser
-content (the hero details, the capability cards and the footer) and hands off to
+content (the hero, the route map and the matching-engine cards) and hands off to
 the onboarding page, whose role chooser modal is now unreachable from the UI, and
 the onboarding page still carries its own copy of the marketing sections.

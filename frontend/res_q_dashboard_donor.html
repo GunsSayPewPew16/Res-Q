@@ -128,6 +128,94 @@
             border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
         }
 
+        /* The pending-orders carousel: the small green inset the item summaries scroll
+           through. It is a shade deeper than the surface it sits on, which is what makes it
+           read as a box of its own without a second colour being introduced. */
+        .pending-rail {
+            background-color: rgba(142, 182, 155, 0.34);
+            border: 1px solid rgba(5, 31, 32, 0.14);
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+            padding: 0.625rem;
+        }
+        /* The strip scrolls sideways rather than wrapping: every waiting item stays one
+           glance away, and the row keeps the same height whether there is one of them or
+           nine. */
+        .pending-track {
+            display: flex;
+            gap: 0.625rem;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            padding-bottom: 0.125rem;
+        }
+        /* One item, at a glance. The card being read is the lit shape — ink, with the
+           surface's own mint for its text — which is the same treatment the rail's tab and
+           the board's feed tabs wear. */
+        .pending-card {
+            flex: 0 0 auto;
+            width: 12.5rem;
+            scroll-snap-align: start;
+            text-align: left;
+            cursor: pointer;
+            padding: 0.75rem 0.875rem;
+            background-color: #DAF1DE;
+            color: #051F20;
+            border: 1px solid rgba(5, 31, 32, 0.16);
+            border-radius: max(0.6rem, calc(var(--canvas-r) - var(--gutter) - var(--step) - 0.25rem));
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+        .pending-card:hover { border-color: #051F20; }
+        .pending-card:focus-visible { outline: 2px solid #051F20; outline-offset: 2px; }
+        .pending-card.is-on {
+            background-color: #051F20;
+            color: #DAF1DE;
+            border-color: #051F20;
+        }
+
+        /* The white box: the item the carousel has selected, read in full rather than at a
+           glance. White rather than the surface's mint, because it is the one block here
+           carrying paragraphs rather than a chip and a figure. */
+        .pending-detail {
+            background-color: #FFFFFF;
+            border: 1px solid rgba(5, 31, 32, 0.12);
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+        }
+
+        /* One shelter holding a claim on the selected item, beside the map it is routed to.
+           The one being drawn is the lit card, like every other pick on this page. */
+        .claimant-card {
+            display: block;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            padding: 0.75rem 0.875rem;
+            background-color: #0B2B26;
+            border: 1px solid #235347;
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .claimant-card:hover { background-color: #163832; border-color: #8EB69B; }
+        .claimant-card:focus-visible { outline: 2px solid #8EB69B; outline-offset: 2px; }
+        .claimant-card.is-on { background-color: #163832; border-color: #8EB69B; }
+        .claimant-card:disabled { cursor: default; opacity: 0.6; }
+
+        /* The drop-off end of the route: an open ring rather than a second teardrop, so the
+           two ends of one delivery are told apart at a glance — the tip is where the food
+           is picked up, the ring is where it is going. */
+        .resq-ring-icon {
+            background: transparent;
+            border: 0;
+            width: 26px;
+            height: 26px;
+        }
+        .resq-ring {
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            background-color: rgba(218, 241, 222, 0.20);
+            border: 3px solid #DAF1DE;
+            box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
+        }
+
         /* The rail's tabs. The item being read is the one lit shape in the rail; every
            other one is its label and nothing else, which is what keeps a five-row rail
            from reading as five buttons. */
@@ -543,8 +631,9 @@
 
                 <!-- The filter row, then the one light surface on the screen. The three labels are
                      the box's own filters — labels only for now, with no field behind them — and
-                     the box under them is the working board: what is still waiting on an order,
-                     with the selected order's details sitting inside it as a dark inset. -->
+                     the box under them is the working board: the items of this donor's that a
+                     shelter has claimed, in the carousel, with the one being read expanded in
+                     the white box under it and its figures as a dark inset beside them. -->
                 <div class="space-y-3">
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="inline-flex items-center gap-2 text-sm text-[#8EB69B] mr-1">Active filters
@@ -558,16 +647,29 @@
                     <div class="surface-light p-5 md:p-7">
                         <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
-                            <div class="xl:col-span-7 flex flex-col">
+                            <div class="xl:col-span-7 flex flex-col min-w-0">
                                 <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#051F20]/15">
-                                    <h2 class="font-display text-2xl leading-none">Pending orders <span class="text-[#051F20]/45 text-lg">(0)</span></h2>
+                                    <h2 class="font-display text-2xl leading-none">Pending orders <span id="pendingCount" class="text-[#051F20]/45 text-lg">(0)</span></h2>
                                     <span id="pendingState" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-[#051F20]/8 border border-[#051F20]/15 text-[#051F20]/70">idle</span>
                                 </div>
 
-                                <!-- The board itself: one row per order still waiting, and nothing at
-                                     all until the first one arrives. -->
-                                <div id="pendingOrdersList" class="flex-1 pt-5 space-y-3">
-                                    <span class="block text-sm text-[#051F20]/55">No orders waiting.</span>
+                                <!-- The carousel: one small card per item of this donor's that a
+                                     shelter has reached for, scrolled sideways in the board's
+                                     own green inset. A card is the whole summary — what the
+                                     item is, how much of it, and how many shelters are on it
+                                     — and the one being read wears the lit shape. -->
+                                <div class="pending-rail mt-5">
+                                    <div id="pendingCarousel" class="pending-track" role="list" aria-label="Items waiting on a delivery">
+                                        <span class="block text-xs text-[#051F20]/55 px-1 py-4">No orders waiting.</span>
+                                    </div>
+                                </div>
+
+                                <!-- The white box: the item the carousel has selected, read in
+                                     full rather than at a glance — what it is, how much of it,
+                                     where it is picked up from, when it went up, and which
+                                     shelters have claimed it. -->
+                                <div id="pendingDetail" class="pending-detail mt-4 p-5">
+                                    <span class="block text-sm text-[#051F20]/55">An item appears here once a shelter has claimed one of yours.</span>
                                 </div>
 
                                 <div class="mt-5 organic-inner border border-dashed border-[#051F20]/30 flex items-center justify-center gap-2 py-5 text-sm text-[#051F20]/70">
@@ -575,45 +677,88 @@
                                 </div>
                             </div>
 
+                            <!-- The same order as a panel of figures: how much is on the move,
+                                 how many shelters want it and how far the nearest one is — the
+                                 three things the map under this surface draws from. -->
                             <div class="xl:col-span-5 organic-inner bg-[#051F20] text-[#DAF1DE] p-5 md:p-6 border border-[#235347] flex flex-col gap-4">
                                 <div class="flex items-center justify-between gap-3">
                                     <span class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Order details</span>
-                                    <span class="organic-chip px-3 py-1 text-[10px] border border-[#235347] text-[#8EB69B]">none</span>
+                                    <span id="pendingStatus" class="organic-chip px-3 py-1 text-[10px] border border-[#235347] text-[#8EB69B]">none</span>
                                 </div>
 
-                                <div class="grid grid-cols-3 gap-3">
-                                    <span class="panel-raised h-20"></span>
-                                    <span class="panel-raised h-20"></span>
-                                    <span class="panel-raised h-20"></span>
-                                </div>
+                                <div id="pendingFigures" class="grid grid-cols-3 gap-3"></div>
 
-                                <div class="mt-auto pt-4 border-t border-[#235347] space-y-3">
-                                    <div class="flex items-center gap-2">
-                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
-                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-3">
-                                        <span class="h-1.5 w-24 organic-chip bg-[#235347]"></span>
-                                        <span class="h-3.5 w-24 organic-chip bg-[#163832] border border-[#235347]"></span>
-                                    </div>
-                                </div>
+                                <div id="pendingFoot" class="mt-auto pt-4 border-t border-[#235347] space-y-3"></div>
                             </div>
 
                         </div>
                     </div>
                 </div>
 
-                <!-- Where the surplus is going: the routing map, with the queue rail beside it. -->
+                <!-- Where the surplus is going: the route the selected order runs, with the
+                     shelters that claimed it beside the map. The one panel is the map of one
+                     delivery — this donor's own pin at the pickup, the shelter that reached for
+                     the item at the drop-off — and the other is that item's claimants, one card
+                     each: press a shelter and the map redraws to it. -->
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6">
 
                     <div class="xl:col-span-8 panel p-5 md:p-6">
-                        <div class="w-full h-72 organic-inner border border-[#235347] bg-[#0B2B26]"></div>
+                        <div id="orderRoutePanel" class="relative w-full h-80 md:h-96 organic-inner border border-[#235347] bg-[#0B2B26] overflow-hidden">
+                            <!-- The resting shape, laid over the empty map so the panel is never
+                                 a blank green box while the library and the tiles are on their
+                                 way — and put back whenever the route cannot be drawn. -->
+                            <svg id="orderRouteRest" class="absolute inset-0 w-full h-full z-10" viewBox="0 0 640 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <g stroke="#235347" stroke-opacity="0.5" fill="none">
+                                    <path d="M0 62 H640" /><path d="M0 140 H640" /><path d="M0 224 H640" /><path d="M0 292 H640" />
+                                    <path d="M86 0 V320" /><path d="M225 0 V320" /><path d="M400 0 V320" /><path d="M540 0 V320" />
+                                </g>
+                                <path d="M120 250 C 200 232 215 160 305 146 C 400 130 430 84 520 66" stroke="#235347" stroke-width="10" fill="none" stroke-linejoin="round" opacity="0.4" />
+                                <path d="M120 250 C 200 232 215 160 305 146 C 400 130 430 84 520 66" stroke="#DAF1DE" stroke-width="2.5" fill="none" stroke-linejoin="round" />
+                                <circle cx="520" cy="66" r="11" fill="#DAF1DE" fill-opacity="0.18" />
+                                <circle cx="520" cy="66" r="7" fill="none" stroke="#DAF1DE" stroke-width="3" />
+                                <circle cx="120" cy="250" r="7" fill="#0B2B26" stroke="#DAF1DE" stroke-width="2.5" />
+                            </svg>
+
+                            <!-- The live map mounts here, and only once its library has arrived. -->
+                            <div id="orderRouteMap" class="absolute inset-0 hidden"></div>
+
+                            <!-- What the map is showing, in the corner the panel keeps for its one
+                                 chip: the item's state, and the road distance once the router
+                                 has answered. -->
+                            <div class="absolute top-3 right-3 z-20 organic-chip inline-flex items-center gap-2 px-3 py-2 bg-[#051F20]/90 border border-[#235347]">
+                                <span id="orderRouteDot" class="w-1.5 h-1.5 rounded-full bg-[#235347]"></span>
+                                <span id="orderRouteChip" class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">no route yet</span>
+                            </div>
+
+                            <!-- Both ends of the route, named, with the line under them saying where
+                                 the route itself came from. Inside the panel rather than on the
+                                 map: a pale line over pale tiles is a line nobody can read. -->
+                            <div id="orderRouteLegend" class="absolute bottom-4 left-4 right-4 z-20 hidden">
+                                <div class="organic-inner bg-[#051F20]/90 border border-[#235347] px-3 py-2 space-y-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE] shrink-0"></span>
+                                        <span id="orderRouteFrom" class="text-[11px] leading-snug text-[#DAF1DE] truncate"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full border border-[#8EB69B] shrink-0"></span>
+                                        <span id="orderRouteTo" class="text-[11px] leading-snug text-[#8EB69B] truncate"></span>
+                                    </div>
+                                    <p id="orderRouteNote" class="text-[10px] text-[#8EB69B]/80 leading-relaxed pt-2 border-t border-[#235347]"></p>
+                                </div>
+                            </div>
+
+                            <p id="orderRouteRestNote" class="absolute bottom-4 left-4 right-4 z-10 text-[11px] text-[#8EB69B] leading-relaxed">No delivery selected yet. Pick an item above and its route to the nearest shelter appears here.</p>
+                        </div>
                     </div>
 
-                    <div class="xl:col-span-4 panel p-5 md:p-6 space-y-3">
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
+                    <div class="xl:col-span-4 panel p-5 md:p-6 flex flex-col gap-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <span class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Claimed by</span>
+                            <span id="orderClaimState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">idle</span>
+                        </div>
+                        <div id="orderClaimants" class="flex-1 space-y-3">
+                            <span class="block text-[11px] text-neutral-500">No shelters on this item yet.</span>
+                        </div>
                     </div>
 
                 </div>
@@ -1773,6 +1918,11 @@
         function openDashboardOrders() {
             var db = resqDb();
             refreshMySurplus();
+            // The route panel under the board is asked for only once it is approached, and
+            // told to look at its box again whenever this section comes back in front of the
+            // donor — a map that was built while it was off screen was built at no size.
+            watchOrderRoute();
+            if (orderRouteMap) { orderRouteMap.resize(); paintOrderRoute(); }
             if (!db) { return; }
             if (!ordersWatch) {
                 ordersWatch = db.watchPosts(function () { refreshMySurplus(); });
@@ -2538,12 +2688,25 @@
             placeStartingPin();
         }
 
-        // MapLibre comes from a CDN the first time the map opens — its stylesheet and its
+        // MapLibre comes from a CDN the first time a map opens — its stylesheet and its
         // script, since the pin and the controls are laid out by that stylesheet. The tiles
         // are OpenFreeMap's keyless vector endpoint, so nothing here needs an account or a
         // token.
-        function loadMaplibre() {
-            if (maplibreOnPage) { initDeliveryMap(); return; }
+        //
+        // One load serves every map on the page: the pin picker's overlay and the route
+        // panel under the board both register here, so whichever asks first fetches the
+        // library and the other is handed the same arrival rather than a second copy of it.
+        var maplibreWaiters = [];
+
+        function drainMaplibre() {
+            var waiting = maplibreWaiters;
+            maplibreWaiters = [];
+            waiting.forEach(function (work) { work(); });
+        }
+
+        function loadMaplibre(onReady) {
+            maplibreWaiters.push(onReady || initDeliveryMap);
+            if (maplibreOnPage) { drainMaplibre(); return; }
             if (maplibreRequested) { return; }
             maplibreRequested = true;
             var css = document.createElement('link');
@@ -2556,7 +2719,7 @@
             script.onload = function () {
                 maplibreOnPage = true;
                 hideDeliverNotice();
-                initDeliveryMap();
+                drainMaplibre();
             };
             script.onerror = function () {
                 maplibreRequested = false;
@@ -2930,6 +3093,9 @@
                 if (!rows.length) {
                     acceptedPosts = 0;
                     renderOrdersFigure();
+                    // Nothing of this donor's is on the board, so nothing is waiting on
+                    // anybody: the surface says so rather than holding the last item up.
+                    pendingBoard(rows, {});
                     setChip('mySurplusState', 'empty', CHIP_DONE);
                     renderMySurplus(rows, '', {});
                     loadCategoryMix(rows);
@@ -2944,6 +3110,12 @@
                         // from, so the figure moves with them wherever they change.
                         acceptedPosts = countAccepted(rows, byPost);
                         renderOrdersFigure();
+                        // The same rows are the pending orders: an item of this donor's that
+                        // a shelter has claimed is one waiting to go out, and the surface
+                        // above reads them as the deliveries they are. The claims read for
+                        // the figure are the board's own answer to who is on each item,
+                        // which is what the claimant list beside the map is built from.
+                        pendingBoard(rows, byPost);
                         setChip('mySurplusState', rows.length ? rows.length + ' logged' : 'empty', CHIP_DONE);
                         renderMySurplus(rows, '', byPost);
                         // The analyser's category mix is read from these same rows: one read
@@ -3783,6 +3955,942 @@
 
         function closeRationing() {
             rationData = null;
+        }
+
+        // ---------------------------------------------------------------------------
+        // Pending orders: every item of this donor's that a shelter has reached for, read
+        // as one delivery each.
+        //
+        // The board carries the item and says it has been claimed; what it does not carry is
+        // *who* claimed it, because that record lives in the API (`POST /api/claims`). So
+        // this reads both halves: this donor's own rows from the same table the orders figure
+        // already counts, and the claims on them from `GET /api/post-claims`, which answers
+        // the shelters holding a claim on this account's posts, each with its own confirmed
+        // pin. Neither half is invented — an item nobody has claimed is not an order, and a
+        // claim with no shelter pin behind it is a card that says so rather than a route
+        // drawn to nowhere.
+        //
+        // The surface reads that at three sizes: one card per waiting item in the carousel,
+        // the item the carousel is on expanded in the white box under it, and the three
+        // figures the map is drawn from in the dark inset beside it. Under the surface the
+        // same order is a delivery: the drive from this donor's own pin to the shelter the
+        // rail beside the map is on.
+        // ---------------------------------------------------------------------------
+        var POST_CLAIMS_URL = apiUrl('/api/post-claims');
+        var ROUTE_URL = 'https://router.project-osrm.org/route/v1/driving/';
+        var ORDER_ROUTE_CREDIT = '\u00a9 OpenStreetMap contributors \u00b7 tiles \u00a9 OpenFreeMap';
+        // The two marks stand off the coordinate they name — the teardrop's tip is the point
+        // and its body rises above it, the ring is centred on its own — so a fit has to clear
+        // the panel's own furniture *and* the mark standing between.
+        var ORDER_PIN_HEIGHT = 36;
+        var ORDER_RING_REACH = 13;
+
+        var pendingRows = [];           // this donor's claimed rows, newest first
+        var pendingBoardClaims = {};    // post id -> the board's own claim rows for it
+        var pendingClaims = {};         // post id -> the claim record read from the API
+        var pendingOrderId = '';        // the row the white box is expanded on
+        var pendingClaimant = 0;        // which of that item's shelters the map is drawn to
+        var pendingClaimsKey = null;    // the set of posts and claims last asked about
+        var pendingClaimTrouble = '';   // why the claim records could not be read
+        var pendingClaimReading = false;
+
+        function pendingEl(id) { return document.getElementById(id); }
+
+        // Everything read from the board or the API goes into markup through here.
+        function pendingText(value) { return surplusText(value); }
+
+        function pendingRow() {
+            for (var i = 0; i < pendingRows.length; i += 1) {
+                if (pendingRows[i].id === pendingOrderId) { return pendingRows[i]; }
+            }
+            return null;
+        }
+
+        // The two names are the same shelter said two ways, and the pages do not agree on
+        // which one they keep: the board files a claim under the person who made it with the
+        // organisation beside it, while the API's own record names the account the way the
+        // rest of the site names one — its business first. So both are asked when the two
+        // halves are joined, folded the way the board's own one-claim-per-recipient index
+        // folds a name.
+        function pendingSameName(one, other) {
+            var db = resqDb();
+            if (db && db.sameName) { return db.sameName(one, other); }
+            return String(one === null || one === undefined ? '' : one).trim().toLowerCase()
+                === String(other === null || other === undefined ? '' : other).trim().toLowerCase();
+        }
+
+        // The claimants on one item, out of both halves of the record.
+        //
+        // Neither half is complete on its own. The board's own `surplus_claims` rows say who
+        // asked and when — which is what the claimant line on a board card is drawn from —
+        // while the API's claim record for the same post adds the one thing a route needs and
+        // the board does not keep: the shelter's own confirmed pin, and so the distance to
+        // it. They are joined on the name, and an entry either half knows is listed: a name
+        // with no pin behind it is still a shelter holding a claim, and a pin with no board
+        // row behind it is a claim recorded before the board kept them.
+        //
+        // Ordered the way a round would serve them — pinned first, nearest first, and the
+        // ones whose pin could not be read after them in the order they asked — because this
+        // is read beside a map and the nearest shelter is the one a donor looks at.
+        function pendingClaimantsFor(id) {
+            var known = (pendingClaims[id] || {}).claimants || [];
+            var board = pendingBoardClaims[id] || [];
+            var rows = [];
+
+            known.forEach(function (claim) {
+                var onBoard = null;
+                for (var i = 0; i < board.length; i += 1) {
+                    if (pendingSameName(board[i].recipient_name, claim.name)
+                        || pendingSameName(board[i].recipient_org, claim.name)) {
+                        onBoard = board[i];
+                        break;
+                    }
+                }
+                rows.push({
+                    // The board's own naming wins where it has one: it is the name the donor
+                    // already read on the board, so the two surfaces agree.
+                    name: (onBoard && String(onBoard.recipient_name || '').trim()) || claim.name,
+                    org: (onBoard && String(onBoard.recipient_org || '').trim()) || '',
+                    address: claim.address || '',
+                    lat: claim.lat,
+                    lng: claim.lng,
+                    claimed_at: claim.claimed_at || (onBoard ? onBoard.claimed_at : ''),
+                    distance_km: claim.distance_km,
+                    pinned: claim.lat !== null && claim.lat !== undefined
+                });
+            });
+
+            board.forEach(function (claim) {
+                var name = String(claim.recipient_name || '').trim();
+                var org = String(claim.recipient_org || '').trim();
+                if (!name && !org) { return; }
+                var already = rows.some(function (one) {
+                    return pendingSameName(one.name, name) || pendingSameName(one.name, org);
+                });
+                if (already) { return; }
+                rows.push({
+                    name: name || org,
+                    org: org,
+                    address: '',
+                    lat: null,
+                    lng: null,
+                    claimed_at: claim.claimed_at || '',
+                    distance_km: null,
+                    pinned: false
+                });
+            });
+
+            rows.sort(function (one, other) {
+                if (one.pinned !== other.pinned) { return one.pinned ? -1 : 1; }
+                if (one.pinned) { return (one.distance_km || 0) - (other.distance_km || 0); }
+                return String(one.claimed_at || '').localeCompare(String(other.claimed_at || ''));
+            });
+            return rows;
+        }
+
+        function pendingClaimantList() { return pendingClaimantsFor(pendingOrderId); }
+
+        // One claimant, named the way the board names them: the person who asked, with the
+        // organisation they asked for beside them when the two are not the same word.
+        function pendingClaimName(claimant) {
+            var name = String((claimant && claimant.name) || '').trim();
+            var org = String((claimant && claimant.org) || '').trim();
+            if (!name) { return org || 'a shelter'; }
+            return (org && !pendingSameName(org, name)) ? name + ' (' + org + ')' : name;
+        }
+
+        function pendingClaimantRow() {
+            var list = pendingClaimantList();
+            if (!list.length) { return null; }
+            return list[Math.min(pendingClaimant, list.length - 1)];
+        }
+
+        // How many shelters are on an item, in the words the card and the white box use.
+        // The three states that are not a count are said rather than shown as zero: nothing
+        // has been read yet, nothing could be read, or neither half of the record holds a
+        // claim for an item the board calls claimed.
+        function pendingClaimLabel(id) {
+            var total = pendingClaimantsFor(id).length;
+            if (total) { return total + (total === 1 ? ' shelter' : ' shelters'); }
+            if (pendingClaimTrouble) { return 'claims unread'; }
+            return pendingClaimReading ? 'reading claims\u2026' : 'no claim record';
+        }
+
+        // Whether a row is waiting on an answer rather than having none: an item whose claim
+        // records have not been read yet is not the same thing as one the board says was
+        // claimed with nothing on the record behind it — and neither of those is the same as
+        // a row whose claims were read and could not be re-read just now, which keeps the
+        // last reading it had rather than being told it has none.
+        function pendingClaimUnread(row) {
+            return !!row && !pendingClaimTrouble && pendingClaimReading
+                && !pendingClaimantsFor(row.id).length;
+        }
+
+        // The board filtered to the deliveries: an item of this donor's that a shelter has
+        // claimed is one waiting to go out. The rows arrive newest first and are sorted to
+        // say so here too, because the carousel is read left to right and opens on the most
+        // recent item. A selection that is still on the board is kept, so a re-read does not
+        // move the white box under the donor's hands.
+        //
+        // The claims read beside the rows come in with them, because the same read of the
+        // board is what names the claimants: the row's own `surplus_claims` entries are the
+        // board's answer to who asked for it.
+        function pendingBoard(rows, byPost) {
+            pendingBoardClaims = byPost || {};
+            var claimed = (rows || []).filter(function (row) {
+                return row && row.status === 'claimed';
+            }).sort(function (a, b) {
+                return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+            });
+            pendingRows = claimed;
+            if (!pendingRow()) {
+                pendingOrderId = claimed.length ? claimed[0].id : '';
+                pendingClaimant = 0;
+            }
+            readPostClaims();
+            renderPendingOrders();
+        }
+
+        // The claim records behind the rows, asked for once per *set* of claimed posts: the
+        // board under this surface is re-read on a subscription and a timer, and the claims
+        // on it do not move until the set of claimed items does.
+        function readPostClaims() {
+            // The set of items *and* the claims on them: a second shelter claiming an item
+            // the donor already had a claim on does not change the rows at all, and its pin
+            // is only in this answer, so the read follows the claims as well as the posts.
+            var key = pendingRows.map(function (row) {
+                var onBoard = (pendingBoardClaims[row.id] || []).map(function (claim) {
+                    return claim.id || claim.recipient_name;
+                });
+                return row.id + ':' + onBoard.join('+');
+            }).join(',');
+            if (key === pendingClaimsKey) { return; }
+            pendingClaimsKey = key;
+            // The claims already read are kept while the new answer is on its way: the
+            // surface is re-read every so often, and blanking it in between would make a
+            // settled order flicker back to "no claim record" for a request's worth of
+            // time. The answer replaces the map whole when it lands.
+            pendingClaimTrouble = '';
+            if (!key) {
+                pendingClaimReading = false;
+                setChip('pendingState', 'none', CHIP_IDLE);
+                return;
+            }
+            var headers = { Accept: 'application/json' };
+            var token = readStore(TOKEN_KEY);
+            if (token) { headers.Authorization = 'Bearer ' + token; }
+            pendingClaimReading = true;
+            setChip('pendingState', 'reading\u2026', CHIP_BUSY);
+            fetch(POST_CLAIMS_URL, { headers: headers })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    pendingClaimReading = false;
+                    if (res.status !== 200 || !res.data || !res.data.ok) {
+                        pendingClaimTrouble = res.status === 401
+                            ? 'your session needs signing in again'
+                            : 'the claim records could not be read';
+                        // An item whose claims were read a moment ago keeps them, and the
+                        // surface only says the records are unread when there is nothing to
+                        // stand behind; a re-read that failed on an order already on screen
+                        // is a note on that order, not a blank one.
+                        var missing = pendingRows.some(function (row) {
+                            return !pendingClaims[row.id];
+                        });
+                        setChip('pendingState', missing ? 'claims unread'
+                            : pendingRows.length + ' waiting', missing ? CHIP_BUSY : CHIP_DONE);
+                        renderPendingOrders();
+                        return;
+                    }
+                    pendingClaims = {};
+                    (res.data.posts || []).forEach(function (post) {
+                        if (post && post.post_id) { pendingClaims[post.post_id] = post; }
+                    });
+                    setChip('pendingState', pendingRows.length + ' waiting', CHIP_DONE);
+                    renderPendingOrders();
+                })
+                .catch(function () {
+                    pendingClaimReading = false;
+                    pendingClaimTrouble = 'the claim records could not be read';
+                    setChip('pendingState', 'unreachable', CHIP_BUSY);
+                    renderPendingOrders();
+                });
+        }
+
+        function renderPendingOrders() {
+            var count = pendingEl('pendingCount');
+            if (count) { count.textContent = '(' + pendingRows.length + ')'; }
+            renderPendingCarousel();
+            renderPendingDetail();
+            renderPendingFigures();
+            renderClaimants();
+            paintOrderRoute();
+        }
+
+        // The carousel: one card per waiting item, with the one being read wearing the lit
+        // shape. Each card carries the whole summary — how many shelters are on it, what the
+        // item is, and how much of it.
+        function renderPendingCarousel() {
+            var track = pendingEl('pendingCarousel');
+            if (!track) { return; }
+            if (!pendingRows.length) {
+                track.innerHTML = '<span class="block text-xs text-[#051F20]/55 px-1 py-4">'
+                    + 'No orders waiting. An item you log appears here the moment a shelter'
+                    + ' claims it.</span>';
+                return;
+            }
+            track.innerHTML = pendingRows.map(function (row) {
+                var on = row.id === pendingOrderId;
+                return '<button type="button" role="listitem" class="pending-card'
+                        + (on ? ' is-on' : '') + '" aria-pressed="' + (on ? 'true' : 'false') + '"'
+                        + ' onclick="selectPendingOrder(\'' + pendingText(row.id) + '\')">'
+                    + '<span class="flex items-center justify-between gap-2 text-[10px] uppercase'
+                        + ' tracking-[0.2em] ' + (on ? 'text-[#8EB69B]' : 'text-[#051F20]/50') + '">'
+                        + '<span>' + pendingText(pendingClaimLabel(row.id)) + '</span>'
+                        + '<span aria-hidden="true">' + (on ? '&#9679;' : '&#8594;') + '</span>'
+                    + '</span>'
+                    + '<span class="block font-display text-base leading-snug mt-2">'
+                        + pendingText(row.item_name) + '</span>'
+                    + '<span class="block text-[11px] mt-2 truncate '
+                        + (on ? 'text-[#8EB69B]' : 'text-[#051F20]/55') + '">'
+                        + pendingText(row.quantity) + '</span>'
+                    + '</button>';
+            }).join('');
+        }
+
+        function pendingFact(label, value) {
+            return '<div class="min-w-0">'
+                + '<span class="block text-[10px] uppercase tracking-[0.2em] text-[#051F20]/45">'
+                    + pendingText(label) + '</span>'
+                + '<span class="block text-sm leading-snug mt-1">'
+                    + pendingText(value || '\u2014') + '</span>'
+                + '</div>';
+        }
+
+        // The white box: the item the carousel is on, read in full rather than at a glance.
+        // Its last line is where the shelters came from, because that is the one thing on
+        // this surface the board does not carry — and a claim that is not on record is said
+        // there rather than left as an empty rail beside the map.
+        function renderPendingDetail() {
+            var box = pendingEl('pendingDetail');
+            if (!box) { return; }
+            var row = pendingRow();
+            if (!row) {
+                box.innerHTML = '<span class="block text-sm text-[#051F20]/55">'
+                    + 'An item appears here once a shelter has claimed one of yours. Everything'
+                    + ' you have logged and nobody has taken is on the board, unclaimed.'
+                    + '</span>';
+                return;
+            }
+
+            var db = resqDb();
+            var tag = db ? db.goodsType(row.goods_type) : null;
+            var claimants = pendingClaimantList();
+            var names = claimants.map(pendingClaimName);
+            var note;
+            if (names.length) {
+                var nearest = claimants[0];
+                note = 'Claimed by ' + names.join(', ') + '. ';
+                if (nearest.pinned && nearest.distance_km !== null && nearest.distance_km !== undefined) {
+                    note += 'Nearest first: ' + nearest.distance_km.toFixed(1) + ' km to '
+                        + pendingClaimName(nearest) + '.';
+                } else if (nearest.pinned) {
+                    note += 'The distance to ' + pendingClaimName(nearest) + ' could not be'
+                        + ' measured: this account has no confirmed delivery location to'
+                        + ' measure it from.';
+                } else if (pendingClaimTrouble) {
+                    note += 'The claim records that carry each shelter\u2019s own pin could not'
+                        + ' be read, so no distance could be measured to them.';
+                } else {
+                    note += pendingClaimName(nearest) + ' has confirmed no delivery location,'
+                        + ' so there is no pin to measure a route to it from.';
+                }
+                if (names.length > 1) {
+                    note += ' Pick a shelter beside the map to draw its route instead.';
+                }
+                if (pendingClaimTrouble && nearest.pinned) {
+                    note += ' The claim records could not be re-read just now, so this is the'
+                        + ' last reading on record.';
+                }
+            } else if (pendingClaimTrouble) {
+                note = 'The shelters holding a claim on this item could not be read \u2014 '
+                    + pendingClaimTrouble + ' \u2014 so the rail beside the map is empty.';
+            } else if (pendingClaimUnread(row)) {
+                note = 'Reading the claim records for this item\u2026';
+            } else {
+                note = 'The board says a shelter claimed this item, but no claim is on record '
+                    + 'for it, so there is no shelter to route to.';
+            }
+
+            box.innerHTML =
+                '<div class="flex flex-wrap items-start justify-between gap-3">'
+                + '<div class="min-w-0">'
+                    + '<span class="block text-[10px] uppercase tracking-[0.2em] text-[#051F20]/45">'
+                        + 'Order waiting</span>'
+                    + '<span class="block font-display text-2xl leading-tight mt-1">'
+                        + pendingText(row.item_name) + '</span>'
+                + '</div>'
+                + '<span class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.2em]'
+                    + ' bg-[#051F20] text-[#DAF1DE]">claimed \u00b7 '
+                    + pendingText(pendingClaimLabel(row.id)) + '</span>'
+                + '</div>'
+                + '<div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">'
+                    + pendingFact('Quantity', row.quantity)
+                    + pendingFact('Pickup', row.location)
+                    + pendingFact('Posted', db ? db.formatWhen(row.created_at) : '')
+                    + pendingFact('Category', tag ? tag.emoji + ' ' + tag.label : 'no category')
+                + '</div>'
+                + '<p class="mt-4 pt-3 border-t border-[#051F20]/12 text-[11px] leading-relaxed'
+                    + ' text-[#051F20]/60">' + pendingText(note) + '</p>';
+        }
+
+        function pendingFigure(label, value) {
+            return '<div class="panel-raised p-3 min-w-0">'
+                + '<span class="block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">'
+                    + pendingText(label) + '</span>'
+                + '<span class="block font-display text-xl leading-tight mt-2 truncate">'
+                    + pendingText(value) + '</span>'
+                + '</div>';
+        }
+
+        function pendingLine(label, value) {
+            return '<div class="flex items-start gap-3">'
+                + '<span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] shrink-0 pt-0.5">'
+                    + pendingText(label) + '</span>'
+                + '<span class="text-sm leading-snug min-w-0">' + pendingText(value) + '</span>'
+                + '</div>';
+        }
+
+        // The dark inset: the same order as three figures and its pickup, which is what the
+        // map under this surface is drawn from and what a donor checks before a run.
+        function renderPendingFigures() {
+            var figures = pendingEl('pendingFigures');
+            var foot = pendingEl('pendingFoot');
+            var status = pendingEl('pendingStatus');
+            if (!figures || !foot) { return; }
+
+            var row = pendingRow();
+            if (status) { status.textContent = row ? 'claimed' : 'none'; }
+            if (!row) {
+                figures.innerHTML = ['Shelters', 'Nearest', 'First claim'].map(function (label) {
+                    return pendingFigure(label, '\u2014');
+                }).join('');
+                foot.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">No item waiting.'
+                    + ' The moment a shelter claims one of your posts it appears here.</span>';
+                return;
+            }
+
+            var db = resqDb();
+            var claimants = pendingClaimantList();
+            var nearest = claimants.length ? claimants[0].distance_km : null;
+            // The first claim is the one the item started moving on: the earlier of the
+            // claims on record, read off the records themselves rather than guessed at.
+            var firsts = claimants.map(function (claim) { return String(claim.claimed_at || ''); })
+                .filter(function (at) { return !!at; }).sort();
+            var tag = db ? db.goodsType(row.goods_type) : null;
+            // A count of shelters is only a figure once the records behind it have been
+            // read: with none on file, "0" would read as nobody wanting the item, which is
+            // not the same thing as nobody having recorded it.
+            var known = claimants.length > 0;
+            figures.innerHTML =
+                pendingFigure('Shelters', known ? String(claimants.length) : '\u2014')
+                + pendingFigure('Nearest',
+                    (nearest === null || nearest === undefined) ? '\u2014' : nearest.toFixed(1) + ' km')
+                + pendingFigure('First claim',
+                    (db && firsts.length) ? db.formatWhen(firsts[0]) : '\u2014');
+            foot.innerHTML =
+                pendingLine('Quantity', row.quantity)
+                + pendingLine('Pickup', row.location)
+                + '<div class="flex flex-wrap items-center justify-between gap-3">'
+                    + '<span class="organic-chip px-3 py-1 text-[10px] border border-[#235347]'
+                        + ' text-[#8EB69B]">'
+                        + (tag ? tag.emoji + ' ' + pendingText(tag.label) : 'no category') + '</span>'
+                    + '<span class="organic-chip px-3 py-1 text-[10px] border border-[#235347]'
+                        + ' text-[#8EB69B]">up '
+                        + pendingText(db ? db.formatWhen(row.created_at) : '') + '</span>'
+                + '</div>';
+        }
+
+        // The rail beside the map: every shelter holding a claim on the selected item, the
+        // nearest first, each one a card that redraws the map to its own shelter. A shelter
+        // that has confirmed no location is still a card — it is holding a claim — but it
+        // cannot be pressed, and it says why instead of pointing the map nowhere.
+        function renderClaimants() {
+            var rail = pendingEl('orderClaimants');
+            var state = pendingEl('orderClaimState');
+            if (!rail) { return; }
+            var row = pendingRow();
+            var claimants = pendingClaimantList();
+
+            if (!row) {
+                if (state) { state.textContent = 'idle'; }
+                rail.innerHTML = '<span class="block text-[11px] text-neutral-500">'
+                    + 'No item selected. The shelters that claimed the item in the white box'
+                    + ' are listed here.</span>';
+                return;
+            }
+            if (!claimants.length) {
+                if (pendingClaimTrouble) {
+                    if (state) { state.textContent = 'unread'; }
+                    rail.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
+                        + pendingText('The claims on this item could not be read \u2014 '
+                            + pendingClaimTrouble + '.') + '</span>';
+                    return;
+                }
+                if (pendingClaimUnread(row)) {
+                    if (state) { state.textContent = 'reading\u2026'; }
+                    rail.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
+                        + 'Reading the claim records for this item\u2026</span>';
+                    return;
+                }
+                if (state) { state.textContent = 'none'; }
+                rail.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
+                    + 'The board says a shelter claimed this item, but no claim is on the'
+                    + ' record for it, so there is nobody to route to yet.</span>';
+                return;
+            }
+
+            if (state) {
+                var withPin = claimants.filter(function (claimant) { return claimant.pinned; }).length;
+                state.textContent = claimants.length
+                    + (claimants.length === 1 ? ' shelter' : ' shelters')
+                    + (withPin === claimants.length ? ' \u00b7 nearest first'
+                        : ' \u00b7 ' + withPin + ' with a pin');
+            }
+            var db = resqDb();
+            var chosen = Math.min(pendingClaimant, claimants.length - 1);
+            rail.innerHTML = claimants.map(function (claimant, index) {
+                var hasPin = !!claimant.pinned;
+                var distance = (claimant.distance_km === null || claimant.distance_km === undefined)
+                    ? (hasPin ? '' : 'no pin')
+                    : claimant.distance_km.toFixed(1) + ' km';
+                var on = index === chosen && hasPin;
+                var where = shortPlace(claimant.address) || claimant.city || '';
+                return '<button type="button" class="claimant-card' + (on ? ' is-on' : '') + '"'
+                    + (hasPin
+                        ? ' onclick="showClaimant(' + index + ')" aria-pressed="'
+                            + (on ? 'true' : 'false') + '"'
+                        : ' disabled title="' + (pendingClaimTrouble
+                            ? 'The claim records, which carry each shelter&#39;s own pin, could not be read.'
+                            : 'This shelter has not confirmed a delivery location.') + '"')
+                    + '>'
+                    + '<span class="flex items-start justify-between gap-3">'
+                        + '<span class="block text-sm text-[#DAF1DE] min-w-0">'
+                            + pendingText(pendingClaimName(claimant)) + '</span>'
+                        + '<span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]'
+                            + ' shrink-0">' + pendingText(distance) + '</span>'
+                    + '</span>'
+                    + (where
+                        ? '<span class="block text-[11px] leading-snug text-[#8EB69B] mt-1">'
+                            + pendingText(where) + '</span>'
+                        : '<span class="block text-[11px] leading-snug text-[#8EB69B] mt-1">'
+                            + 'no address on the record</span>')
+                    + '<span class="block text-[10px] text-[#8EB69B]/70 mt-2">claimed '
+                        + pendingText(db ? db.formatWhen(claimant.claimed_at) : '') + ' \u00b7 '
+                        + (hasPin ? 'press to draw the route here'
+                            : (pendingClaimTrouble
+                                ? 'no pin \u00b7 the claim records could not be read'
+                                : 'no confirmed location'))
+                    + '</span>'
+                    + '</button>';
+            }).join('');
+        }
+
+        // Picking another item from the carousel starts it at the nearest shelter again: the
+        // rail belongs to the item, not to the shelter that happened to be chosen last.
+        function selectPendingOrder(id) {
+            pendingOrderId = String(id || '');
+            pendingClaimant = 0;
+            renderPendingOrders();
+        }
+
+        function showClaimant(index) {
+            pendingClaimant = index;
+            renderClaimants();
+            paintOrderRoute();
+        }
+
+        // ---------------------------------------------------------------------------
+        // The route the selected order runs: this donor's own pin at the pickup, the shelter
+        // the rail is on at the drop-off, and the drive OSRM answers between them. It is the
+        // console's own map — the same painted OpenFreeMap tiles, the ink teardrop at the
+        // pickup and the open mint ring where the food is going — mounted into the panel
+        // under the board, and asked for only when that panel is approached, so a donor who
+        // never scrolls this far fetches none of the library, the tiles or the router.
+        // ---------------------------------------------------------------------------
+        var orderRouteMap = null;
+        var orderRoutePickup = null;
+        var orderRouteDropoff = null;
+        var orderRouteWatched = false;
+        var orderRouteShown = '';      // what the map is showing, so the same route is not redrawn
+        var pickupPoints = {};         // one address lookup per pickup address
+        var roadRoutes = {};           // one OSRM answer per pair of pins
+
+        function watchOrderRoute() {
+            if (orderRouteWatched) { return; }
+            var panel = pendingEl('orderRoutePanel');
+            if (!panel) { return; }
+            orderRouteWatched = true;
+            if (!window.IntersectionObserver) { loadOrderRouteMap(); return; }
+            var approach = new window.IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) { return; }
+                    approach.disconnect();
+                    loadOrderRouteMap();
+                });
+            }, { rootMargin: '200px 0px' });
+            approach.observe(panel);
+        }
+
+        function loadOrderRouteMap() {
+            if (orderRouteMap || !pendingEl('orderRouteMap')) { return; }
+            loadMaplibre(mountOrderRouteMap);
+        }
+
+        function mountOrderRouteMap() {
+            var container = pendingEl('orderRouteMap');
+            if (orderRouteMap || !container || !window.maplibregl) { return; }
+            try {
+                // Shown before it is built: MapLibre sizes itself from its container's box,
+                // and a hidden container measures nothing.
+                container.classList.remove('hidden');
+                orderRouteMap = new window.maplibregl.Map({
+                    container: container,
+                    style: MAP_STYLE,
+                    center: [START_VIEW[1], START_VIEW[0]],
+                    zoom: 12,
+                    // A route is read rather than driven: no pan, no zoom, so a scroll over
+                    // the panel keeps scrolling the page.
+                    interactive: false,
+                    attributionControl: false,
+                    fadeDuration: 0
+                });
+            } catch (err) {
+                orderRouteMap = null;
+                container.classList.add('hidden');
+                keepOrderRouteDrawn('The map could not start in this page'
+                    + (err && err.message ? ' (' + err.message + ')' : '')
+                    + ', so this is the drawn shape of the route.');
+                return;
+            }
+            // A source can only be added once the style has arrived — adding one before
+            // that throws, and on a cold load OSRM's answer easily beats the tiles. So the
+            // drawn shape stays up over the empty map until the route can really be put on
+            // it, and the card only becomes a reading from then on.
+            orderRouteMap.once('load', function () { paintOrderRoute(); });
+            orderRouteMap.on('error', orderRouteTrouble);
+            orderRouteMap.resize();
+        }
+
+        // A style that never arrives leaves a map with nothing to draw on, and an empty box
+        // is worse than the drawn route it replaced. Caught after the fact rather than
+        // before it, because the same `error` event carries a single tile that failed to
+        // download, which is not worth taking the panel away for.
+        function orderRouteTrouble() {
+            if (!orderRouteMap || orderRouteMap.isStyleLoaded()) { return; }
+            keepOrderRouteDrawn('The map tiles could not be loaded, so this is the drawn'
+                + ' shape of the route.');
+        }
+
+        // The drawn shape comes back and the map stands down, so a route that cannot be
+        // drawn leaves a panel that still reads rather than an empty green box.
+        function keepOrderRouteDrawn(why) {
+            var container = pendingEl('orderRouteMap');
+            var rest = pendingEl('orderRouteRest');
+            var note = pendingEl('orderRouteRestNote');
+            var legend = pendingEl('orderRouteLegend');
+            if (container) { container.classList.add('hidden'); }
+            if (rest) { rest.classList.remove('hidden'); }
+            if (note) {
+                note.textContent = why;
+                note.classList.remove('hidden');
+            }
+            if (legend) { legend.classList.add('hidden'); }
+            orderRouteShown = '';
+        }
+
+        // The way back: the map is the reading again, and the drawn shape goes.
+        function showOrderRouteSurface() {
+            var container = pendingEl('orderRouteMap');
+            var rest = pendingEl('orderRouteRest');
+            var note = pendingEl('orderRouteRestNote');
+            if (container) { container.classList.remove('hidden'); }
+            if (rest) { rest.classList.add('hidden'); }
+            if (note) { note.classList.add('hidden'); }
+        }
+
+        function setOrderRouteChip(text, live) {
+            var label = pendingEl('orderRouteChip');
+            var dot = pendingEl('orderRouteDot');
+            if (label) { label.textContent = text; }
+            if (dot) {
+                dot.className = 'w-1.5 h-1.5 rounded-full '
+                    + (live ? 'bg-[#DAF1DE]' : 'bg-[#235347]');
+            }
+        }
+
+        // Both ends of the route and where the line came from, inside the panel rather than
+        // on the map: a pale line over pale tiles is a line nobody can read.
+        function setOrderRouteLegend(from, to, note) {
+            var box = pendingEl('orderRouteLegend');
+            var fromEl = pendingEl('orderRouteFrom');
+            var toEl = pendingEl('orderRouteTo');
+            var noteEl = pendingEl('orderRouteNote');
+            if (fromEl) { fromEl.textContent = from; }
+            if (toEl) { toEl.textContent = to; }
+            if (noteEl) { noteEl.textContent = note; }
+            if (box) { box.classList.remove('hidden'); }
+        }
+
+        // The pickup end: the location this account confirmed on the board, and — for an
+        // account that never confirmed one — the address the item was logged at, turned into
+        // coordinates with the same lookup the map's own search uses. Nothing is invented: an
+        // account with neither has no route to draw, and the panel says so.
+        function orderPickupPoint(row) {
+            if (savedLocation) {
+                return Promise.resolve({
+                    lat: savedLocation.lat,
+                    lng: savedLocation.lng,
+                    address: savedLocation.address || (row && row.location) || ''
+                });
+            }
+            var address = String((row && row.location) || '').trim();
+            if (!address) { return Promise.resolve(null); }
+            if (!pickupPoints[address]) {
+                pickupPoints[address] = fetch(LOOKUP_URL + encodeURIComponent(address),
+                    { headers: { Accept: 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (results) {
+                        if (!results || !results.length) { return null; }
+                        var lat = Number(results[0].lat);
+                        var lng = Number(results[0].lon);
+                        if (!isFinite(lat) || !isFinite(lng)) { return null; }
+                        return { lat: lat, lng: lng, address: address };
+                    })
+                    .catch(function () { return null; });
+            }
+            return pickupPoints[address];
+        }
+
+        // The road, from OSRM's keyless demo router — the one free service that answers with
+        // a real drive rather than a straight line. One request per pair of pins, kept for as
+        // long as the panel is open: the board under this surface re-reads itself every so
+        // often, and a route that has not changed does not need asking for again. An answer
+        // that failed is not kept, so a later render tries the router again.
+        function roadRoute(pickup, dropoff) {
+            var key = [pickup.lng, pickup.lat, dropoff.lng, dropoff.lat].join(',');
+            if (!roadRoutes[key]) {
+                var asked = fetch(ROUTE_URL + pickup.lng + ',' + pickup.lat + ';'
+                    + dropoff.lng + ',' + dropoff.lat + '?overview=full&geometries=geojson',
+                    { headers: { Accept: 'application/json' } })
+                    .then(function (response) {
+                        return response.json().catch(function () { return null; });
+                    })
+                    .then(function (data) {
+                        var route = data && data.routes && data.routes[0];
+                        if (!route || !route.geometry || !route.geometry.coordinates) { return null; }
+                        return {
+                            coordinates: route.geometry.coordinates,
+                            metres: route.distance,
+                            seconds: route.duration
+                        };
+                    })
+                    .catch(function () { return null; });
+                asked.then(function (route) {
+                    if (!route) { delete roadRoutes[key]; }
+                });
+                roadRoutes[key] = asked;
+            }
+            return roadRoutes[key];
+        }
+
+        // The whole of what the panel is showing, decided in one place: no selection, an item
+        // with nobody on the record, a shelter with no pin, an account with no pickup point,
+        // and the route itself. Every one of those states is said in the panel rather than
+        // left as an empty box.
+        function paintOrderRoute() {
+            var row = pendingRow();
+            var claimant = row ? pendingClaimantRow() : null;
+            if (!row) {
+                keepOrderRouteDrawn('No delivery selected yet. Pick an item above and its route'
+                    + ' to the nearest shelter appears here.');
+                setOrderRouteChip('no route yet', false);
+                return;
+            }
+            if (!claimant) {
+                keepOrderRouteDrawn(pendingClaimTrouble
+                    ? 'The claims on this item could not be read, so there is nothing to route to yet.'
+                    : (pendingClaimUnread(row)
+                        ? 'Reading the claim records for this item, and the route to the'
+                            + ' nearest shelter with them.'
+                        : 'The board says this item was claimed, but no claim is on the record'
+                            + ' for it, so there is no shelter to route to.'));
+                setOrderRouteChip('no shelter', false);
+                return;
+            }
+            if (!claimant.pinned) {
+                keepOrderRouteDrawn(pendingClaimTrouble
+                    ? 'The claim records that carry each shelter\u2019s own pin could not be read,'
+                        + ' so there is no pin to draw a route from yet.'
+                    : (pendingClaimName(claimant) + ' has not confirmed a delivery location, so'
+                        + ' there is no route to draw to it \u2014 pick another shelter beside the'
+                        + ' map.'));
+                setOrderRouteChip('no shelter pin', false);
+                return;
+            }
+            var dropoff = {
+                lat: Number(claimant.lat),
+                lng: Number(claimant.lng),
+                address: claimant.address || ''
+            };
+
+            orderPickupPoint(row).then(function (pickup) {
+                if (!pickup) {
+                    keepOrderRouteDrawn('No pickup pin to route from: this account has no'
+                        + ' confirmed delivery location and the item\u2019s own address could'
+                        + ' not be read. Confirm a location to see the route.');
+                    setOrderRouteChip('no pickup pin', false);
+                    return;
+                }
+                if (!orderRouteMap || !orderRouteMap.isStyleLoaded()) {
+                    // The library, the style or the tiles are still on their way.
+                    keepOrderRouteDrawn('Reading the road from ' + (pickup.address || 'your pin')
+                        + ' to ' + (claimant.name || 'the shelter') + '\u2026');
+                    setOrderRouteChip('reading the road\u2026', false);
+                    return;
+                }
+                var key = [row.id, claimant.name, claimant.lat, claimant.lng,
+                    pickup.lat, pickup.lng].join('|');
+                if (key === orderRouteShown) { return; }
+                orderRouteShown = key;
+                drawOrderRoute(row, pickup, dropoff, claimant);
+            });
+        }
+
+        function drawOrderRoute(row, pickup, dropoff, claimant) {
+            roadRoute(pickup, dropoff).then(function (route) {
+                if (!orderRouteMap || !orderRouteMap.isStyleLoaded()) { return; }
+                orderRouteMarks(pickup, dropoff);
+                putOrderRoute(route ? route.coordinates
+                    : [[pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]]);
+                showOrderRouteSurface();
+                setOrderRouteLegend(
+                    'Picked up at ' + (pickup.address || 'your confirmed location'),
+                    'Taken to ' + (claimant.name || 'the shelter')
+                        + (dropoff.address ? ' \u00b7 ' + shortPlace(dropoff.address) : ''),
+                    route ? roadRouteNote(route) : ('Shown as the direct line between the two'
+                        + ' pins \u2014 the road router could not be read. ' + ORDER_ROUTE_CREDIT));
+                if (route) {
+                    var km = route.metres / 1000;
+                    var minutes = Math.max(1, Math.round(route.seconds / 60));
+                    setOrderRouteChip('claimed \u00b7 ' + km.toFixed(1) + ' km \u00b7 '
+                        + minutes + ' min', true);
+                } else {
+                    setOrderRouteChip('claimed \u00b7 direct line', false);
+                }
+                fitOrderRoute(pickup, dropoff);
+                // The chip and the legend are measured to take the fit, and a webfont that
+                // lands after it changes both by a pixel or two, so the fit is taken once
+                // more when the fonts are in.
+                if (document.fonts && document.fonts.ready) {
+                    document.fonts.ready.then(function () {
+                        if (orderRouteMap) { fitOrderRoute(pickup, dropoff); }
+                    });
+                }
+            });
+        }
+
+        function roadRouteNote(route) {
+            var km = route.metres / 1000;
+            var minutes = Math.max(1, Math.round(route.seconds / 60));
+            return 'Road route \u00b7 ' + km.toFixed(1) + ' km by road \u00b7 about ' + minutes
+                + ' min \u00b7 OSRM \u00b7 ' + ORDER_ROUTE_CREDIT;
+        }
+
+        // The two ends of the delivery: the teardrop is this donor's own pin, the ring is the
+        // shelter the food is going to, so the two ends of one order are told apart at a
+        // glance.
+        function orderRouteMarks(pickup, dropoff) {
+            if (!orderRoutePickup) {
+                orderRoutePickup = new window.maplibregl.Marker(
+                    { element: deliveryPinElement(), anchor: 'bottom' });
+            }
+            orderRoutePickup.setLngLat([pickup.lng, pickup.lat]).addTo(orderRouteMap);
+            if (!orderRouteDropoff) {
+                orderRouteDropoff = new window.maplibregl.Marker(
+                    { element: orderRingElement(), anchor: 'center' });
+            }
+            orderRouteDropoff.setLngLat([dropoff.lng, dropoff.lat]).addTo(orderRouteMap);
+        }
+
+        function orderRingElement() {
+            var ring = document.createElement('div');
+            ring.className = 'resq-ring-icon';
+            ring.innerHTML = '<div class="resq-ring"></div>';
+            return ring;
+        }
+
+        // The line itself: a wide casing with the route drawn over it, which is how the rest
+        // of the site tells a road from the ground behind it, in the same two colour steps.
+        function putOrderRoute(coordinates) {
+            var shape = {
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates: coordinates }
+            };
+            if (orderRouteMap.getSource('order-route')) {
+                orderRouteMap.getSource('order-route').setData(shape);
+                return;
+            }
+            orderRouteMap.addSource('order-route', { type: 'geojson', data: shape });
+            orderRouteMap.addLayer({
+                id: 'order-route-case',
+                type: 'line',
+                source: 'order-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#235347', 'line-width': 9, 'line-opacity': 0.5 }
+            });
+            orderRouteMap.addLayer({
+                id: 'order-route',
+                type: 'line',
+                source: 'order-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#DAF1DE', 'line-width': 3 }
+            });
+        }
+
+        // How much of the panel the map may not draw under, read off the panel's own
+        // furniture rather than guessed at: the chip runs along the top, the legend along the
+        // bottom, and the two marks stand off the points they name, so both have to be
+        // cleared by the fit.
+        function orderRoutePadding() {
+            var panel = pendingEl('orderRoutePanel');
+            var chip = pendingEl('orderRouteChip');
+            var legend = pendingEl('orderRouteLegend');
+            var padding = { top: 72, bottom: 132, left: 44, right: 44 };
+            if (!panel) { return padding; }
+            var box = panel.getBoundingClientRect();
+            if (chip) {
+                padding.top = Math.round(chip.getBoundingClientRect().bottom - box.top)
+                    + 20 + ORDER_PIN_HEIGHT;
+            }
+            if (legend && !legend.classList.contains('hidden')) {
+                padding.bottom = Math.round(box.bottom - legend.getBoundingClientRect().top)
+                    + 14 + ORDER_RING_REACH;
+            }
+            return padding;
+        }
+
+        function fitOrderRoute(pickup, dropoff) {
+            var bounds = new window.maplibregl.LngLatBounds(
+                [pickup.lng, pickup.lat], [pickup.lng, pickup.lat]);
+            bounds.extend([dropoff.lng, dropoff.lat]);
+            // Snapping rather than animating: a route wants no animation, and the padding is
+            // taken again on every fit because the legend only exists once the route does.
+            orderRouteMap.fitBounds(bounds, { padding: orderRoutePadding(), duration: 0 });
         }
 
     </script>
