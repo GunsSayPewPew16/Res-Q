@@ -473,13 +473,20 @@ have to agree:
 
 1. **The pages have to know where the API is.** Every call is written as
    `fetch(apiUrl('/api/…'))`, and `frontend/resq_api.js` is the one line that decides which
-   origin those paths are asked of. It is empty in the repository, which means "this same
-   origin" — how it runs locally, and how a Render-only deployment works. On Vercel, set it
-   to the API's own origin:
+   origin those paths are asked of. It carries the Render service as committed, which is
+   what a Vercel front-end wants — an empty value means "the API is on this same origin",
+   which is how a Render-only deployment works, and how a local run works when the pages
+   are grabbed from the API's own process:
 
    ```js
-   var RESQ_API_BASE = 'https://res-q-api.onrender.com';
+   var RESQ_API_BASE = 'https://res-q-api.onrender.com';   // the API's origin
+   var RESQ_API_BASE = '';                                 // this page's own origin
    ```
+
+   The one to keep is the one that matches how the pages are served. Because the committed
+   value names Render, a page opened from the local server talks to Render rather than to
+   the local API — which is why the local origins belong in `RESQ_ALLOWED_ORIGINS` beside
+   the deployed one, or `RESQ_API_BASE` wants emptying for that run.
 
 2. **The API has to allow that origin.** A browser will not let one site read another's API
    unless the other site says it may, which is what `RESQ_ALLOWED_ORIGINS` is. It is a
@@ -488,8 +495,13 @@ have to agree:
    Vercel gives every preview deployment its own hostname:
 
    ```
-   RESQ_ALLOWED_ORIGINS=https://res-q.vercel.app,*.vercel.app
+   RESQ_ALLOWED_ORIGINS=https://res-q.vercel.app,*.vercel.app,http://localhost:8080,http://127.0.0.1:8080
    ```
+
+   `localhost:8080` and `127.0.0.1:8080` are two different origins as far as a browser is
+   concerned, as is every port, so a local page served by `backend/server.py` needs its own
+   entry unless `RESQ_API_BASE` is emptied for that run. `RESQ_ALLOWED_ORIGINS` is read
+   once at startup, so the service has to restart for a change to it to be answered.
 
    A single `*` is honoured only when it is written out, and an empty list allows nothing:
    a deployment nobody configured stays same-origin only. What an allowed origin is granted
