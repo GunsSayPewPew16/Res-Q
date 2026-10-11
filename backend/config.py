@@ -42,6 +42,11 @@ DEMO_ORDERS = {}
 
 DEMO_ORDER_SEQ = count(1)
 
+# The logged days a demo account has, keyed by the contact it signed in with. Demo users
+# all carry id 0, so a contact is what a row can be filed under in a process that has no
+# database; with persistence on the same rows are the account's own rows in the table.
+DEMO_HISTORY = {}
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,9 +103,53 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (donor_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS surplus_history (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id            INTEGER NOT NULL,
+    date               TEXT    NOT NULL,
+    weather            TEXT,
+    weather_code       INTEGER,
+    temp_c             REAL,
+    customers_served   INTEGER,
+    expected_customers REAL,
+    surplus_kg         REAL,
+    created_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+    -- One row per kitchen per day: the log is a timeline, and a day cannot be logged
+    -- twice, so a re-seed cannot double a kitchen's own past.
+    UNIQUE (user_id, date),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
 """
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# Cross-origin access. In development the pages are served by this very server, so their
+# calls are same-origin and need none of this; deployed apart — the pages on Vercel, the
+# API on Render — every call is cross-origin and the API has to say which origins it
+# answers, because the browser will not read an answer that does not name its own origin.
+#
+# RESQ_ALLOWED_ORIGINS is a comma-separated list. An entry is either an exact origin
+# (`https://res-q.vercel.app`) or a wildcard for one domain's subdomains
+# (`*.vercel.app`), which is what preview deployments need: Vercel gives every branch its
+# own hostname, so pinning a single exact origin would refuse every preview. Nothing is
+# allowed by default, so a deployment nobody configured talks to its own pages only.
+def _origin_list(value):
+    """A comma-separated origin list, trimmed the way the CORS check compares them."""
+    return tuple(part.strip().rstrip("/").lower()
+                 for part in (value or "").split(",") if part.strip())
+
+
+ALLOWED_ORIGINS = _origin_list(os.environ.get("RESQ_ALLOWED_ORIGINS", ""))
+
+# What a preflight is told the API accepts. The pages send JSON with a bearer token, so
+# those are the two headers worth naming — a browser preflights a request carrying
+# `Authorization`, and an unanswered preflight is a call that never happens.
+CORS_ALLOWED_METHODS = "GET, POST, OPTIONS"
+
+CORS_ALLOWED_HEADERS = "Authorization, Content-Type"
+
+CORS_MAX_AGE_SECONDS = 600
 
 PUBLIC_FIELDS = (
     "id", "role", "first_name", "last_name", "business_name", "email", "phone",
@@ -131,11 +180,42 @@ WEATHER_TIMEOUT_SECONDS = 8
 WEATHER_SOURCE = "Open-Meteo"
 WEATHER_SOURCE_URL = "https://open-meteo.com/"
 
+# The same service read backwards: the conditions those days actually had, which is what
+# the test donors' logs are filled with so their weather is real rather than invented.
+WEATHER_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+
 # The analyser's weekly chart: the same service read as a daily outlook, one entry per
 # day from today onwards, and every day run through the model. Seven is a week's worth
 # of bars; the ceiling is the sixteen days Open-Meteo will forecast at all.
 WEATHER_OUTLOOK_DAYS = 7
 WEATHER_MAX_OUTLOOK_DAYS = 16
+
+# The surplus history: one row per kitchen per day — what that kitchen served, what the
+# sky over it was, and how much surplus came out of the day. It is the donor's own log,
+# and it is where the analyser's model reads its past from: the three surplus lags and
+# the expected customers are derived from these rows, which is what the model's own
+# defaults are a fallback for rather than the answer every kitchen gets.
+HISTORY_FIELDS = (
+    "date", "weather", "weather_code", "temp_c",
+    "customers_served", "expected_customers", "surplus_kg",
+)
+
+# How far back a reading looks. Six weeks is enough for the fourteen-day window, the
+# week-old lag and the day-old lag to all be real numbers at once.
+HISTORY_READ_DAYS = 42
+
+# The test donors the calculator is exercised against: five kitchens with six weeks of
+# logs each. In demo mode the server seeds them on startup, since nothing is written to
+# disk; with persistence on, RESQ_SEED=on asks for it, so a database nobody meant to
+# touch is never written to uninvited.
+SEED_HISTORY_DAYS = 42
+
+_seed_flag = os.environ.get("RESQ_SEED", "").strip().lower()
+
+SEED_ON_START = (not PERSIST) if not _seed_flag else _seed_flag in ("on", "1", "true", "yes")
+
+# The seven day-to-day rows of a seed, and the fourteen-day window the model averages
+# over, are the model's own business and live in surplus.py.
 
 # The three impact figures the donor dashboard shows. They belong to the donor's own
 # profile and to no other role: they are that donor's record of what their surplus

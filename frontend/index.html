@@ -13,6 +13,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <!-- Where the API is (see resq_api.js). Loaded first so every page builds its API URLs the same way. -->
+    <script src="resq_api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -475,7 +477,7 @@ def rank(candidates, me):
             if (!token) return;
 
             // ...then let the backend settle the role and the session behind it.
-            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+            fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
                         return { status: response.status, data: data };

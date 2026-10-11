@@ -13,6 +13,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <!-- Where the API is (see resq_api.js). Loaded first so every page builds its API URLs the same way. -->
+    <script src="resq_api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -1055,7 +1057,7 @@
             }
 
             // ...then let the backend settle the link, the header and which dashboard this is.
-            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+            fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
                         return { status: response.status, data: data };
@@ -1234,7 +1236,7 @@
         // not be read instead of passing a made-up sky off as one.
         function forecastWeather(location) {
             if (!location) { return Promise.resolve(null); }
-            return fetch('/api/weather?lat=' + location.lat.toFixed(6) + '&lng=' + location.lng.toFixed(6),
+            return fetch(apiUrl('/api/weather?lat=' + location.lat.toFixed(6) + '&lng=' + location.lng.toFixed(6)),
                 { headers: { Accept: 'application/json' } })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
@@ -1281,9 +1283,18 @@
                     sky = weather;
                     var body = { day_of_week: forecastDay(weather && weather.local_date) };
                     if (weather && weather.label) { body.weather = weather.label; }
-                    return fetch('/api/surplus-forecast', {
+                    // The day the backend reads its log for is the address's own date, so the
+                    // model's past is the day this kitchen is actually on rather than the
+                    // server's — the two differ whenever the reader is a timezone ahead.
+                    if (weather && weather.local_date) { body.on_date = weather.local_date; }
+                    // The token travels with it because this is a private answer: the backend
+                    // fills the model's past from the days this account has logged.
+                    var headers = { 'Content-Type': 'application/json' };
+                    var token = readStore(TOKEN_KEY);
+                    if (token) { headers.Authorization = 'Bearer ' + token; }
+                    return fetch(apiUrl('/api/surplus-forecast'), {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: headers,
                         body: JSON.stringify(body)
                     });
                 })
@@ -1301,7 +1312,7 @@
                     }
                     forecastRanOnce = true;
                     setForecastChip('updated', 'done');
-                    renderForecast(res.data.forecast, sky, at);
+                    renderForecast(res.data.forecast, sky, at, res.data.history);
                 })
                 .catch(function () {
                     forecastRunning = false;
@@ -1313,9 +1324,10 @@
         // The answer, written out with the reading it was forecast from: the day is today's,
         // the sky is the weather endpoint's own label for the address the account holds, and
         // the conditions panel carries the reading itself — the temperature right now, the
-        // day's own summary, where it was read and who read it. A run with no reading says
-        // so in both places rather than printing a sky nobody measured.
-        function renderForecast(forecast, weather, location) {
+        // day's own summary, where it was read and who read it. The rhythm the model leans on
+        // is named for what it actually is: the days this kitchen has logged, when the
+        // backend could read them, and the model's own assumption when it could not.
+        function renderForecast(forecast, weather, location, history) {
             var headline = document.getElementById('forecastHeadline');
             var story = document.getElementById('forecastStory');
             var accuracyText = document.getElementById('forecastAccuracyText');
@@ -1330,17 +1342,20 @@
             var kg = Number(forecast.predicted_surplus_kg);
             var mae = Number(forecast.mae_kg);
             var where = shortPlace(location && location.address) || 'your delivery address';
+            var rhythm = history && history.days
+                ? 'your own last ' + history.days + ' logged days'
+                : 'your kitchen\'s recent rhythm';
             var logging = ' Log anything above ' + (kg * 0.4).toFixed(1)
                 + ' kg on the board \u2014 smaller amounts travel better merged into the next pickup.';
             headline.textContent = kg.toFixed(2) + ' kg expected';
             if (weather) {
                 story.textContent = 'Based on ' + forecast.day_of_week + ' with '
                     + forecast.weather.toLowerCase() + ' conditions at ' + where
-                    + ' and your kitchen\'s recent rhythm, the model expects about '
+                    + ' and ' + rhythm + ', the model expects about '
                     + kg.toFixed(2) + ' kg of surplus food ready for donation today.' + logging;
             } else {
                 story.textContent = 'Based on ' + forecast.day_of_week
-                    + ' and your kitchen\'s recent rhythm, the model expects about '
+                    + ' and ' + rhythm + ', the model expects about '
                     + kg.toFixed(2) + ' kg of surplus food ready for donation today.'
                     + (location
                         ? ' The live conditions at ' + where + ' could not be read, so this run went'
@@ -1564,8 +1579,13 @@
             var where = shortPlace(location.address) || 'your delivery address';
             weekRunning = true;
             setWeekCopy('reading\u2026', 'the sky at ' + where, '\u2014');
-            fetch('/api/surplus-outlook?lat=' + location.lat.toFixed(6) + '&lng=' + location.lng.toFixed(6),
-                { headers: { Accept: 'application/json' } })
+            // Like the banner's own read, the week is the account's: each day is forecast
+            // from the days this kitchen has logged, so the token goes with it.
+            var headers = { Accept: 'application/json' };
+            var token = readStore(TOKEN_KEY);
+            if (token) { headers.Authorization = 'Bearer ' + token; }
+            fetch(apiUrl('/api/surplus-outlook?lat=' + location.lat.toFixed(6) + '&lng=' + location.lng.toFixed(6)),
+                { headers: headers })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
                         return { status: response.status, data: data };
@@ -1742,7 +1762,7 @@
         // can be walked through from one sign-in. That endpoint is demo mode only, and the
         // note under the buttons says so rather than the button appearing to do nothing.
         // ---------------------------------------------------------------------------
-        var SWITCH_URL = '/api/dev/switch-role';
+        var SWITCH_URL = apiUrl('/api/dev/switch-role');
         var OTHER_ROLE = 'recipient';
 
         function setAccountNote(message, tone) {
@@ -1760,7 +1780,7 @@
             if (!token) { leave(); return; }
             // The session is dropped at the backend too, but nobody waits on that: someone
             // who asked to sign out is signed out here either way.
-            fetch('/api/logout', {
+            fetch(apiUrl('/api/logout'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1939,7 +1959,7 @@
         var START_VIEW = [43.6532, -79.3832];
         var ADDRESS_LOOKUP_DELAY = 500;
         var ADDRESS_RETRY_DELAY = 900;
-        var SAVE_URL = '/api/delivery-location';
+        var SAVE_URL = apiUrl('/api/delivery-location');
 
         var deliverMap = null;
         var deliverMarker = null;

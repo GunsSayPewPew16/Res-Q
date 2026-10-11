@@ -290,11 +290,12 @@ sit on a dashboard rather than behind the API:
   The screen opens on the surplus predictor's layout: the forecast banner and the
   weekly yield chart both carry live data, while the category split is still held open
   by bare placeholder bars. Running the analyser reads the **live weather** at the
-  account's own address and forecasts **today's** surplus from that day, that sky and
-  the model's defaults for the rest of its row, then reads the same point's seven-day
-  outlook to draw the chart — one bar per day, today first, which is where the model's
-  own weekend bump turns up — see [the live weather](#the-live-weather). The section is
-  the donor's own; the recipient dashboard has no analyser.
+  account's own address and forecasts **today's** surplus from that day, that sky and the
+  days the kitchen has **logged** — the model's own defaults stand in only when there is
+  no log to read — then reads the same point's seven-day outlook to draw the chart: one
+  bar per day, today first, which is where the model's own weekend bump turns up. See
+  [the live weather](#the-live-weather) and [the logged days](#the-logged-days). The
+  section is the donor's own; the recipient dashboard has no analyser.
 
 ### For You, and what a post is tagged with
 
@@ -342,6 +343,15 @@ python3 backend/server.py                   # demo mode: nothing is stored
 RESQ_PERSIST=on python3 backend/server.py   # persistent: accounts go to backend/resq.db
 ```
 
+Demo mode seeds five test donors with six weeks of logs each on startup — see
+[the logged days](#the-logged-days) for who they are and their password — so the analyser
+has a real past to forecast from the moment the server is up. `RESQ_SEED=off` starts
+without them, and with persistence on they are written only when `RESQ_SEED=on` asks.
+
+To run it the way a host will, see [Deployment](#deployment):
+`gunicorn -c gunicorn_config.py wsgi:application` from `backend/` is the same API behind
+the same routes, serving the same pages, and it is worth running once before deploying.
+
 Then visit <http://localhost:8080/>. The server returns the landing page as the
 default document, so reloading keeps the visitor there. The landing page's
 *Onboarding* button opens `res_q_homepage.html`, and that form hands the visitor
@@ -357,6 +367,133 @@ form and both boards say so plainly — *surplus_posts is not in the project* �
 than failing quietly. That board is read and written from the browser, so nothing about
 it lives in the backend's database and it behaves the same in demo mode as it does with
 persistence on.
+
+## Deployment
+
+The API and the pages are one service. `backend/server.py` serves the front-end from
+`frontend/` and answers `/api/*` out of the same process, so a host that can run Python is
+the whole of what this needs to be reachable on the internet — which is why `render.yaml`
+in the repository root asks for exactly one web service, and why the URL it hands back is a
+working site on its own: the landing page at `/`, the liveness probe at `/api/health`, the
+rest of the API under `/api/`.
+
+### The entry point a host uses
+
+Run by hand, the API *is* the standard library's HTTP server (`python3 backend/server.py`).
+A host brings its own server instead, and that server speaks WSGI, so `backend/wsgi.py`
+adapts the same handler to it: every WSGI request is written back out as the HTTP request
+the handler already parses, and what it answers is handed back as a WSGI response. Nothing
+is reimplemented in there — no route, no static file, no CORS rule exists twice — so a
+deployed API and a local one answer identically. Gunicorn then runs it:
+
+```bash
+cd backend
+pip install -r requirements.txt
+gunicorn -c gunicorn_config.py wsgi:application   # $PORT when set, else 127.0.0.1:8080
+```
+
+| File | What it is for |
+| --- | --- |
+| `render.yaml` | The Blueprint: one Python web service, with its build command, start command, health check and environment |
+| `backend/requirements.txt` | The one dependency there is — Gunicorn; nothing in `backend/` imports anything else |
+| `backend/gunicorn_config.py` | The server's settings, each one with the reason it holds the value it does |
+| `backend/wsgi.py` | The API as a WSGI application, and the startup a worker does before its first request |
+| `backend/.python-version` | The Python version the host builds with |
+| `backend/Procfile` | The same start command, for a host that reads a Procfile instead of a Blueprint |
+
+**One worker, and that is a requirement rather than a preference.** Demo mode keeps its
+accounts, sessions and logged days in the process's memory, so a second worker would hold a
+second, separate copy of all of it — sign in through one and the next request could reach a
+worker that has never heard of that session. Requests are taken four at a time by threads
+inside the one process instead, which is also what stops a route waiting on Open-Meteo from
+holding up a page load. The count lives in `gunicorn_config.py` rather than in the host's
+dashboard so that the reason stays attached to the number; it is the one setting to revisit
+when the accounts move fully into a database.
+
+### On Render
+
+New → **Blueprint** → pick this repository → Apply. Render reads `render.yaml`, builds with
+`pip install -r requirements.txt` from `backend/`, and starts it with
+`gunicorn -c gunicorn_config.py wsgi:application`. Two values are deliberately not in the
+file and are filled in on the service's **Environment** page:
+
+| Variable | What it does |
+| --- | --- |
+| `RESQ_ALLOWED_ORIGINS` | Which origins may read this API from a browser — see below. Empty means none may, which is the right default for a service only its own pages call. |
+| `RESQ_PERSIST` / `RESQ_DB` | Set to `on`, with `RESQ_DB` on a mounted disk, to store accounts in SQLite. Left off, as committed, the deployment runs in demo mode. |
+
+`RESQ_SEED=on` — also in the file — is what makes a fresh deployment useful immediately:
+the worker creates the five test donors and their six weeks of logged days as it starts, and
+prints their addresses and shared password to the service log. The archive weather read is
+made once per donor at that moment, so the first boot takes a few seconds longer than the
+ones after it.
+
+A **free** instance sleeps after fifteen minutes with no traffic and takes about a minute
+to wake, and its disk is ephemeral: anything written is gone on the next deploy, restart or
+wake-up. That is exactly why the deployment runs in demo mode — its state is the worker's
+memory, and the seed is what refills it — and why turning `RESQ_PERSIST=on` there would
+only appear to work. Persistent accounts want a paid instance with a disk mounted at
+`RESQ_DB`'s path.
+
+### The front-end on Vercel, talking back to Render
+
+The pages can be served by Vercel instead of (or as well as) by the API process. Import the
+repository, set **Root Directory** to `frontend`, leave the framework preset on *Other* and
+the build command empty — there is no build step, the pages are the files. Then two things
+have to agree:
+
+1. **The pages have to know where the API is.** Every call is written as
+   `fetch(apiUrl('/api/…'))`, and `frontend/resq_api.js` is the one line that decides which
+   origin those paths are asked of. It is empty in the repository, which means "this same
+   origin" — how it runs locally, and how a Render-only deployment works. On Vercel, set it
+   to the API's own origin:
+
+   ```js
+   var RESQ_API_BASE = 'https://res-q-api.onrender.com';
+   ```
+
+2. **The API has to allow that origin.** A browser will not let one site read another's API
+   unless the other site says it may, which is what `RESQ_ALLOWED_ORIGINS` is. It is a
+   comma-separated list, and an entry is either an exact origin or a wildcard for one
+   domain's subdomains — `*.vercel.app` is usually wanted beside the production URL, because
+   Vercel gives every preview deployment its own hostname:
+
+   ```
+   RESQ_ALLOWED_ORIGINS=https://res-q.vercel.app,*.vercel.app
+   ```
+
+   A single `*` is honoured only when it is written out, and an empty list allows nothing:
+   a deployment nobody configured stays same-origin only. What an allowed origin is granted
+   is narrow — the origin itself in `Access-Control-Allow-Origin`, `GET, POST, OPTIONS`,
+   and the two headers the pages actually send (`Authorization`, `Content-Type`) — and no
+   `Allow-Credentials`, because the session is a bearer token in a header rather than a
+   cookie, so a browser is never told to send one. `Vary: Origin` keeps a cache from serving
+   one origin's answer to another. A `POST` carrying `Authorization` is asked about first
+   with an `OPTIONS` preflight, which is answered for the same list and nothing else.
+
+Getting either half wrong looks the same in the browser — a failed call and a CORS line in
+the console — so the two are worth checking together: the origin in the console's error
+message is the one to put in `RESQ_ALLOWED_ORIGINS`, and the base in `resq_api.js` is what
+has to match it.
+
+There is a third arrangement that needs neither half: leave `RESQ_API_BASE` empty on Vercel
+and add a rewrite to `vercel.json` sending `/api/*` to the Render service. The pages then
+call their own origin, Vercel forwards the calls, and no cross-origin rule is involved at
+all. It costs a hop and hides the API's URL from the browser; naming the origin directly,
+as above, is the shorter path when both are yours.
+
+### Somewhere else entirely
+
+Nothing in the deployment is Render-specific: any host that runs
+`pip install -r requirements.txt` and then a process bound to `0.0.0.0:$PORT` will do, and
+`backend/Procfile` carries the same start command for the ones that read one. The two
+things a host has to get right are those — the `$PORT` it hands over, which both
+`gunicorn_config.py` and `server.py` read, and one worker, for the reason above.
+
+`backend/claim_recorder.py` is *not* part of this service and is not deployed with it: it
+is a companion process on its own port that records which recipient claimed which post. It
+lives in `backend/` because that is where this project's Python lives, and nothing in the
+API imports it.
 
 ## Backend and API
 
@@ -375,17 +512,25 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/matching.py` | What makes two accounts deliverable: shared categories, confirmed pins |
 | `backend/orders.py` | The order's stored shape, shared by both modes |
 | `backend/surplus.py` | The surplus calculator: the regression pipeline, trained once and cached, forecasting per request |
-| `backend/weather.py` | The live conditions at a point — now, and day by day for the week ahead — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
+| `backend/history.py` | The logged days — one row per kitchen per day — and the features the model reads out of them |
+| `backend/seed.py` | The five test donors and their six weeks of logs, with the weather taken from Open-Meteo's archive |
+| `backend/weather.py` | The live conditions at a point — now, day by day for the week ahead, and the days behind it — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
+| `backend/wsgi.py` | The same handler as a WSGI application, which is how a host runs it; see [Deployment](#deployment) |
 
 The server itself still uses only the standard library, so nothing has to be
-installed for the site, the accounts and the matching to work. The live weather wants
-nothing installed either — `weather.py` calls Open-Meteo with `urllib` — while the
-surplus forecast additionally wants pandas and scikit-learn: `surplus.py` imports them
-inside its functions so the rest of the backend runs without them, and the endpoint
+installed for the site, the accounts and the matching to work — the one dependency in
+`requirements.txt` is the server a host runs it on, not anything the API imports. The live
+weather wants nothing installed either — `weather.py` calls Open-Meteo with `urllib` —
+while the surplus forecast additionally wants pandas and scikit-learn: `surplus.py` imports
+them inside its functions so the rest of the backend runs without them, and the endpoint
 answers `503` with install instructions when they are missing.
 
-The backend listens on `127.0.0.1:8080`. `GET /api/health` reports which mode it
-is in.
+Run by hand the backend listens on `127.0.0.1:8080`; under a host it listens on the
+address the host asks for — `$PORT`, on `0.0.0.0` — and either can be overridden with
+`RESQ_HOST` and `RESQ_PORT`. `$PORT` counts only when it is a port number: an empty value
+or a `0` in the environment is somebody else's variable rather than a host's instruction,
+and both entry points ignore it rather than binding somewhere nothing is looking.
+`GET /api/health` reports which mode it is in.
 
 ### The surplus calculator
 
@@ -467,6 +612,58 @@ week's heaviest — carry their figures, which is what makes the axis readable f
 panel itself; a week that really is flat is drawn flat rather than exaggerated into a
 shape it does not have.
 
+### The logged days
+
+A forecast is only as good as the past it is made from, so the past is stored: one row
+per kitchen per day, holding what that kitchen served, the sky over it and the surplus
+that came out of the day. In persistent mode those rows are the `surplus_history` table,
+keyed by the account and unique per date, so a kitchen's own past cannot be logged twice;
+in demo mode they live in the process, filed under the contact the account signed in with,
+because demo users all carry id `0` and there is no table to key them by.
+
+`backend/history.py` derives the model's own features from those rows rather than from a
+second copy of the same week: the surplus **yesterday**, the same weekday's surplus a week
+ago, the mean of the **fourteen days before** the day being forecast, and the customer
+count that weekday has actually run at. Every one of them is read *before* the day being
+forecast — the window the training data built them in — and a feature the log cannot
+answer comes back as nothing rather than as a zero: a day that has not happened yet has no
+yesterday to read, and the model's imputer is there for exactly that. A value the caller
+sends still wins over the log, so an explicit `surplus_yesterday` is never overwritten.
+
+The day itself can be named: `POST /api/surplus-forecast` takes an optional `on_date` (an
+ISO day) and reads the log for *that* day rather than for the server's, which is what lets
+the dashboard read the log for the date its own address is on. `GET /api/history` answers
+the signed-in account's own days, newest first, with the summary and the derived features
+beside them: what the log says, rather than making anything else derive it again.
+
+**Five test donors ship with the server**, so the calculator can be exercised against a
+real past instead of its own defaults. Each one has six weeks of days ending yesterday:
+
+| Sign in as | Kitchen | Where | Serves per day |
+| --- | --- | --- | --- |
+| `dana@resq.test` | Whitfield Bakery | 60 Queen St W, Toronto | 170–250 |
+| `omar@resq.test` | Haddad Grocers | 1180 Ste-Catherine O, Montréal | 200–300 |
+| `priya@resq.test` | Raman Kitchens | 87 Elm St, Toronto | 110–190 |
+| `luis@resq.test` | Ortega Deli | 601 Biscayne Blvd, Miami | 230–330 |
+| `mei@resq.test` | Chen Noodle House | 55 Bay St, Toronto | 90–170 |
+
+The password is `ResqDemo1!` for all five. They are created when the server starts in
+demo mode — nothing is written to disk there — and with persistence on only when
+`RESQ_SEED=on` asks for it, so a database nobody meant to touch is never written to
+uninvited. `RESQ_SEED=off` turns it back off in demo mode. Each donor arrives working: a
+goods profile, a confirmed pin at its own address and its impact figures, because a test
+account that has to be walked through onboarding first is not one.
+
+The **weather in those logs is real**: each donor's days carry the conditions Open-Meteo's
+archive actually recorded at that donor's coordinates, so the history is a record rather
+than an invention. If the archive cannot be reached the days fall back to a deterministic
+pattern, and a day from that pattern carries no WMO code — which is what marks it as not a
+measurement. The customers and the surplus are the fixture's own, generated from the same
+shape the model was trained on (a weekday rhythm, the weekend bump, a little noise),
+because a test that ran against some other shape would prove nothing about this model.
+Everything is seeded per donor, so the same five kitchens come back the same way every
+time; seeding again adds nothing, since a day already logged is left alone.
+
 ### Demo mode (default)
 
 Nothing is written to a database and no detail is ever rejected as a duplicate,
@@ -505,9 +702,10 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
+| `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the six-week window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
 | `GET` | `/api/weather` | The real conditions at a point, in the analyser's own vocabulary. Requires `lat`/`lng`, and answers `400` for a missing, non-numeric or off-globe pair. Reads Open-Meteo — keyless — and returns the model's label for today, the WMO code and summary behind it, the day's high/low and rainfall, the current temperature and wind, the address's timezone and the source. Answers `502` `weather_unavailable` when the service cannot be reached, rather than a default sky |
 | `GET` | `/api/surplus-outlook` | The week's surplus at a point, which is what the analyser's chart is drawn from: one forecast per day, today first. Requires `lat`/`lng` (`400` as above) and takes an optional `days` — a whole number, defaulting to 7 and pulled to the 16-day ceiling the weather service answers at, `400` when it is not a number. Each day carries its own date, day name, Open-Meteo conditions and the model's prediction, with the model and its MAE once for the whole week. Answers `502` `weather_unavailable` when the outlook cannot be read, and `503` `model_dependencies_missing` without pandas or scikit-learn |
-| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather` and up to four numeric features, in the query string or a JSON body; the dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy or a number sitting below zero, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed |
+| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather`, `on_date` (the ISO day being forecast, which the log is read for) and up to four numeric features, in the query string or a JSON body. With a bearer token, any numeric feature the caller leaves out is **filled from that account's own logged days**, and the answer carries the log it read and which features came from it; an explicit value always wins. The dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy, a number sitting below zero or an unreadable `on_date`, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed |
 
 ### Matching and delivery orders
 

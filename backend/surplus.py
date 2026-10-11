@@ -16,6 +16,15 @@ does not retrain the forest on every forecast.
 
 import threading
 
+# The features the pipeline was fitted on, in the order the training data built them, and
+# the window the rolling average looks back over. `history.py` derives its numbers with
+# these rather than with a second copy of the same week, so the log and the model cannot
+# drift apart about what "surplus_rolling_14" means.
+FEATURES = ("day_of_week", "expected_customers", "weather", "surplus_yesterday",
+            "surplus_last_week", "surplus_rolling_14")
+
+ROLLING_WINDOW_DAYS = 14
+
 MODEL_CACHE = {}
 MODEL_LOCK = threading.Lock()
 TRAIN_MEMORY_ERROR = (
@@ -163,8 +172,7 @@ def forecast_surplus(day_of_week=None, weather=None, expected_customers=None,
         "predicted_surplus_kg": round(predicted, 2),
         "mae_kg": round(mae, 2),
         "model": "RandomForestRegressor(n_estimators=100, random_state=42)",
-        "features": ["day_of_week", "expected_customers", "weather", "surplus_yesterday",
-                     "surplus_last_week", "surplus_rolling_14"],
+        "features": list(FEATURES),
     }
 
 

@@ -1,0 +1,52 @@
+# Render Blueprint for Res-Q.
+#
+# In the Render dashboard: New → Blueprint → choose this repository → Apply. That reads
+# this file and creates one Python web service, which serves the API *and* the pages beside
+# it, so the URL Render hands back is a working site on its own:
+#
+#     https://<the-name-you-choose>.onrender.com            the landing page
+#     https://<the-name-you-choose>.onrender.com/api/health  the liveness probe
+#
+# Everything the service needs to know is either here or filled in on the service's
+# Environment page. Two of the values below are deliberately left blank for you to set
+# there — a Blueprint can carry a name but never someone's live URL or secret.
+#
+# The front-end can also live on Vercel instead (or as well). When it does, add its origin
+# to RESQ_ALLOWED_ORIGINS, which is what lets the browser read this API from another site.
+
+services:
+  - type: web
+    name: res-q-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    # The Python version is `backend/.python-version`; Render reads it during the build.
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn_config.py wsgi:application
+    # Answers from server.py's own /api/health route. A free instance sleeps when nothing
+    # has called it for fifteen minutes, and this is what tells Render it is awake again.
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      # Which sites may read this API from a browser. Comma-separated, exact origins or
+      # `*.your-domain.tld` for a whole family of subdomains — Vercel gives every preview
+      # deployment its own hostname, so `*.vercel.app` is usually wanted beside the
+      # production URL. Left unset it is empty, and an origin that is not listed is
+      # refused. Fill it in from the service's Environment page once Vercel has told you
+      # the front-end's URL. `sync: false` means "ask me for this, don't store it here".
+      - key: RESQ_ALLOWED_ORIGINS
+        sync: false
+      # A free instance's disk is ephemeral: anything written is gone on the next deploy,
+      # restart or wake-up, so the deployment runs in demo mode — accounts, sessions and
+      # the seeded logs live in the worker's memory for as long as it is up. Turn this to
+      # `on` on a plan with a persistent disk, and point RESQ_DB at a path on that disk;
+      # /tmp is the only writable place without one.
+      - key: RESQ_PERSIST
+        value: "off"
+      - key: RESQ_DB
+        value: /tmp/resq.db
+      # Create the five test donors, and their six weeks of logged days, when the worker
+      # starts. In demo mode this is what makes a fresh deployment immediately useful; the
+      # startup log names the five addresses and the password they share.
+      - key: RESQ_SEED
+        value: "on"

@@ -15,6 +15,12 @@ POST /api/orders turns a chosen pair into a delivery order.
     python3 backend/server.py                   # demo mode, port 8080
     RESQ_PERSIST=on python3 backend/server.py   # store accounts in SQLite (backend/resq.db)
 
+This file is also the whole of the API when it is deployed: `wsgi.py` adapts its handler
+into a WSGI application, which is what Gunicorn runs on Render (see the README's
+deployment section). Both front-ends answer with the same routes because there is one
+implementation of them, and the cross-origin rules — which origins may read this API —
+are read from `RESQ_ALLOWED_ORIGINS` so a deployment's frontend can be named there.
+
 Endpoints
     GET  /api/health                liveness probe
     POST /api/register              create an account (409 when the email or phone is taken)
@@ -26,6 +32,7 @@ Endpoints
     GET  /api/matches               rank the counterparts near the account, nearest first
     GET  /api/orders                list the delivery orders the account is part of
     POST /api/orders                bind the account and one counterpart into an order
+    GET  /api/history               the account's own logged days, and what they answer
     GET  /api/weather               the real conditions at a point, in the analyser's words
     GET  /api/surplus-forecast      forecast today's surplus (surplus.py pipeline)
     GET  /api/surplus-outlook       the week ahead at a point, a forecast per day
@@ -46,6 +53,8 @@ the API can be inspected a topic at a time:
     accounts.py   impact figures and the demo accounts and peers
     matching.py   what makes two accounts deliverable
     orders.py     the order's stored shape
+    history.py    the logged days, and the features the model reads out of them
+    seed.py       the five test donors and their six weeks of logs
     weather.py    live conditions from Open-Meteo, in the model's three words
     surplus.py    the surplus calculator: train once, forecast per request
 """
@@ -73,6 +82,9 @@ from accounts import (
     seed_donor_metrics,
 )
 from config import (
+    CORS_ALLOWED_HEADERS,
+    CORS_ALLOWED_METHODS,
+    CORS_MAX_AGE_SECONDS,
     DB_PATH,
     DEFAULT_MATCH_LIMIT,
     DEFAULT_RADIUS_KM,
@@ -85,6 +97,7 @@ from config import (
     EMAIL_RE,
     FIRM_SURPLUS,
     FRONTEND_DIR,
+    HISTORY_READ_DAYS,
     LIST_FIELDS,
     LIVE_ORDER_STATUSES,
     MAX_ADDRESS_CHARS,
@@ -95,11 +108,13 @@ from config import (
     PERSIST,
     PUBLIC_FIELDS,
     RECIPIENT_NEEDS,
+    SEED_ON_START,
     WEATHER_MAX_OUTLOOK_DAYS,
     WEATHER_OUTLOOK_DAYS,
 )
 from db import connect, init_db, users_by_ids
 from geo import bounding_box, haversine_km, offset_point
+from history import as_day, features_from_history, history_summary, read_history
 from helpers import (
     clean_email,
     clean_id,
@@ -108,11 +123,13 @@ from helpers import (
     decode_list,
     demo_display_name,
     display_name,
+    origin_allowed,
     password_problem,
     query_number,
 )
 from matching import routing_problem, shared_categories
 from orders import order_row
+from seed import seed_test_donors
 from security import hash_password, verify_password
 from surplus import forecast_surplus, train_surplus_model
 from weather import WeatherUnavailable, fetch_outlook, fetch_weather
@@ -121,17 +138,59 @@ from weather import WeatherUnavailable, fetch_outlook, fetch_weather
 class ResQHandler(SimpleHTTPRequestHandler):
     server_version = "ResQ/1.0"
 
+    # Set for the length of one HEAD request, when an API route answers without its body.
+    head_only = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
 
     # ------------------------------------------------------------------ helpers
+    def cors_headers(self):
+        """The CORS headers this request has earned, or nothing at all.
+
+        Only an origin the allowlist names is answered, and the answer names that origin
+        rather than `*`, so a deployment never hands its API to a site nobody listed. The
+        pages authenticate with a bearer token in a header rather than with a cookie, so no
+        credentials ride along and no `Allow-Credentials` is needed; `Vary: Origin` is set
+        so a cache cannot serve one origin's answer to another.
+        """
+        origin = (self.headers.get("Origin") or "").strip()
+        if not origin_allowed(origin):
+            return {}
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": CORS_ALLOWED_METHODS,
+            "Access-Control-Allow-Headers": CORS_ALLOWED_HEADERS,
+            "Access-Control-Max-Age": str(CORS_MAX_AGE_SECONDS),
+            "Vary": "Origin",
+        }
+
+    def do_OPTIONS(self):
+        """Answer a CORS preflight: which methods and headers a cross-origin caller may use.
+
+        A browser asks this before any `POST` carrying `Authorization` — which every private
+        call here does — so a preflight that goes unanswered is a call that never happens.
+        An origin that is not allowed is answered too, with no CORS headers in it: the
+        browser then refuses the call, which is the whole point of an allowlist.
+        """
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        for name, value in self.cors_headers().items():
+            self.send_header(name, value)
+        self.end_headers()
+
     def send_json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in self.cors_headers().items():
+            self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(body)
+        # A HEAD request is answered with the headers the GET would send — content length
+        # included — and nothing after them; the body is what it asks not to be sent.
+        if not self.head_only:
+            self.wfile.write(body)
 
     def read_json(self):
         length = int(self.headers.get("Content-Length") or 0)
@@ -204,6 +263,23 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return token
 
     # ------------------------------------------------------------------- routes
+    def do_HEAD(self):
+        """Answer an API route as its `GET` answers it, minus the body.
+
+        Without this the request falls through to the static handler, which looks for a
+        file named `/api/health` and answers `404` — so `curl -I` against a deployed URL,
+        or any uptime check that probes with `HEAD`, would report a working service as a
+        missing page. A page still gets the static handler's own `HEAD`, which knows how to
+        answer for a file without sending it.
+        """
+        if urlparse(self.path).path.startswith("/api/"):
+            self.head_only = True
+            try:
+                return self.do_GET()
+            finally:
+                self.head_only = False
+        return super().do_HEAD()
+
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
@@ -222,6 +298,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_matches()
         if path == "/api/orders":
             return self.api_orders()
+        if path == "/api/history":
+            return self.api_history()
         if path == "/api/weather":
             return self.api_weather()
         if path == "/api/surplus-forecast":
@@ -534,6 +612,94 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 conn.commit()
         return self.send_json(200, {"ok": True})
 
+    # -------------------------------------------------------------------- history
+    def signed_in_history(self):
+        """`(signed_in, days)` for the bearer token: the account's logged days, oldest first.
+
+        The log is read the same way from either mode — demo mode answers the process's own
+        store for the session's account, persistence the account's own rows through the
+        session's token — and the connection is opened and closed in here, so nothing above
+        has to know which mode this server is running in.
+        """
+        token = self.bearer_token()
+        if not token:
+            return False, []
+        if not PERSIST:
+            user = DEMO_SESSIONS.get(token)
+            if user is None:
+                return False, []
+            return True, read_history(user)
+        with connect() as conn:
+            row = self.user_for_token(conn, token)
+            if row is None:
+                return False, []
+            return True, read_history(row, conn)
+
+    def api_history(self):
+        """The account's own logged days, newest first, and what they can answer.
+
+        The log is the kitchen's own: a donor reads back the days they logged — served, the
+        sky over them and the surplus that came out — and those are the same rows the
+        analyser's model reads its past from. That is why the derived numbers the next
+        forecast will be made with travel beside the rows: the answer says what the log
+        says, rather than making the caller derive it again. A recipient has none of this,
+        the way they have none of the impact figures: the log belongs to the kitchen that
+        cooked.
+        """
+        signed_in, days = self.signed_in_history()
+        if not signed_in:
+            return self.send_json(
+                401, {"error": "Your session has expired. Please sign in again."}
+            )
+        # A reading looks back six weeks at most — far enough for the fourteen-day window,
+        # the week-old lag and the day-old lag — so a longer log is read for its own sake
+        # rather than every row of it being summarised.
+        recent = days[-HISTORY_READ_DAYS:]
+        return self.send_json(
+            200,
+            {
+                "ok": True,
+                "history": {
+                    "days": list(reversed(recent)),
+                    "summary": history_summary(recent),
+                    "features": features_from_history(recent),
+                    "window_days": HISTORY_READ_DAYS,
+                },
+            },
+        )
+
+    def history_features(self, cleaned, on_date=None):
+        """Fill a forecast's numeric features from the caller's own logged days.
+
+        Only the features the caller did not send are filled, so an explicit value always
+        wins, and the answer says which ones came from the log. With no account, or an
+        account that has logged nothing, nothing is filled and the model's own defaults
+        stand — which is exactly what they are a fallback for, rather than the answer every
+        kitchen gets.
+        """
+        signed_in, days = self.signed_in_history()
+        if not signed_in or not days:
+            return None
+        recent = days[-HISTORY_READ_DAYS:]
+        derived = features_from_history(recent, on_date)
+        filled = []
+        for name in ("expected_customers", "surplus_yesterday", "surplus_last_week",
+                     "surplus_rolling_14"):
+            value = derived.get(name)
+            if value is None or name in cleaned:
+                continue
+            cleaned[name] = value
+            filled.append(name)
+        if not filled:
+            return None
+        return {
+            "days": len(recent),
+            "first_date": recent[0]["date"],
+            "last_date": recent[-1]["date"],
+            "derived": derived,
+            "filled_features": filled,
+        }
+
     # ------------------------------------------------------------------- forecast
     def query_point(self, query):
         """Read a lat/lng pair out of a query string, or the 400 it deserves.
@@ -625,12 +791,28 @@ class ResQHandler(SimpleHTTPRequestHandler):
         except WeatherUnavailable as err:
             return self.weather_unavailable(err)
 
+        # Every day is read against the same log, at its own date: today's own day is what
+        # the lagged surpluses and the rolling window can answer, and the days after it take
+        # their weekday's customer count and the fourteen-day mean, which is the kitchen's
+        # measured level rather than an invented future. What the log cannot answer for a
+        # day that has not happened yet — that day's yesterday — is left to the model's
+        # imputer, which is what it is there for.
+        signed_in, logged = self.signed_in_history()
+        logged = logged[-HISTORY_READ_DAYS:] if signed_in else []
+
         series = []
         model = None
         try:
             for day in outlook["days"]:
+                features = {}
+                if logged:
+                    features = {
+                        name: value
+                        for name, value in features_from_history(logged, as_day(day["date"])).items()
+                        if value is not None
+                    }
                 answer = forecast_surplus(
-                    day_of_week=day["day_of_week"], weather=day["label"]
+                    day_of_week=day["day_of_week"], weather=day["label"], **features
                 )
                 series.append(
                     dict(day, predicted_surplus_kg=answer["predicted_surplus_kg"])
@@ -641,9 +823,14 @@ class ResQHandler(SimpleHTTPRequestHandler):
         except ImportError:
             return self.model_dependencies_missing()
 
-        return self.send_json(
-            200, {"ok": True, "outlook": dict(outlook, days=series, **(model or {}))}
-        )
+        answer = {"ok": True, "outlook": dict(outlook, days=series, **(model or {}))}
+        if logged:
+            answer["outlook"]["history"] = {
+                "days": len(logged),
+                "first_date": logged[0]["date"],
+                "last_date": logged[-1]["date"],
+            }
+        return self.send_json(200, answer)
 
     def forecast_param_problem(self, data):
         """Validate one forecast request's answers before the model sees them.
@@ -707,7 +894,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
         else:
             data = {}
             query = parse_qs(urlparse(self.path).query)
-            for name in ("day_of_week", "weather"):
+            for name in ("day_of_week", "weather", "on_date"):
                 value = (query.get(name) or [""])[0].strip()
                 if value:
                     data[name] = value
@@ -721,6 +908,24 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if problem:
             return self.send_json(400, problem)
 
+        # The day being forecast, when the caller names it: the analyser sends the date its
+        # own address is on, so the log is read for that day rather than for the server's.
+        # A caller that sends the date and not the day gets the day off the date.
+        on_date = None
+        raw_date = (data.get("on_date") or "").strip()
+        if raw_date:
+            on_date = as_day(raw_date)
+            if on_date is None:
+                return self.send_json(
+                    400,
+                    {
+                        "error": "on_date has to be an ISO date, like 2026-10-11.",
+                        "field": "on_date",
+                    },
+                )
+            cleaned.setdefault("day_of_week", on_date.strftime("%A"))
+
+        history = self.history_features(cleaned, on_date)
         try:
             forecast = forecast_surplus(**cleaned)
         except ImportError:
@@ -728,7 +933,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
             # pandas is missing; scikit-learn's missing import is a ModuleNotFoundError,
             # which subclasses it. Either way the answer is the same 503.
             return self.model_dependencies_missing()
-        return self.send_json(200, {"ok": True, "forecast": forecast})
+        answer = {"ok": True, "forecast": forecast}
+        if history is not None:
+            answer["history"] = history
+        return self.send_json(200, answer)
 
     # ------------------------------------------------------------------ matching
     def api_matches(self):
@@ -1377,16 +1585,77 @@ class ResQHandler(SimpleHTTPRequestHandler):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
 
-def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+def prepare_state():
+    """Everything the process does once, before it answers anything.
+
+    The tables when accounts are being stored, and the five test donors when seeding is
+    on. Both entry points call this — `main()` below for the standard library's server and
+    `wsgi.py` for the one a host runs — so a deployed API starts with exactly the state a
+    local one does, and the report is printed once rather than per request.
+    """
     if PERSIST:
         init_db()
-    server = ThreadingHTTPServer(("127.0.0.1", port), ResQHandler)
+    if not SEED_ON_START:
+        return None
+    # Demo mode keeps the accounts and their logs in the process; persistence writes them
+    # to the tables, which is why the connection is opened only for it.
     if PERSIST:
-        print("Res-Q backend on http://127.0.0.1:%d" % port, flush=True)
+        with connect() as seeded:
+            seed_report = seed_test_donors(seeded)
+    else:
+        seed_report = seed_test_donors()
+    print(
+        "Test donors: %d created, %d already there, %d days logged"
+        % (len(seed_report["created"]), len(seed_report["skipped"]),
+           seed_report["days_written"]),
+        flush=True,
+    )
+    if seed_report["created"]:
+        print(
+            "  weather: %d donors from the Open-Meteo archive, %d from the fallback"
+            " pattern" % (seed_report["weather_from_archive"],
+                          seed_report["weather_from_pattern"]),
+            flush=True,
+        )
+        print(
+            "  sign in as " + ", ".join(seed_report["created"]) + " with the password "
+            + seed_report["password"],
+            flush=True,
+        )
+    return seed_report
+
+
+def hosted_port():
+    """The port a host asked for, or `None` when nothing usable was asked for.
+
+    `$PORT` is the variable a host hands over, and a *port number* is the only thing that
+    counts: an empty value, something that is not a number, and `0` — which asks the
+    operating system to choose — are all treated as nobody having asked. Shells and CI
+    runners do set `PORT` to one of those, and a local run that quietly moved to a random
+    port because of it would look like the server had simply failed to start.
+    """
+    raw = (os.environ.get("PORT") or "").strip()
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return None
+
+
+def main():
+    # By hand the server stays on the loopback address and port 8080, which is where the
+    # pages and the README expect to find it. A host — Render and most others — hands the
+    # port over in $PORT and reaches the service from outside, so that is when the socket
+    # moves to 0.0.0.0. RESQ_HOST and RESQ_PORT override either choice deliberately.
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else (
+        hosted_port() or int(os.environ.get("RESQ_PORT") or 8080)
+    )
+    host = os.environ.get("RESQ_HOST") or ("0.0.0.0" if hosted_port() else "127.0.0.1")
+    prepare_state()
+    server = ThreadingHTTPServer((host, port), ResQHandler)
+    if PERSIST:
+        print("Res-Q backend on http://%s:%d" % (host, port), flush=True)
         print("  mode: PERSISTENT — accounts are stored in %s" % DB_PATH, flush=True)
     else:
-        print("Res-Q backend on http://127.0.0.1:%d" % port, flush=True)
+        print("Res-Q backend on http://%s:%d" % (host, port), flush=True)
         print(
             "  mode: DEMO — nothing is written to a database and no detail is\n"
             "        rejected as a duplicate. Accounts registered in this run sign back\n"

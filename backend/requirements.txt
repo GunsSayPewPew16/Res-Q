@@ -1,0 +1,10 @@
+# The Res-Q API is standard-library Python — nothing in backend/ imports a third-party
+# package. The one dependency is the server a host runs it on: Gunicorn, which speaks WSGI
+# to the adapter in wsgi.py.
+#
+#     pip install -r requirements.txt
+#     gunicorn -c gunicorn_config.py wsgi:application
+#
+# Render's build step runs the install line above, from this folder (see render.yaml and
+# the README's deployment section).
+gunicorn==23.0.0

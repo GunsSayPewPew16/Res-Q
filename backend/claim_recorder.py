@@ -2,11 +2,12 @@
 """
 Res-Q claim recorder.
 
-A separate companion service that records who claimed which surplus post.
-It is deliberately OUTSIDE the backend/ folder: the rule for this feature is
-that not one line of the backend's own code may be touched. This module adds
-one extra port (8081) beside the site's own server, and the Recipient dashboard
-posts every successful claim to it.
+A separate companion service that records who claimed which surplus post. It
+lives beside the backend because that is where this project's Python lives, but
+it is still not part of it: none of the backend's own modules imports this file,
+no line of the API's code knows it exists, and it runs as its own process on its
+own port (8081), which is where the Recipient dashboard posts every successful
+claim. Moving it in here changed where the file sits and nothing else.
 
 What it stores
 
@@ -44,8 +45,8 @@ many claimants.
 Run it from the repository root (it does not need the site running, but the
 dashboards only post to it while the claim flow is live):
 
-    python3 claim_recorder.py            # port 8081
-    python3 claim_recorder.py 8090       # any other port
+    python3 backend/claim_recorder.py            # port 8081
+    python3 backend/claim_recorder.py 8090       # any other port
 
 Only the standard library is used.
 """
@@ -60,8 +61,9 @@ from urllib.parse import urlparse
 
 # The records live inside the backend folder — data, not code — so the rationing
 # pass reads them from the place the site's own accounts database lives too.
-BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
-RECORDS_PATH = os.path.join(BACKEND_DIR, "claim_records.json")
+# The records sit in this module's own folder — the backend folder — so they land in the
+# same file whether the recorder is started from the repository root or from inside it.
+RECORDS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "claim_records.json")
 
 LOCK = threading.Lock()
 

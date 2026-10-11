@@ -13,6 +13,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <!-- Where the API is (see resq_api.js). Loaded first so every page builds its API URLs the same way. -->
+    <script src="resq_api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -1094,7 +1096,7 @@
             }
 
             // ...then let the backend settle the link, the header and which dashboard this is.
-            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+            fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
                         return { status: response.status, data: data };
@@ -1285,7 +1287,7 @@
         // can be walked through from one sign-in. That endpoint is demo mode only, and the
         // note under the buttons says so rather than the button appearing to do nothing.
         // ---------------------------------------------------------------------------
-        var SWITCH_URL = '/api/dev/switch-role';
+        var SWITCH_URL = apiUrl('/api/dev/switch-role');
         var OTHER_ROLE = 'donor';
 
         function setAccountNote(message, tone) {
@@ -1303,7 +1305,7 @@
             if (!token) { leave(); return; }
             // The session is dropped at the backend too, but nobody waits on that: someone
             // who asked to sign out is signed out here either way.
-            fetch('/api/logout', {
+            fetch(apiUrl('/api/logout'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1482,7 +1484,7 @@
         var START_VIEW = [43.6532, -79.3832];
         var ADDRESS_LOOKUP_DELAY = 500;
         var ADDRESS_RETRY_DELAY = 900;
-        var SAVE_URL = '/api/delivery-location';
+        var SAVE_URL = apiUrl('/api/delivery-location');
 
         var deliverMap = null;
         var deliverMarker = null;

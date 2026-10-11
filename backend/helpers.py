@@ -10,7 +10,7 @@ is decided the same way everywhere.
 import json
 import re
 
-from config import MAX_PICKS
+from config import ALLOWED_ORIGINS, MAX_PICKS
 
 def clean_selection(value, allowed, limit=MAX_PICKS):
     """Normalise a 1..limit multi-select answer. None means it is not a valid answer.
@@ -48,6 +48,34 @@ def decode_list(value):
     if not isinstance(parsed, list):
         return []
     return [item for item in parsed if isinstance(item, str)]
+
+def origin_allowed(origin):
+    """Whether this Origin may read the API, by the allowlist in config.
+
+    An entry is either an exact origin (`https://res-q.vercel.app`) or a wildcard for one
+    domain's subdomains (`*.vercel.app`) — which is what preview deployments need, since
+    Vercel gives every branch its own hostname — and `*` is honoured only when it is asked
+    for outright. An empty list, which is the default, allows nothing: a deployment nobody
+    configured stays same-origin only. A request with no Origin at all (a server-side
+    call, or curl) is never allowed, because there is no browser origin to answer.
+    """
+    if not origin:
+        return False
+    origin = origin.strip().rstrip("/").lower()
+    host = origin.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+    for entry in ALLOWED_ORIGINS:
+        if entry == "*":
+            return True
+        if entry.startswith("*."):
+            # The dot matters: *.vercel.app matches res-q.vercel.app and every preview
+            # hostname under it, and never a host that merely ends in similar letters.
+            base = entry[2:]
+            if host == base or host.endswith("." + base):
+                return True
+        elif origin == entry:
+            return True
+    return False
+
 
 def demo_display_name(contact):
     """Turn an unknown email or phone into something friendly to greet."""

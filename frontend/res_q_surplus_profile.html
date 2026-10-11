@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Res-Q | Surplus Profile</title>
+    <!-- Where the API is (see resq_api.js). Loaded first so every page builds its API URLs the same way. -->
+    <script src="resq_api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -638,7 +640,7 @@
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-60');
 
-            fetch('/api/profile', {
+            fetch(apiUrl('/api/profile'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
                 body: JSON.stringify(payload)
@@ -689,7 +691,7 @@
             if (!token) return;
 
             // ...then let the backend settle the role and the session behind it.
-            fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
+            fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
                         return { status: response.status, data: data };

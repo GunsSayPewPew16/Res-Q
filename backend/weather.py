@@ -14,10 +14,12 @@ closest things the model was trained to hold. That is a real loss of information
 the raw code, its own words and the day's own rainfall travel beside the label for
 anything that wants to show the weather rather than feed it to the model.
 
-Two readings come out of the same service: the sky over a point right now, which is
-the row a forecast is made under, and the days ahead of it, which is what the
-analyser's weekly chart is drawn from. Both are the same call with a different set of
-fields, so the request, the answer and every failure they share live once, here.
+Three readings come out of the same service: the sky over a point right now, which is
+the row a forecast is made under; the days ahead of it, which is what the analyser's
+weekly chart is drawn from; and the days behind it, which is what the test donors' logs
+are filled with so their weather is real weather rather than an invention. All three are
+the same call with a different set of fields and the same daily block, so the request,
+the answer and every failure they share live once, here.
 """
 
 import datetime
@@ -27,6 +29,7 @@ import urllib.request
 
 from config import (
     WEATHER_API_URL,
+    WEATHER_ARCHIVE_URL,
     WEATHER_CURRENT_FIELDS,
     WEATHER_DAILY_FIELDS,
     WEATHER_MAX_OUTLOOK_DAYS,
@@ -123,6 +126,23 @@ def outlook_url(lat, lng, days):
         "%s?latitude=%.6f&longitude=%.6f&daily=%s&forecast_days=%d&timezone=auto"
         % (WEATHER_API_URL, lat, lng, WEATHER_DAILY_FIELDS, days)
     )
+
+
+def archive_url(lat, lng, start, end):
+    """The Open-Meteo request for the days a run of history covers, both dates inclusive."""
+    return (
+        "%s?latitude=%.6f&longitude=%.6f&daily=%s&start_date=%s&end_date=%s&timezone=auto"
+        % (WEATHER_ARCHIVE_URL, lat, lng, WEATHER_DAILY_FIELDS, start, end)
+    )
+
+
+def fetch_archive(lat, lng, start, end):
+    """The conditions those days actually had at a point, in the outlook's own shape.
+
+    The archive answers the same daily block the outlook does, so it is read by the same
+    parser: a day's entry means the same thing whether it has happened or is forecast.
+    """
+    return outlook_from_payload(fetch_json(archive_url(lat, lng, start, end)))
 
 
 def fetch_json(url):
