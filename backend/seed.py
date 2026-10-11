@@ -247,6 +247,13 @@ TEST_ORTEGA_ORDERS = (
 # baskets and crates rather than a weight — because reading that text is the first thing
 # the pass does. The hours are hours before now, so the fixture keeps its shape whenever
 # the server is up.
+#
+# The two figures a shelter reports are spread deliberately wide — Overtown feeding four
+# times the households and three weeks without a delivery, Little Havana a recent, small
+# one — so a split reads as a split rather than as three equal shares. They are the
+# strongest lever the pass has on a post without a model: the item's own urgency is the
+# same for every claimant of it, so the difference a donor sees in the rations comes from
+# what the shelters themselves report.
 TEST_ORTEGA_DELIVERIES = (
     {
         "id": "6d2f0c94-1a3b-4e57-8c21-9f4b7a5e0d18",
@@ -256,11 +263,11 @@ TEST_ORTEGA_DELIVERIES = (
         "posted_hours_ago": 7.0,
         "claimants": (
             {"shelter": "ana@resq.test", "claimed_hours_ago": 5.5,
-             "households_waiting": 180, "days_since_last_delivery": 11},
+             "households_waiting": 60, "days_since_last_delivery": 3},
             {"shelter": "ines@resq.test", "claimed_hours_ago": 3.0,
-             "households_waiting": 240, "days_since_last_delivery": 6},
+             "households_waiting": 900, "days_since_last_delivery": 24},
             {"shelter": "tomas@resq.test", "claimed_hours_ago": 1.5,
-             "households_waiting": 90, "days_since_last_delivery": 2},
+             "households_waiting": 30, "days_since_last_delivery": 1},
         ),
     },
     {
@@ -271,9 +278,9 @@ TEST_ORTEGA_DELIVERIES = (
         "posted_hours_ago": 21.0,
         "claimants": (
             {"shelter": "ines@resq.test", "claimed_hours_ago": 18.0,
-             "households_waiting": 240, "days_since_last_delivery": 6},
+             "households_waiting": 900, "days_since_last_delivery": 24},
             {"shelter": "tomas@resq.test", "claimed_hours_ago": 12.0,
-             "households_waiting": 90, "days_since_last_delivery": 2},
+             "households_waiting": 30, "days_since_last_delivery": 1},
         ),
     },
     {
@@ -284,9 +291,9 @@ TEST_ORTEGA_DELIVERIES = (
         "posted_hours_ago": 30.0,
         "claimants": (
             {"shelter": "ana@resq.test", "claimed_hours_ago": 28.0,
-             "households_waiting": 180, "days_since_last_delivery": 11},
+             "households_waiting": 60, "days_since_last_delivery": 3},
             {"shelter": "ines@resq.test", "claimed_hours_ago": 25.5,
-             "households_waiting": 240, "days_since_last_delivery": 6},
+             "households_waiting": 900, "days_since_last_delivery": 24},
         ),
     },
 )
@@ -394,20 +401,27 @@ TEST_BOARD_POSTS = tuple(
 # "3 shelters", "2 shelters" and so on, so the surface shows a post being split as well as
 # one that a single shelter took. The Miami kitchen's claims are its own book's, taken from
 # `TEST_ORTEGA_DELIVERIES` for the same reason its items are.
+# Each entry is one claim: the item, the shelter, how long ago it claimed, and the two
+# figures the shelter reports — which travel with the claim record, because they are what
+# the pass scores a need by. A claim the pages record carries only the two pins, and the
+# pass reads a claim without figures as a moderate need; a fixture that wants an uneven
+# split has to say so.
 TEST_BOARD_CLAIMS = tuple(
-    (spec["id"], claimant["shelter"], claimant["claimed_hours_ago"])
+    (spec["id"], claimant["shelter"], claimant["claimed_hours_ago"],
+     {"households_waiting": claimant["households_waiting"],
+      "days_since_last_delivery": claimant["days_since_last_delivery"]})
     for spec in TEST_ORTEGA_DELIVERIES
     for claimant in spec["claimants"]
 ) + (
-    ("b1a10000-0000-4000-8000-000000000005", TEST_RECIPIENT["email"], 20.0),
-    ("b1a10000-0000-4000-8000-000000000005", "harbour@resq.test", 18.0),
-    ("b1a10000-0000-4000-8000-000000000006", TEST_RECIPIENT["email"], 12.0),
-    ("b1a10000-0000-4000-8000-000000000006", "harbour@resq.test", 10.0),
-    ("b1a10000-0000-4000-8000-000000000007", TEST_RECIPIENT["email"], 9.0),
-    ("b1a10000-0000-4000-8000-000000000007", "harbour@resq.test", 8.0),
-    ("b1a10000-0000-4000-8000-000000000007", "riverside@resq.test", 6.0),
-    ("b1a10000-0000-4000-8000-000000000008", TEST_RECIPIENT["email"], 4.0),
-    ("b1a10000-0000-4000-8000-000000000008", "riverside@resq.test", 3.0),
+    ("b1a10000-0000-4000-8000-000000000005", TEST_RECIPIENT["email"], 20.0, None),
+    ("b1a10000-0000-4000-8000-000000000005", "harbour@resq.test", 18.0, None),
+    ("b1a10000-0000-4000-8000-000000000006", TEST_RECIPIENT["email"], 12.0, None),
+    ("b1a10000-0000-4000-8000-000000000006", "harbour@resq.test", 10.0, None),
+    ("b1a10000-0000-4000-8000-000000000007", TEST_RECIPIENT["email"], 9.0, None),
+    ("b1a10000-0000-4000-8000-000000000007", "harbour@resq.test", 8.0, None),
+    ("b1a10000-0000-4000-8000-000000000007", "riverside@resq.test", 6.0, None),
+    ("b1a10000-0000-4000-8000-000000000008", TEST_RECIPIENT["email"], 4.0, None),
+    ("b1a10000-0000-4000-8000-000000000008", "riverside@resq.test", 3.0, None),
 )
 
 
@@ -958,15 +972,20 @@ def seed_demo_board(conn=None, now=None):
             continue
         report["posts_published"].append(post["id"])
 
-    for post_id, email, hours_ago in TEST_BOARD_CLAIMS:
+    for post_id, email, hours_ago, figures in TEST_BOARD_CLAIMS:
         shelter = test_account(email, conn)
         row = rows.get(post_id)
         if shelter is None or row is None:
             continue
         claimed_at = fixture_time(hours_ago, now)
         # The API's own record of the claim: this is the half that carries the shelter's
-        # pin, which is what a route is drawn between.
-        remember(record_from_post(row, shelter, claimed_at), conn)
+        # pin, which is what a route is drawn between — and the shelter's own figures,
+        # which are what the rationing pass scores its need by. A record without them is a
+        # claim the pass reads as a moderate need, whatever the shelter actually reported.
+        record = record_from_post(row, shelter, claimed_at)
+        if figures:
+            record["metrics"] = dict(figures)
+        remember(record, conn)
         report["claims_recorded"] += 1
         if not supabase.configured():
             continue
