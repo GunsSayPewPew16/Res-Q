@@ -2279,6 +2279,9 @@
                     setSearchValue(deliverAddress);
                     hideDeliverNotice();
                     renderDeliveryReadout();
+                    // The post area posts from the account's own location, so the address
+                    // just confirmed is what the pickup field should carry from here on.
+                    prefillSurplusLocation();
                 })
                 .catch(function () {
                     savingLocation = false;
@@ -2780,12 +2783,25 @@
             return field ? String(field.value || '').trim() : '';
         }
 
-        // The account's confirmed location, or the address it onboarded with. Only
-        // ever filled in while the field is still empty, so it never overwrites typing.
+        // What the page itself last wrote into the pickup field, so a location confirmed
+        // later can replace the page's own earlier answer without ever replacing the
+        // donor's typing.
+        var prefilledSurplusLocation = '';
+
+        // The account's confirmed location, or the address it onboarded with. Read out of
+        // the profile when the page loads, and again whenever that location changes: a pin
+        // confirmed on the dashboard map is the address the next post should carry, so the
+        // post area is refilled the moment it is saved. The field is the page's to write
+        // only while it is empty or still holds what the page put there — a donor who has
+        // typed an address of their own keeps it.
         function prefillSurplusLocation() {
             var field = document.getElementById('surplusLocation');
-            if (!field || field.value) { return; }
-            field.value = (savedLocation && savedLocation.address) || profileAddress || '';
+            if (!field) { return; }
+            var address = (savedLocation && savedLocation.address) || profileAddress || '';
+            if (!address) { return; }
+            if (field.value && field.value !== prefilledSurplusLocation) { return; }
+            field.value = address;
+            prefilledSurplusLocation = address;
         }
 
         // The same sentence for both failures worth explaining: the table is missing,
@@ -3090,6 +3106,10 @@
 
         function openFeed() {
             setChip('feedState', 'reading\u2026', CHIP_BUSY);
+            // The compose box is on this screen, so its pickup address is settled here as
+            // well: a profile that arrived after the form was first filled reaches the field
+            // the moment the feed opens rather than only on the next page load.
+            prefillSurplusLocation();
             var db = resqDb();
             if (!db) {
                 setChip('feedState', 'no client', CHIP_BUSY);
