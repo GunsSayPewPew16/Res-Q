@@ -26,11 +26,14 @@ Endpoints
     GET  /api/matches               rank the counterparts near the account, nearest first
     GET  /api/orders                list the delivery orders the account is part of
     POST /api/orders                bind the account and one counterpart into an order
-    GET  /api/surplus-forecast      forecast tomorrow's surplus (surplus.py pipeline)
+    GET  /api/weather               the real conditions at a point, in the analyser's words
+    GET  /api/surplus-forecast      forecast today's surplus (surplus.py pipeline)
+    GET  /api/surplus-outlook       the week ahead at a point, a forecast per day
 
 Only the standard library is used for the site and session work, so the server
-runs as before with nothing to install; the surplus forecast additionally wants
-pandas and scikit-learn, and answers 503 with install instructions without them.
+runs as before with nothing to install; the live weather wants nothing but a
+connection, and the surplus forecast additionally wants pandas and scikit-learn and
+answers 503 with install instructions without them.
 
 The handler lives here; everything it calls lives in the module that owns it, so
 the API can be inspected a topic at a time:
@@ -43,6 +46,7 @@ the API can be inspected a topic at a time:
     accounts.py   impact figures and the demo accounts and peers
     matching.py   what makes two accounts deliverable
     orders.py     the order's stored shape
+    weather.py    live conditions from Open-Meteo, in the model's three words
     surplus.py    the surplus calculator: train once, forecast per request
 """
 
@@ -91,6 +95,8 @@ from config import (
     PERSIST,
     PUBLIC_FIELDS,
     RECIPIENT_NEEDS,
+    WEATHER_MAX_OUTLOOK_DAYS,
+    WEATHER_OUTLOOK_DAYS,
 )
 from db import connect, init_db, users_by_ids
 from geo import bounding_box, haversine_km, offset_point
@@ -109,6 +115,7 @@ from matching import routing_problem, shared_categories
 from orders import order_row
 from security import hash_password, verify_password
 from surplus import forecast_surplus, train_surplus_model
+from weather import WeatherUnavailable, fetch_outlook, fetch_weather
 
 
 class ResQHandler(SimpleHTTPRequestHandler):
@@ -215,8 +222,12 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_matches()
         if path == "/api/orders":
             return self.api_orders()
+        if path == "/api/weather":
+            return self.api_weather()
         if path == "/api/surplus-forecast":
             return self.api_surplus_forecast()
+        if path == "/api/surplus-outlook":
+            return self.api_surplus_outlook()
         if path.startswith("/api/"):
             return self.send_json(404, {"error": "Unknown endpoint."})
         return super().do_GET()
@@ -524,6 +535,116 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return self.send_json(200, {"ok": True})
 
     # ------------------------------------------------------------------- forecast
+    def query_point(self, query):
+        """Read a lat/lng pair out of a query string, or the 400 it deserves.
+
+        Returns `(lat, lng, None)` for a point on the globe and `(None, None, body)` for
+        anything else. Both weather readings are made *at* a point, and they are checked
+        the way the delivery location checks them: a point the site itself would refuse to
+        store is a point nobody has an address for, so nothing is read there.
+        """
+        try:
+            lat = float((query.get("lat") or [""])[0])
+            lng = float((query.get("lng") or [""])[0])
+        except (TypeError, ValueError):
+            return None, None, {
+                "error": "lat and lng have to be numbers: the weather is read at a point.",
+                "field": "lat",
+            }
+        if lat != lat or lng != lng or not -90 <= lat <= 90 or not -180 <= lng <= 180:
+            return None, None, {
+                "error": "Those coordinates are not a place on the map.",
+                "field": "lat",
+            }
+        return lat, lng, None
+
+    def weather_unavailable(self, err):
+        """The one 502 both weather readings answer with when the sky cannot be read."""
+        return self.send_json(502, {"error": str(err), "code": "weather_unavailable"})
+
+    def model_dependencies_missing(self):
+        """The one 503 both surplus endpoints answer with, install line and all."""
+        return self.send_json(
+            503,
+            {
+                "error": "The surplus model needs pandas and scikit-learn, which are"
+                         " not installed on this server. Install them (pip install"
+                         " pandas scikit-learn) and restart it.",
+                "code": "model_dependencies_missing",
+            },
+        )
+
+    def api_weather(self):
+        """The real sky at a point, in the vocabulary the analyser was trained on.
+
+        The reading comes from Open-Meteo — keyless, like the map's tiles — and
+        `weather.py` is the one place that decides which of Sunny, Cloudy and Rainy a WMO
+        code becomes. An unreachable service is answered as 502 rather than guessed at,
+        because a forecast drawn under an invented sky is worse than one that says the sky
+        could not be read.
+        """
+        lat, lng, problem = self.query_point(parse_qs(urlparse(self.path).query))
+        if problem:
+            return self.send_json(400, problem)
+
+        try:
+            weather = fetch_weather(lat, lng)
+        except WeatherUnavailable as err:
+            # The message says what went wrong in the service's own terms; the dashboard
+            # puts it on the analyser's banner rather than running the model under a sky
+            # nobody read.
+            return self.weather_unavailable(err)
+        return self.send_json(200, {"ok": True, "weather": weather})
+
+    def api_surplus_outlook(self):
+        """The week's surplus at a point: each day's own sky, run through the model.
+
+        This is what the analyser's weekly chart is drawn from. The weather is what makes
+        one day differ from the next — and the day's own name brings the model's weekend
+        bump with it — so the week is read as one daily outlook and every day is forecast
+        with its own day and its own sky, today first, at the same point the banner's sky
+        was read at. `days` defaults to a week and is pulled into what the service will
+        answer, so a caller cannot ask for a week that does not exist. An unreachable
+        service, or a run without pandas and scikit-learn, is answered as 502 and 503
+        respectively: a chart drawn under invented skies is worse than one that says the
+        week could not be read.
+        """
+        query = parse_qs(urlparse(self.path).query)
+        lat, lng, problem = self.query_point(query)
+        if problem:
+            return self.send_json(400, problem)
+        days = query_number(query, "days", WEATHER_OUTLOOK_DAYS, 1, WEATHER_MAX_OUTLOOK_DAYS)
+        if days is None:
+            return self.send_json(
+                400,
+                {"error": "days has to be a whole number of days.", "field": "days"},
+            )
+
+        try:
+            outlook = fetch_outlook(lat, lng, int(days))
+        except WeatherUnavailable as err:
+            return self.weather_unavailable(err)
+
+        series = []
+        model = None
+        try:
+            for day in outlook["days"]:
+                answer = forecast_surplus(
+                    day_of_week=day["day_of_week"], weather=day["label"]
+                )
+                series.append(
+                    dict(day, predicted_surplus_kg=answer["predicted_surplus_kg"])
+                )
+                # Every day carries the same cached pipeline and its score, so the week
+                # carries them once rather than seven times over.
+                model = {"mae_kg": answer["mae_kg"], "model": answer["model"]}
+        except ImportError:
+            return self.model_dependencies_missing()
+
+        return self.send_json(
+            200, {"ok": True, "outlook": dict(outlook, days=series, **(model or {}))}
+        )
+
     def forecast_param_problem(self, data):
         """Validate one forecast request's answers before the model sees them.
 
@@ -571,7 +692,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return cleaned, None
 
     def api_surplus_forecast(self):
-        """Tomorrow's surplus, forecast by the pipeline in surplus.py.
+        """Today's surplus, forecast by the pipeline in surplus.py.
 
         The model is trained on synthetic daily history once and cached, so the
         first request pays for the forest and the rest do not. Every feature is
@@ -606,15 +727,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
             # Surplus.py raises the plain ImportError with install instructions when
             # pandas is missing; scikit-learn's missing import is a ModuleNotFoundError,
             # which subclasses it. Either way the answer is the same 503.
-            return self.send_json(
-                503,
-                {
-                    "error": "The surplus model needs pandas and scikit-learn, which are"
-                             " not installed on this server. Install them (pip install"
-                             " pandas scikit-learn) and restart it.",
-                    "code": "model_dependencies_missing",
-                },
-            )
+            return self.model_dependencies_missing()
         return self.send_json(200, {"ok": True, "forecast": forecast})
 
     # ------------------------------------------------------------------ matching

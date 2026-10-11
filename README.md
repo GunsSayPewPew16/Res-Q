@@ -287,11 +287,14 @@ sit on a dashboard rather than behind the API:
 - **Surplus Analyser** — the donor's own rows, the same table narrowed to that
   donor's name, with the status each one has reached. It is the donor's log rather
   than the shared board, which is why it lives beside the feed instead of in it.
-  The screen opens on the surplus predictor's layout, kept as boxes alone: the
-  forecast banner, the two quick statistics, the weekly yield chart and the category
-  split are all built, with none of the reference's copy — each line it carried is
-  held open by a bare placeholder bar, the way the rest of the skeleton is. The
-  section is the donor's own; the recipient dashboard has no analyser.
+  The screen opens on the surplus predictor's layout: the forecast banner and the
+  weekly yield chart both carry live data, while the category split is still held open
+  by bare placeholder bars. Running the analyser reads the **live weather** at the
+  account's own address and forecasts **today's** surplus from that day, that sky and
+  the model's defaults for the rest of its row, then reads the same point's seven-day
+  outlook to draw the chart — one bar per day, today first, which is where the model's
+  own weekend bump turns up — see [the live weather](#the-live-weather). The section is
+  the donor's own; the recipient dashboard has no analyser.
 
 ### For You, and what a post is tagged with
 
@@ -372,12 +375,14 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/matching.py` | What makes two accounts deliverable: shared categories, confirmed pins |
 | `backend/orders.py` | The order's stored shape, shared by both modes |
 | `backend/surplus.py` | The surplus calculator: the regression pipeline, trained once and cached, forecasting per request |
+| `backend/weather.py` | The live conditions at a point — now, and day by day for the week ahead — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
 
 The server itself still uses only the standard library, so nothing has to be
-installed for the site, the accounts and the matching to work. The surplus forecast
-additionally wants pandas and scikit-learn — `surplus.py` imports them inside its
-functions so the rest of the backend runs without them — and the endpoint answers
-`503` with install instructions when they are missing.
+installed for the site, the accounts and the matching to work. The live weather wants
+nothing installed either — `weather.py` calls Open-Meteo with `urllib` — while the
+surplus forecast additionally wants pandas and scikit-learn: `surplus.py` imports them
+inside its functions so the rest of the backend runs without them, and the endpoint
+answers `503` with install instructions when they are missing.
 
 The backend listens on `127.0.0.1:8080`. `GET /api/health` reports which mode it
 is in.
@@ -391,14 +396,18 @@ weather, a weekday rhythm with a weekend bump — ending in a random-forest regr
 through an impute → scale / one-hot pipeline, with the mean absolute error it scores
 at printed when the file is run on its own (`python3 backend/surplus.py`).
 
-The module exposes two calls:
+The row it forecasts is **today's**: the day the kitchen is cooking on, and the surplus
+it is holding now. The module exposes two calls:
 
 - `train_surplus_model()` — the original script verbatim, seed and features and split
   unchanged, returning the fitted pipeline and its MAE (9.2 kg on the held-out tail).
 - `forecast_surplus(**features)` — the call a request reaches. Every feature is
   optional; anything left out is filled with a usable default, and the labels default
-  to **today's** own day and a clear sky. The pipeline is trained on the first call and
-  cached in the process, so the forest is not rebuilt per request.
+  to **today's** own day and a clear sky. The clear sky is a fallback rather than a
+  reading — the dashboard reads the real one at the account's address and passes it in
+  as `weather` — so a request that omits it is one that had no address to read. The
+  pipeline is trained on the first call and cached in the process, so the forest is not
+  rebuilt per request.
 
 `GET` or `POST /api/surplus-forecast` calls it. Accepts `day_of_week` (a day name),
 `weather` (Sunny, Cloudy or Rainy) and the four numeric features
@@ -408,6 +417,55 @@ training data was built on is refused with `400` rather than forecast against
 silently, and the answer carries the prediction, the MAE it comes with and the model
 and features that produced it. With pandas or scikit-learn missing, it is `503`,
 `model_dependencies_missing`, with the install line in the message.
+
+### The live weather
+
+The analyser forecasts today's surplus, so the sky in that row has to be today's too.
+`GET /api/weather?lat=..&lng=..` reads it from [Open-Meteo](https://open-meteo.com/) —
+keyless, like the map's vector tiles and the address lookups, so nothing has to be
+registered to run this server. Coordinates are required and are checked the way the
+delivery location checks them: a point the site itself would refuse to store is a point
+nobody has an address for, so nothing is read there. The reading is today's own summary
+— the WMO code the day is filed under — with the sky right now carried beside it, in
+the address's own timezone, because "today" is the address's day and not UTC's.
+
+The model was trained on three words for the sky, so the table in `backend/weather.py`
+is the one place that turns a WMO code into them: clear and mainly clear are **Sunny**,
+partly cloudy, overcast and fog are **Cloudy**, and everything that falls out of the sky
+— drizzle, rain, showers, snow, thunderstorms — is **Rainy**. Snow answered as rain and
+fog as cloud is information dropped, because the model has no word for either, so the
+answer carries the raw code, its own summary and the day's rainfall beside the label for
+anything that wants to show the weather rather than feed it to the model.
+
+The dashboard reads it at the account's own address: the **delivery location confirmed
+on the Dashboard** when there is one, and the address typed at onboarding — geocoded
+with the same Nominatim lookup the map's search uses — when there is not. A run with no
+address at all, or with the service unreachable (`502`, `weather_unavailable`), still
+forecasts, and says on the banner and in the conditions panel that the sky could not be
+read rather than passing a made-up one off as a reading.
+
+The day the forecast row carries comes from that same reading: the date Open-Meteo files
+today under **at the address**, so the day the kitchen is actually cooking on is the day
+being forecast, and the reader's own clock is only the fallback for a run that had no
+reading to take a date from.
+
+**The week ahead** is the same point read again as a run of days:
+`GET /api/surplus-outlook?lat=..&lng=..` asks for that daily outlook — seven days by
+default, and never more than the sixteen the service will answer at all — then runs
+**each day through the same model** under that day's own name and that day's own sky.
+That is what gives the analyser's chart its shape: the sky moves from day to day, and
+`Saturday` and `Sunday` carry the model's weekend bump by themselves. Nothing between the
+bars is interpolated, averaged or smoothed — every bar is one forecast of one day — and
+the reading behind each label travels with it (the WMO code, its summary, and the day's
+high, low and rainfall) beside the prediction for anything that wants both.
+
+The chart draws those bars across the week's **own** range rather than up from zero:
+seven days of one kitchen's surplus sit within a few kilos of each other, so a
+zero-based axis would draw seven identical bars and hide the shape the chart exists to
+show. The range is named under the chart and the two bars that matter — today's and the
+week's heaviest — carry their figures, which is what makes the axis readable from the
+panel itself; a week that really is flat is drawn flat rather than exaggerated into a
+shape it does not have.
 
 ### Demo mode (default)
 
@@ -447,7 +505,9 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
-| `GET`/`POST` | `/api/surplus-forecast` | Tomorrow's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather` and up to four numeric features, in the query string or a JSON body. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy or a number sitting below zero, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed |
+| `GET` | `/api/weather` | The real conditions at a point, in the analyser's own vocabulary. Requires `lat`/`lng`, and answers `400` for a missing, non-numeric or off-globe pair. Reads Open-Meteo — keyless — and returns the model's label for today, the WMO code and summary behind it, the day's high/low and rainfall, the current temperature and wind, the address's timezone and the source. Answers `502` `weather_unavailable` when the service cannot be reached, rather than a default sky |
+| `GET` | `/api/surplus-outlook` | The week's surplus at a point, which is what the analyser's chart is drawn from: one forecast per day, today first. Requires `lat`/`lng` (`400` as above) and takes an optional `days` — a whole number, defaulting to 7 and pulled to the 16-day ceiling the weather service answers at, `400` when it is not a number. Each day carries its own date, day name, Open-Meteo conditions and the model's prediction, with the model and its MAE once for the whole week. Answers `502` `weather_unavailable` when the outlook cannot be read, and `503` `model_dependencies_missing` without pandas or scikit-learn |
+| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather` and up to four numeric features, in the query string or a JSON body; the dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy or a number sitting below zero, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed |
 
 ### Matching and delivery orders
 

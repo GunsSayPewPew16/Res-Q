@@ -5,7 +5,7 @@ exactly as it was built and pasted in from the surplus.py notebook script:
 synthetic daily history from the shape a kitchen actually sees — a weekday
 rhythm, a weather row, a weekend bump — trained into a random-forest regressor
 through an impute → scale / one-hot → forest pipeline, scored with its mean
-absolute error, then run against the latest conditions to forecast tomorrow.
+absolute error, then run against the latest conditions to forecast today.
 
 `train_surplus_model` is the pasted file, turned into one function: same seed,
 same features, same split, so the score it reports here is the score the
@@ -112,12 +112,19 @@ def train_surplus_model(verbose=False):
 def forecast_surplus(day_of_week=None, weather=None, expected_customers=None,
                      surplus_yesterday=None, surplus_last_week=None,
                      surplus_rolling_14=None):
-    """Tomorrow's surplus from the trained pipeline, in the shape the API returns.
+    """Today's surplus from the trained pipeline, in the shape the API returns.
+
+    The row being forecast is today's, which is why the day defaults to today's own
+    date: the analyser asks about the surplus a kitchen is holding now, not tomorrow's.
 
     Every feature the model was trained on can be passed; anything left out is
-    filled with a usable default — the labels with today's real ones, the
-    numbers with the medians the training imputer would have chosen. Missing
-    pandas or scikit-learn raises the message the endpoint answers with, so a
+    filled with a usable default — the day with today's, the sky with a clear one,
+    the numbers with the medians the training imputer would have chosen. The clear
+    sky is a fallback and not a reading: the endpoint's caller reads the real
+    weather at the account's delivery address through `/api/weather` and passes the
+    label in, so a request that omits it is one that had no address to read.
+
+    Missing pandas or scikit-learn raises the message the endpoint answers with, so a
     server without them says plainly what to install instead of a bare import
     traceback.
     """

@@ -395,9 +395,9 @@
     <!-- DONOR DASHBOARD. One inset canvas holds the top rail and the working area, the way
          the reference holds everything on a single surface: the rail runs across the top of
          it, so every screen is full width and the sections are reached by tabs rather than
-         by a column that eats a sixth of the page. The only copy the layout itself carries
-         is the rail's labels and the section headings; the panels below are placeholders
-         waiting for their own content. -->
+         by a column that eats a sixth of the page. The rail's labels and the section
+         headings are the layout's own copy; the panels below carry their own content, and
+         the few that read nothing yet are left as the bare bars that say so. -->
 
     <div class="organic-canvas bg-[#0B2B26] border border-[#235347] min-h-[calc(100vh-1.5rem)] md:min-h-[calc(100vh-2.5rem)] flex flex-col">
 
@@ -768,10 +768,11 @@
 
             <!-- Surplus Analyser — a donor's own screen; the recipient dashboard has no
                  analyser. The predictor layout is kept as boxes: the forecast banner, the two
-                 quick statistics, the weekly yield chart and the category split, every card and
-                 every bar in place and none of the reference's copy. Each line of text it
-                 carried is held open by a bare placeholder bar, so the shape is what this
-                 screen carries and the words can be dropped in later. -->
+                 quick statistics, the weekly yield chart and the category split, every card
+                 and every bar in place. The banner and the chart are driven by what the
+                 backend reads — today's surplus and the live week ahead — and the category
+                 split is still held open by bare placeholder bars, so those words can be
+                 dropped in when there is something behind them. -->
             <div id="viewSurplusAnalyser" class="hidden space-y-6 md:space-y-8">
 
                 <!-- Top bar: the eyebrow over the screen's name, and the two status chips at the
@@ -794,7 +795,7 @@
                     <div class="lg:col-span-2 gradient-banner p-8 md:p-10 flex flex-col justify-between gap-6 min-h-[320px]">
                         <div class="flex items-start justify-between gap-4">
                             <div class="space-y-2 min-w-0">
-                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#051F20]/70">Tomorrow's surplus forecast</span>
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#051F20]/70">Today's surplus forecast</span>
                                 <p class="font-display text-4xl md:text-5xl leading-none text-[#051F20]">
                                     <span id="forecastHeadline">Ready to analyse</span>
                                 </p>
@@ -805,9 +806,9 @@
                         </div>
 
                         <p id="forecastStory" class="text-sm md:text-[15px] leading-relaxed text-[#051F20]/80 max-w-lg">
-                            Run the analyser and tomorrow's expected surplus — forecast from the
-                            day of the week, the weather and your kitchen's recent rhythm — will
-                            be written here, in kilograms.
+                            Run the analyser and today's expected surplus — forecast from the day
+                            of the week, the live weather at your delivery address and your
+                            kitchen's recent rhythm — will be written here, in kilograms.
                         </p>
 
                         <!-- The card's two actions: the filled one re-runs the forecast, the
@@ -828,7 +829,7 @@
                             </div>
                             <div class="space-y-2">
                                 <span id="forecastWindowValue" class="block font-display text-2xl leading-none">—</span>
-                                <span id="forecastWindowNote" class="block text-xs text-[#8EB69B]">the day and weather behind the number</span>
+                                <span id="forecastWindowNote" class="block text-xs text-[#8EB69B]">today's sky, read at your delivery address</span>
                             </div>
                         </div>
                         <div class="panel panel-lift p-6 flex flex-col justify-between gap-4 min-h-[148px]">
@@ -844,31 +845,28 @@
                     </div>
                 </div>
 
-                <!-- The weekly yield chart beside the category split. The bars are height-set the
-                     way the reference sets them, and Friday's is the accent-filled one. -->
+                <!-- The weekly yield chart beside the category split. The chart is the real
+                     thing: one bar per day of the seven-day outlook the analyser reads, today
+                     first and the one bar drawn in the accent, with the coming week's names
+                     under it. Both rows are written at runtime, and before anything has run the
+                     bars hold a flat baseline that prints no figures — an empty chart is
+                     honest, a shaped one would not be. The category split beside it is still
+                     held open by bare placeholder bars. -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
 
                     <div class="panel p-6 md:p-8">
                         <div class="flex items-center justify-between gap-4 mb-6">
                             <div class="space-y-2">
-                                <span class="block h-5 w-48 max-w-full organic-inner bg-[#163832]"></span>
-                                <span class="block h-3 w-40 max-w-full organic-chip bg-[#163832]"></span>
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Weekly yield</span>
+                                <span class="block font-display text-2xl leading-none">The week ahead</span>
                             </div>
-                            <div class="flex items-center gap-2 shrink-0">
-                                <span class="block h-8 w-20 organic-inner bg-[#0B2B26] border border-[#235347]"></span>
-                                <span class="block w-8 h-8 organic-inner bg-[#0B2B26] border border-[#235347]"></span>
-                            </div>
+                            <span id="weekLegend" class="shrink-0 organic-chip px-4 py-2 text-[10px] uppercase tracking-[0.15em] bg-[#DAF1DE]/40 text-[#051F20]">not run yet</span>
                         </div>
-                        <div class="h-48 flex items-end justify-between gap-3 pt-6 border-b border-[#235347] pb-4">
-                            <div class="w-1/5 h-[45%] rounded-t-xl bg-[#0B2B26] border border-[#235347] border-b-0 hover:bg-[#163832] transition-all"></div>
-                            <div class="w-1/5 h-[70%] rounded-t-xl bg-[#0B2B26] border border-[#235347] border-b-0 hover:bg-[#163832] transition-all"></div>
-                            <div class="w-1/5 h-[55%] rounded-t-xl bg-[#0B2B26] border border-[#235347] border-b-0 hover:bg-[#163832] transition-all"></div>
-                            <div class="w-1/5 h-[85%] rounded-t-xl bg-[#0B2B26] border border-[#235347] border-b-0 hover:bg-[#163832] transition-all"></div>
-                            <div class="w-1/5 h-[95%] rounded-t-xl bg-[#DAF1DE] hover:bg-[#8EB69B] transition-all"></div>
-                        </div>
+                        <div id="weekChart" class="h-40 flex items-end gap-2 md:gap-3 pb-4 border-b border-[#235347]"></div>
+                        <div id="weekDays" class="flex gap-2 md:gap-3 mt-3"></div>
                         <div class="flex items-center justify-between gap-4 mt-4">
-                            <span class="block h-3 w-44 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 w-36 max-w-full organic-chip bg-[#163832]"></span>
+                            <span id="weekChartNote" class="text-xs text-[#8EB69B]">seven days from today, in kilograms</span>
+                            <span id="weekChartRange" class="shrink-0 text-xs text-[#8EB69B]">—</span>
                         </div>
                     </div>
 
@@ -1153,12 +1151,13 @@
 
         // ---------------------------------------------------------------------------
         // The forecast banner. The analyser's answer lives on the screen's one gradient
-        // surface: Run analyser asks the backend's /api/surplus-forecast for tomorrow's
-        // number — carried by the day of the week, the weather and the kitchen's own
-        // recent rhythm — and the banner, its two chips and the stat cards beside it are
-        // all written from that one answer. Nothing runs or shows a figure until it is
-        // asked for: the box opens on its rest copy, and a run that fails says so on the
-        // banner rather than leaving an old number in place.
+        // surface: Run analyser reads the real weather at the account's delivery address,
+        // then asks the backend's /api/surplus-forecast for today's number — carried by
+        // the day of the week, that weather and the kitchen's own recent rhythm — and the
+        // banner, its two chips and the stat cards beside it are all written from that one
+        // answer. Nothing runs or shows a figure until it is asked for: the box opens on
+        // its rest copy, and a run that fails says so on the banner rather than leaving an
+        // old number in place.
         // ---------------------------------------------------------------------------
         var forecastRunning = false;
         var forecastRanOnce = false;
@@ -1183,12 +1182,79 @@
             });
         }
 
-        // Tomorrow's conditions, in the labels the model was trained on.
-        function forecastConditions() {
+        // Today's day of the week, in the labels the model was trained on. The analyser
+        // forecasts today's surplus now, so the row it predicts carries today's own day: a
+        // kitchen reading this on Friday is being told what Friday's surplus is worth, not
+        // Saturday's. When the sky was read, today means the address's own today rather
+        // than the reader's — it is the day that kitchen is cooking on, so a donor checking
+        // the analyser from another timezone does not shift it — and the reader's own clock
+        // is the fallback for a run with no reading to take the date from.
+        function forecastDay(localDate) {
             var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            var tomorrow = new Date(Date.now() + 86400000);
-            var weather = ['Sunny', 'Cloudy', 'Rainy'][tomorrow.getDate() % 3];
-            return { day_of_week: days[tomorrow.getDay()], weather: weather };
+            var parts = String(localDate || '').split('-');
+            // Built from its own parts rather than parsed as a string: a bare date string is
+            // read as UTC, which lands on the day before in every negative offset.
+            var at = parts.length === 3
+                ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+                : new Date();
+            if (!isFinite(at.getTime())) { at = new Date(); }
+            return days[at.getDay()];
+        }
+
+        // Where the weather is read: the delivery location this account confirmed on the
+        // Dashboard, or — when nothing has been confirmed yet — the address it onboarded
+        // with, turned into coordinates with the same lookup the map's search uses. Nothing
+        // is invented: an account with neither resolves to null, and the run says the sky
+        // could not be read rather than reading it somewhere nobody asked about.
+        function forecastLocation() {
+            if (savedLocation) {
+                return Promise.resolve({
+                    lat: savedLocation.lat,
+                    lng: savedLocation.lng,
+                    address: savedLocation.address || ''
+                });
+            }
+            if (!profileAddress) { return Promise.resolve(null); }
+            return fetch(LOOKUP_URL + encodeURIComponent(profileAddress), { headers: { Accept: 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (results) {
+                    if (!results || !results.length) { return null; }
+                    return {
+                        lat: parseFloat(results[0].lat),
+                        lng: parseFloat(results[0].lon),
+                        address: results[0].display_name || profileAddress
+                    };
+                })
+                .catch(function () { return null; });
+        }
+
+        // The real sky over that point, from the backend's keyless weather endpoint, which
+        // is the one place that decides which of the model's three words a WMO code
+        // becomes. A run without it still forecasts — the banner says the conditions could
+        // not be read instead of passing a made-up sky off as one.
+        function forecastWeather(location) {
+            if (!location) { return Promise.resolve(null); }
+            return fetch('/api/weather?lat=' + location.lat.toFixed(6) + '&lng=' + location.lng.toFixed(6),
+                { headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    if (res.status !== 200 || !res.data || !res.data.weather) { return null; }
+                    return res.data.weather;
+                })
+                .catch(function () { return null; });
+        }
+
+        // The place, short enough for the conditions panel: the first two parts of an
+        // address are what name a spot — street and town — and the rest is postcode.
+        function shortPlace(address) {
+            var parts = String(address || '').split(',')
+                .map(function (part) { return part.trim(); })
+                .filter(function (part) { return !!part; });
+            return parts.length ? parts.slice(0, 2).join(', ') : '';
         }
 
         function runSurplusForecast() {
@@ -1198,16 +1264,29 @@
             setForecastChip('running\u2026', 'busy');
 
             var headline = document.getElementById('forecastHeadline');
-            var story = document.getElementById('forecastStory');
-            var modelChip = document.getElementById('forecastModelChip');
-            var accuracyText = document.getElementById('forecastAccuracyText');
             if (headline) { headline.textContent = 'Forecasting\u2026'; }
 
-            fetch('/api/surplus-forecast', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(forecastConditions())
-            })
+            var at = null;
+            var sky = null;
+            forecastLocation()
+                .then(function (location) {
+                    at = location;
+                    // The chart reads beside the banner rather than after it: it is the same
+                    // point and the same two services, and nothing about it depends on the
+                    // banner's own answer.
+                    loadWeekOutlook(location);
+                    return forecastWeather(location);
+                })
+                .then(function (weather) {
+                    sky = weather;
+                    var body = { day_of_week: forecastDay(weather && weather.local_date) };
+                    if (weather && weather.label) { body.weather = weather.label; }
+                    return fetch('/api/surplus-forecast', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                })
                 .then(function (response) {
                     return response.json().catch(function () { return {}; }).then(function (data) {
                         return { status: response.status, data: data };
@@ -1222,7 +1301,7 @@
                     }
                     forecastRanOnce = true;
                     setForecastChip('updated', 'done');
-                    renderForecast(res.data.forecast);
+                    renderForecast(res.data.forecast, sky, at);
                 })
                 .catch(function () {
                     forecastRunning = false;
@@ -1231,7 +1310,12 @@
                 });
         }
 
-        function renderForecast(forecast) {
+        // The answer, written out with the reading it was forecast from: the day is today's,
+        // the sky is the weather endpoint's own label for the address the account holds, and
+        // the conditions panel carries the reading itself — the temperature right now, the
+        // day's own summary, where it was read and who read it. A run with no reading says
+        // so in both places rather than printing a sky nobody measured.
+        function renderForecast(forecast, weather, location) {
             var headline = document.getElementById('forecastHeadline');
             var story = document.getElementById('forecastStory');
             var accuracyText = document.getElementById('forecastAccuracyText');
@@ -1245,18 +1329,46 @@
 
             var kg = Number(forecast.predicted_surplus_kg);
             var mae = Number(forecast.mae_kg);
+            var where = shortPlace(location && location.address) || 'your delivery address';
+            var logging = ' Log anything above ' + (kg * 0.4).toFixed(1)
+                + ' kg on the board \u2014 smaller amounts travel better merged into the next pickup.';
             headline.textContent = kg.toFixed(2) + ' kg expected';
-            story.textContent = 'Based on ' + forecast.day_of_week + ' with ' + forecast.weather.toLowerCase()
-                + ' conditions and your kitchen\'s recent rhythm, the model expects about '
-                + kg.toFixed(2) + ' kg of surplus food ready for donation tomorrow. Log anything above '
-                + (kg * 0.4).toFixed(1) + ' kg on the board \u2014 smaller amounts travel better merged into the next pickup.';
+            if (weather) {
+                story.textContent = 'Based on ' + forecast.day_of_week + ' with '
+                    + forecast.weather.toLowerCase() + ' conditions at ' + where
+                    + ' and your kitchen\'s recent rhythm, the model expects about '
+                    + kg.toFixed(2) + ' kg of surplus food ready for donation today.' + logging;
+            } else {
+                story.textContent = 'Based on ' + forecast.day_of_week
+                    + ' and your kitchen\'s recent rhythm, the model expects about '
+                    + kg.toFixed(2) + ' kg of surplus food ready for donation today.'
+                    + (location
+                        ? ' The live conditions at ' + where + ' could not be read, so this run went'
+                          + ' without them \u2014 run it again for a weather-aware number.'
+                        : ' Live weather is read at the location you confirm on the Dashboard, and'
+                          + ' this account has none yet, so this run went without it.')
+                    + logging;
+            }
             accuracyText.textContent = 'model error \u00b1' + mae.toFixed(2) + ' kg (MAE)';
-            if (dayChip) { dayChip.textContent = forecast.day_of_week.slice(0, 3) + ' \u00b7 ' + forecast.weather; }
-            if (windowValue) { windowValue.textContent = (kg * 1.15).toFixed(1) + ' kg'; }
-            if (windowNote) { windowNote.textContent = 'likely peak: plan your pickups around it'; }
+            if (dayChip) {
+                dayChip.textContent = forecast.day_of_week.slice(0, 3) + ' \u00b7 '
+                    + (weather ? forecast.weather : 'no live sky');
+            }
+            if (windowValue) {
+                windowValue.textContent = weather && weather.temperature_c !== null && weather.temperature_c !== undefined
+                    ? weather.temperature_c + ' \u00b0C'
+                    : (weather ? weather.summary : '\u2014');
+            }
+            if (windowNote) {
+                windowNote.textContent = weather
+                    ? weather.summary + ' \u00b7 live at ' + where + ' \u00b7 ' + weather.source
+                    : (location
+                        ? 'the sky at ' + where + ' could not be read'
+                        : 'no delivery location to read the sky at');
+            }
             if (confidenceChip) { confidenceChip.textContent = mae < kg * 0.25 ? 'high' : 'moderate'; }
             if (adviceValue) { adviceValue.textContent = (kg * 0.4).toFixed(1) + ' kg'; }
-            if (adviceNote) { adviceNote.textContent = 'smallest amount worth posting tomorrow'; }
+            if (adviceNote) { adviceNote.textContent = 'smallest amount worth posting today'; }
         }
 
         function renderForecastFailure(message) {
@@ -1276,6 +1388,202 @@
         // coming back.
         function openSurplusForecast() {
             setForecastChip(forecastRanOnce ? 'updated \u00b7 rerun to refresh' : 'idle', 'done');
+            // The chart beside the banner opens on its own rest shape: the coming week's
+            // names over a flat baseline, which is what knowing only the calendar is worth.
+            if (!weekRan && !weekRunning) { renderWeekRest(); }
+        }
+
+        // ---------------------------------------------------------------------------
+        // The week ahead. The analyser's chart is the seven-day outlook read at the same
+        // point the banner's sky was: every day's own conditions from Open-Meteo, each run
+        // through the surplus model under that day's own name — which is where the model's
+        // weekend bump comes from — with today first, because today is the day the screen
+        // is about. At rest the chart holds the coming week's names over a flat baseline:
+        // nothing has been read yet, so nothing is drawn as if it had been.
+        // ---------------------------------------------------------------------------
+        var WEEK_LENGTH = 7;
+        var WEEK_REST_HEIGHT = 16;
+        var WEEK_BAR_FLOOR = 24;
+        var WEEK_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+            'Friday', 'Saturday'];
+        var weekRunning = false;
+        var weekRan = false;
+
+        // A null in any field means "leave it alone": a stale chart keeps its figures and
+        // rewrites only the words around them.
+        function setWeekCopy(legend, note, range) {
+            var legendNode = document.getElementById('weekLegend');
+            var noteNode = document.getElementById('weekChartNote');
+            var rangeNode = document.getElementById('weekChartRange');
+            if (legend !== null && legendNode) { legendNode.textContent = legend; }
+            if (note !== null && noteNode) { noteNode.textContent = note; }
+            if (range !== null && rangeNode) { rangeNode.textContent = range; }
+        }
+
+        // One bar. The figure it is worth is printed above it where there is one to print —
+        // on today's bar and on the week's heaviest day, the two a reader wants first — and
+        // the bar's own height is decided by weekHeight below. Today's is the one lit bar,
+        // the way the reference lights one.
+        function weekBarHTML(value, height, lit) {
+            return '<div class="flex-1 h-full flex flex-col justify-end items-center">'
+                + '<span class="block text-[10px] leading-none mb-2 '
+                + (lit ? 'text-[#DAF1DE]' : 'text-[#8EB69B]') + '">'
+                + (value === null ? '&nbsp;' : value) + '</span>'
+                + '<div class="w-full rounded-t-lg border border-b-0 transition-all '
+                + (lit ? 'bg-[#DAF1DE] border-[#DAF1DE]' : 'bg-[#0B2B26] border-[#235347]')
+                + '" style="height: ' + height + '%;"></div>'
+                + '</div>';
+        }
+
+        function weekDayHTML(name, lit) {
+            return '<span class="flex-1 text-center text-[10px] uppercase tracking-[0.15em] '
+                + (lit ? 'text-[#DAF1DE]' : 'text-[#8EB69B]') + '">' + name + '</span>';
+        }
+
+        // Bars are drawn across the week's **own** range rather than up from zero: seven days
+        // of one kitchen's surplus sit within a few kilos of each other, so a zero-based axis
+        // draws seven identical bars and hides the shape it was built to show. What keeps
+        // that honest is that the range itself is named under the chart and the bars that
+        // matter carry their figures, so the axis is readable from the panel itself. A week
+        // that really is flat is drawn flat, at mid-height, rather than exaggerated into a
+        // shape it does not have.
+        function weekHeight(kg, low, high) {
+            if (low === null || high === null || !isFinite(low) || !isFinite(high)) {
+                return WEEK_REST_HEIGHT;
+            }
+            if (high <= low) { return 62; }
+            return Math.round(WEEK_BAR_FLOOR + (100 - WEEK_BAR_FLOOR) * ((kg - low) / (high - low)));
+        }
+
+        // Draw the chart from one entry per day, today first: { name, kg }, with kg null on
+        // a day nothing has been read for. Returns the week's own low, high and heaviest
+        // day, which is what the words under the chart are written from.
+        function renderWeekChart(entries) {
+            var bars = document.getElementById('weekChart');
+            var names = document.getElementById('weekDays');
+            if (!bars || !names) { return null; }
+
+            var summary = { low: null, high: null, heaviest: null };
+            entries.forEach(function (entry) {
+                if (entry.kg === null) { return; }
+                if (summary.low === null || entry.kg < summary.low) { summary.low = entry.kg; }
+                if (summary.high === null || entry.kg > summary.high) { summary.high = entry.kg; }
+            });
+            entries.forEach(function (entry) {
+                if (summary.heaviest === null && entry.kg !== null && entry.kg === summary.high) {
+                    summary.heaviest = entry;
+                }
+            });
+
+            var barHTML = '';
+            var nameHTML = '';
+            entries.forEach(function (entry, index) {
+                var lit = index === 0;
+                var printed = entry.kg !== null && (lit || entry === summary.heaviest)
+                    ? entry.kg.toFixed(1)
+                    : null;
+                var height = entry.kg === null
+                    ? WEEK_REST_HEIGHT
+                    : weekHeight(entry.kg, summary.low, summary.high);
+                barHTML += weekBarHTML(printed, height, lit);
+                nameHTML += weekDayHTML(entry.name, lit);
+            });
+            bars.innerHTML = barHTML;
+            names.innerHTML = nameHTML;
+            return summary;
+        }
+
+        // The rest shape: the next seven days by their own names, every bar level and every
+        // figure blank, because nothing has been read for any of them yet.
+        function renderWeekRest() {
+            var now = new Date();
+            var entries = [];
+            for (var i = 0; i < WEEK_LENGTH; i += 1) {
+                var at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+                entries.push({
+                    name: i === 0 ? 'today' : WEEK_DAY_NAMES[at.getDay()].slice(0, 3).toLowerCase(),
+                    kg: null
+                });
+            }
+            renderWeekChart(entries);
+            setWeekCopy('not run yet', 'seven days from today, in kilograms', '\u2014');
+        }
+
+        function renderWeekOutlook(outlook, place) {
+            var series = (outlook && outlook.days) || [];
+            if (!series.length) { return; }
+            var where = place || 'your delivery address';
+            var entries = series.slice(0, WEEK_LENGTH).map(function (day, index) {
+                var kg = Number(day.predicted_surplus_kg);
+                return {
+                    name: index === 0
+                        ? 'today'
+                        : String(day.day_of_week || '').slice(0, 3).toLowerCase(),
+                    kg: isFinite(kg) ? kg : null
+                };
+            });
+            var summary = renderWeekChart(entries);
+            setWeekCopy('live \u00b7 ' + (outlook.source || 'Open-Meteo'),
+                'the live sky at ' + where + ', run through the model day by day \u00b7 bars scaled'
+                    + ' to the week\'s own range',
+                summary && summary.low !== null
+                    ? summary.low.toFixed(1) + '\u2013' + summary.high.toFixed(1) + ' kg \u00b7 '
+                        + summary.heaviest.name + ' the heaviest'
+                    : '\u2014');
+        }
+
+        // A read that fails leaves whatever was already drawn alone and says so around it,
+        // the way the banner keeps its last answer and calls it out of date.
+        function renderWeekFailure(reason) {
+            if (weekRan) {
+                setWeekCopy('stale', 'the last week is out of date \u2014 ' + reason, null);
+                return;
+            }
+            renderWeekRest();
+            setWeekCopy('unavailable', reason, '\u2014');
+        }
+
+        // The chart's own read, made beside the banner's: the same point, the same service
+        // and the same model, so a week that cannot be read says so on the chart rather than
+        // on the banner.
+        function loadWeekOutlook(location) {
+            if (weekRunning) { return; }
+            if (!location) {
+                // Nothing to read at, so nothing is drawn as if it had been: an account that
+                // never had a location keeps the flat rest shape, and one that has lost the
+                // location it once read keeps the last week and is told it is out of date.
+                if (weekRan) {
+                    setWeekCopy('stale', 'the last week is out of date \u2014 no delivery'
+                        + ' location to read it at', null);
+                } else {
+                    renderWeekRest();
+                    setWeekCopy('no location', 'confirm a delivery location to read the week at', '\u2014');
+                }
+                return;
+            }
+            var where = shortPlace(location.address) || 'your delivery address';
+            weekRunning = true;
+            setWeekCopy('reading\u2026', 'the sky at ' + where, '\u2014');
+            fetch('/api/surplus-outlook?lat=' + location.lat.toFixed(6) + '&lng=' + location.lng.toFixed(6),
+                { headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    weekRunning = false;
+                    if (res.status !== 200 || !res.data || !res.data.outlook) {
+                        renderWeekFailure((res.data && res.data.error) || 'the week could not be read');
+                        return;
+                    }
+                    weekRan = true;
+                    renderWeekOutlook(res.data.outlook, where);
+                })
+                .catch(function () {
+                    weekRunning = false;
+                    renderWeekFailure('the week could not be read');
+                });
         }
 
         // ---------------------------------------------------------------------------

@@ -117,6 +117,26 @@ DELIVERY_FIELDS = ("delivery_address", "delivery_lat", "delivery_lng", "delivery
 
 MAX_ADDRESS_CHARS = 400
 
+# Live weather for the analyser. Read from Open-Meteo, which is keyless like the map's
+# tiles and the address lookups, so nothing has to be registered to run this server.
+# The analyser's model knows three words for the sky; weather.py is the one place that
+# decides which of them a WMO code becomes, and these are the constants that call needs.
+WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
+
+# What is asked for: the sky right now, and today's own summary, because the analyser
+# forecasts today's surplus. Local time, so "today" is the address's day, not UTC's.
+WEATHER_CURRENT_FIELDS = "temperature_2m,precipitation,weather_code,wind_speed_10m"
+WEATHER_DAILY_FIELDS = "weather_code,precipitation_sum,temperature_2m_max,temperature_2m_min"
+WEATHER_TIMEOUT_SECONDS = 8
+WEATHER_SOURCE = "Open-Meteo"
+WEATHER_SOURCE_URL = "https://open-meteo.com/"
+
+# The analyser's weekly chart: the same service read as a daily outlook, one entry per
+# day from today onwards, and every day run through the model. Seven is a week's worth
+# of bars; the ceiling is the sixteen days Open-Meteo will forecast at all.
+WEATHER_OUTLOOK_DAYS = 7
+WEATHER_MAX_OUTLOOK_DAYS = 16
+
 # The three impact figures the donor dashboard shows. They belong to the donor's own
 # profile and to no other role: they are that donor's record of what their surplus
 # became. Surplus saved is a weight in kilograms, kept to two decimals — fractions of a
