@@ -126,6 +126,7 @@ the matching logic, and invites visitors into the flow above.
 | `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, holds the six goods categories one time, and draws every post as the one shared card both roles see |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
 | `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` | The `goods_type` tag column, its constraint to the six categories and the claim-guard update that freezes it — run once against the project, after the file above |
+| `supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql` | The five allocation columns the rationing pass publishes back to a claimed row — its weight, its share, the score behind it, who receives it and when — with the note on the policy and trigger that already permit the write |
 | `supabase/clear_surplus_posts.sql` | Empties the board between demos: one `delete` run by hand as the project owner, since the publishable key the pages hold cannot delete |
 
 Every page's top-left Res-Q lockup is a link. It goes to the dashboard for the
@@ -194,6 +195,14 @@ agreed rather than a fresh look at the two profiles. The chip in the card's corn
 what is on the books: an order agreed reads `confirmed`, one only proposed reads
 `proposed`, each with the distance between the pins and the day it is booked for.
 
+The three figure blocks above the console's cards are the other half of the same reading:
+the rationing pass's answer for this account — the kilos it will receive, that figure as a
+share of the post, and the weighted score the share came out of, with each of the three
+scores under the last of them. They read `GET /api/rations`, described under
+[The rationing pass](#the-rationing-pass), and each figure carries its own working in its
+tooltip: which post and donor the ration is from, its rank among the post's claimants, the
+formula, and whether a model read the claim or the pass's own tables did.
+
 The road comes from [OSRM](https://project-osrm.org)'s keyless demo router, the one free
 service that answers with a real drive rather than a straight line, and the legend under
 the map says where the line came from — the kilometrage and minutes by road, OSRM, and
@@ -248,16 +257,24 @@ is logged rather than waiting for a page to be reloaded.
 | `goods_type` | `text` | Which of the six goods categories the post is for, or `null` on a post logged before the category existed |
 | `status` | `text` | `pending` or `claimed`, defaulting to `pending` |
 | `created_at` | `timestamptz` | Defaulting to `now()`; the board reads newest-first |
+| `allocated_kg` | `numeric` | The rationing pass's answer for the row, once it is published: how much of the item the shelter will receive |
+| `allocation_percent` | `numeric` | That ration as a share of the post, 0–100 |
+| `allocation_score` | `numeric` | The weighted score the share came out of |
+| `allocated_to` | `text` | The shelter it is for, named the way the header names them |
+| `allocated_at` | `timestamptz` | When it was published |
 
 Apply them once against the project, in order: paste
 `supabase/migrations/20261008000000_create_surplus_posts.sql` into **SQL Editor →
 New query → Run** in the Supabase dashboard, then
 `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql` the same
-way — or point the Supabase CLI at the project and run `supabase db push`. Both files
-are written to be safe to run more than once. The second one only has to be applied
+way — or point the Supabase CLI at the project and run `supabase db push`. All three
+files are written to be safe to run more than once. The second one only has to be applied
 once: until it is, the compose box still logs posts, but it logs them untagged and
 says so on the line under the fields, so a half-migrated project loses the category
-rather than the ability to post.
+rather than the ability to post. The third adds the five allocation columns the rationing
+pass publishes its answer into; until it is applied the board still works exactly as it
+did, and publishing an allocation is the one call that answers with the migration's name
+instead.
 
 Emptying the board is a separate, deliberate act rather than a migration:
 `supabase/clear_surplus_posts.sql` deletes every row and is run by hand the same way.
@@ -389,8 +406,8 @@ Opening the pages straight from disk works for the layouts, but the forms cannot
 save anything, because there is no server to talk to.
 
 The surplus board needs one step of its own, done once against your Supabase project:
-apply `supabase/migrations/20261008000000_create_surplus_posts.sql`, as described
-under [The surplus board](#the-surplus-board-supabase). Until it is applied, the donor's
+apply the three files in `supabase/migrations/` in order, as described under
+[The surplus board](#the-surplus-board-supabase). Until it is applied, the donor's
 form and both boards say so plainly — *surplus_posts is not in the project* — rather
 than failing quietly. That board is read and written from the browser, so nothing about
 it lives in the backend's database and it behaves the same in demo mode as it does with
@@ -449,6 +466,8 @@ file and are filled in on the service's **Environment** page:
 | --- | --- |
 | `RESQ_ALLOWED_ORIGINS` | Which origins may read this API from a browser — see below. Empty means none may, which is the right default for a service only its own pages call. |
 | `RESQ_PERSIST` / `RESQ_DB` | Set to `on`, with `RESQ_DB` on a mounted disk, to store accounts in SQLite. Left off, as committed, the deployment runs in demo mode. |
+| `RESQ_LLM_API_KEY` | *Optional.* A model key, for the rationing pass to read the written half of a claim with. Left unset — as committed — the pass reads those same fields from its own tables. `RESQ_LLM_MODEL` and `RESQ_LLM_BASE_URL` choose which model and which endpoint, so any OpenAI-compatible one will do. The key is read at startup and never logged, written or returned. |
+| `RESQ_SUPABASE_URL` / `RESQ_SUPABASE_KEY` | *Optional.* Where the board is and a key to publish an allocation with — `POST /api/rations` writes the ration back onto the claimed row. The publishable key goes through the table's policies (which already allow that write); a secret key bypasses them. Left unset, rations are computed and shown but nothing is published. |
 
 `RESQ_SEED=on` — also in the file — is what makes a fresh deployment useful immediately:
 the worker creates the five test donors, their six weeks of logged days and the one agreed
@@ -531,10 +550,13 @@ Nothing in the deployment is Render-specific: any host that runs
 things a host has to get right are those — the `$PORT` it hands over, which both
 `gunicorn_config.py` and `server.py` read, and one worker, for the reason above.
 
-`backend/claim_recorder.py` is *not* part of this service and is not deployed with it: it
-is a companion process on its own port that records which recipient claimed which post. It
-lives in `backend/` because that is where this project's Python lives, and nothing in the
-API imports it.
+`backend/claim_recorder.py` is *not* part of this service and is not deployed with it.
+Claims are recorded by the API itself now (`POST /api/claims`), so that a deployment keeps
+them the way it keeps its accounts; the recorder came first, and it stays as a local tool
+for a run that wants the file written instead — the rationing pass reads
+`backend/claim_records.json` either way, so nothing it recorded earlier is lost. It is a
+companion process on its own port, it lives in `backend/` because that is where this
+project's Python lives, and nothing in the API imports it.
 
 ## Backend and API
 
@@ -552,6 +574,10 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/accounts.py` | The donor impact figures (seed/fill), demo account and demo peer stores |
 | `backend/matching.py` | What makes two accounts deliverable: shared categories, confirmed pins |
 | `backend/orders.py` | The order's stored shape and the shape a dashboard reads it back in, shared by both modes, and the two keys a demo run files an order's sides under |
+| `backend/rationing.py` | The rationing pass: the official weighted score, the split of a post between its claimants, and the queue it answers with |
+| `backend/llm.py` | The one optional model call, in the shape an OpenAI-compatible endpoint speaks — the pass reads the written half of a claim with it when a key is configured, and without it when not |
+| `backend/claims.py` | The claims: one shape, recorded by the API against the signed-in account, kept in the process or in the `claims` table, and read back by the rationing pass |
+| `backend/supabase.py` | The one write this backend makes to the board: an allocation, PATCHed onto one row with `urllib`, and reported per post rather than raising |
 | `backend/surplus.py` | The surplus calculator: the regression pipeline, trained once and cached, forecasting per request |
 | `backend/history.py` | The logged days — one row per kitchen per day — and the features the model reads out of them |
 | `backend/seed.py` | The five test donors, the one recipient and the agreed delivery between them, with the donors' six weeks of logs and the weather taken from Open-Meteo's archive |
@@ -763,6 +789,10 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
+| `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing. Only the caller's own ration and share are named — other claimants are a count |
+| `POST` | `/api/rations` | Run the same pass and publish the caller's own shares back to the board, writing `allocated_kg`, `allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at` onto each row it claimed — and nothing else about the row. Answers `503` `board_unconfigured` when `RESQ_SUPABASE_URL`/`RESQ_SUPABASE_KEY` are not set, and `200` with a per-post result otherwise — including when a row refuses the write, which the result says per post rather than failing the request |
+| `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
+| `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201` |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 | `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the six-week window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
 | `GET` | `/api/weather` | The real conditions at a point, in the analyser's own vocabulary. Requires `lat`/`lng`, and answers `400` for a missing, non-numeric or off-globe pair. Reads Open-Meteo — keyless — and returns the model's label for today, the WMO code and summary behind it, the day's high/low and rainfall, the current temperature and wind, the address's timezone and the source. Answers `502` `weather_unavailable` when the service cannot be reached, rather than a default sky |
@@ -805,6 +835,83 @@ its two pins, described under [The delivery map](#the-delivery-map). Nothing cal
 `/api/matches` from a page yet: wiring the rails and the donor's impact panel to it is
 the next piece of work.
 
+### The rationing pass
+
+The board's own rule is *first claim wins*: a post stops being claimable the moment one
+shelter reaches it. Nothing on the board says how an item that several shelters needed
+should have been **shared**, and `backend/rationing.py` is the answer to that — it takes
+every claim a post has, scores each of its claimants, and splits the post between them in
+proportion to those scores, so a shelter gets a share of what it asked for rather than all
+of it or none of it.
+
+The score is the project's own weighted formula, as the pitch states it:
+
+```
+(distance_score * 0.3) + (need_score * 0.4) + (expiry_urgency_multiplier * 3.0)
+```
+
+Every input is a fraction of one, which is what makes the three terms comparable at all.
+`distance_score` is one at the donor's own door and zero at the edge of the radius a match
+is measured inside — measured from the two pins with the same haversine distance the
+matching uses. `need_score` is read from the little a claim carries about a shelter: how
+many households are waiting, how long since its last delivery, whether the goods are ones
+it asked for, and how quickly it reached for the post; a signal a claim does not carry
+contributes the neutral middle rather than nothing, so an unread shelter is assumed to
+need the item moderately instead of least. `expiry_urgency_multiplier` is read from the
+item itself — what it is, how long it has been sitting, and what the words beside it say.
+Urgency is **multiplied** rather than weighted because it is the one term that changes
+what the goods are worth at all, and it carries the largest coefficient for the same
+reason: produce that spoils tonight is worth nothing tomorrow, and no distance is short
+enough to save it. The queue is that score sorted highest first, which is the order a
+delivery round would serve these claimants in.
+
+`backend/llm.py` reads the qualitative half of each claim when a model is configured: the
+written quantity — "3 crates of tomatoes, 2 trays of pastries and a crate of milk" is a
+weight only something that knows what a crate holds can name — how perishable the item is,
+and how pressing a shelter's need looks from its name and its address. It is optional in
+both directions. With no key the pass reads those same fields from its own tables (a pack
+weight table, a category perishability table, four need signals), and a call that fails —
+no key, no network, a refused key, a reply that is not JSON — falls back to them the same
+way, so a model that is slow, refused or simply absent costs a refinement rather than a
+ration. Every value the model sends back is optional, and is clamped, ignored or replaced
+when it is not a number in range; `distance_score` is recomputed from the two pins whenever
+they are known, because a distance the backend can measure should not be guessed at. The
+answer says which reading it used — `normalizer.mode` for the pass, `score.source` for each
+claim.
+
+The pass answers with the caller's own allocations — the ration in kilograms and its share
+of the post — with the queue those came out of beside them. **A recipient is never told
+another shelter's name or amount:** the other claimants on a post are a count, and the
+console reads that count rather than a list. The recipient console's three figure blocks
+are that answer on screen: *Your ration*, *Share of the post* and *Weighted score*, with
+the three scores each total was built from under the last of them.
+
+The claims come from the API's own store (`backend/claims.py`): a shelter's claim is
+recorded by `POST /api/claims` against its own session, so a deployment keeps its claims the
+way it keeps its accounts — in the process in demo mode, in the `claims` table with
+persistence on, and in `backend/claim_records.json` only when the standalone recorder was
+the one that wrote them, which the pass still reads so that nothing recorded earlier is
+lost. One post, many claimants, joined on the post id every claim carries. A claim names its
+donor as the board does — by business name — so the pass places that end of the delivery by
+looking the name up among the accounts; a donor nobody can place leaves the distance unread
+and that one term comes from the model's reading of the two written locations instead.
+
+Publishing the answer is the pass's second verb. `POST /api/rations` runs the same pass and
+writes each of the caller's own shares onto the board row it came from — `allocated_kg`,
+`allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at`, added by
+`supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql` — so the number
+sits in front of both ends of the delivery and not only inside the console that asked. It
+wants `RESQ_SUPABASE_URL` and `RESQ_SUPABASE_KEY` on the service; with those unset the ration
+is still worked out and shown, and the answer says the board was not written to. Only the
+caller's own rows are written, and only those five columns of them, so the status, the donor,
+the item and the timestamp the claim guard freezes cannot be touched by it.
+
+A fresh deployment has no claims on its board yet, so `seed.py` carries one claimed post
+with three shelters on it — the fixture's own recipient among them — and the pass reads it
+for that one account only, which is what keeps the fixture's claimants out of a run that
+has claims of its own. That is what gives a deployment nobody has used yet a share that is
+not a hundred percent.
+
 How the pieces connect:
 
 - **Signing out.** The account menu in the dashboard header holds the two actions an
@@ -824,7 +931,11 @@ How the pieces connect:
   without either page being reloaded. Sign-in, the profile and the confirmed delivery
   location stay where they are. The project URL and the publishable key sit in
   `frontend/resq_supabase.js`; that key is the anonymous one, so the table's row level
-  security policies are what actually decide what it may do.
+  security policies are what actually decide what it may do. Two writes are the
+  exceptions, and both go through the API: the claim a shelter makes on a post
+  (`POST /api/claims`, filed against the session token — the board itself keeps only the
+  status), and the allocation the rationing pass works out (`POST /api/rations`, written
+  onto the claimed row with the service's own board key).
 - **Duplicate details.** In persistent mode email addresses are compared
   case-insensitively and both the email and phone columns are unique, so
   re-entering details that already belong to an account answers `409` and the page
@@ -924,7 +1035,9 @@ behind the backend first.
 The dashboards are part wired, part skeleton: the rails name their sections and switch
 between them, five parts are wired end to end — the delivery card, the recipient's
 route card, the donor's *Log
-surplus* compose box on its feed screen, and the three screens that read the surplus board — and the boxes, metric
+surplus* compose box on its feed screen, and the three screens that read the surplus board — with a
+sixth on the recipient's console, its three figures, which read the rationing pass; the
+boxes, metric
 row and queue rail around them still hold no data of their own. The map needs no key,
 so it works as soon as the server is running: pick a spot, confirm it, and the address
 and its coordinates are stored on the account and waiting there the next time the map
