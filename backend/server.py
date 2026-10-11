@@ -104,6 +104,7 @@ from config import (
     MAX_MATCH_LIMIT,
     MAX_PICKS,
     MAX_RADIUS_KM,
+    MAX_REQUEST_BODY_BYTES,
     METRIC_DECIMALS,
     PERSIST,
     PUBLIC_FIELDS,
@@ -200,14 +201,29 @@ class ResQHandler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
 
     def read_json(self):
-        length = int(self.headers.get("Content-Length") or 0)
-        if not length:
+        """The request body as an object, or None when it is not one.
+
+        A header that is not a number cannot say how long the body is, a negative one
+        makes the read below run to end-of-stream, and an absurd one parks the thread on
+        bytes no client is sending; all three are answered as unreadable rather than
+        trusted. Every endpoint here reads an object, so a body of any other shape — a
+        list, a bare string, a number — is malformed rather than something to trip over
+        halfway through a handler.
+        """
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            return None
+        if length <= 0:
             return {}
+        if length > MAX_REQUEST_BODY_BYTES:
+            return None
         raw = self.rfile.read(length)
         try:
-            return json.loads(raw.decode("utf-8"))
+            data = json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
             return None
+        return data if isinstance(data, dict) else None
 
     def bearer_token(self):
         header = self.headers.get("Authorization") or ""
@@ -609,7 +625,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return self.send_json(200, {"ok": True, "user": self.donor_user_with_metrics(row)})
 
     def api_logout(self):
-        token = self.bearer_token() or (self.read_json() or {}).get("token", "")
+        # A token that arrived as anything but a string is not a token, so it is dropped
+        # rather than handed to the session lookup; the body is read through the same
+        # object-only path every other endpoint uses.
+        sent = self.read_json() or {}
+        token = self.bearer_token() or (sent.get("token") if isinstance(sent.get("token"), str) else "")
         if token:
             if not PERSIST:
                 DEMO_SESSIONS.pop(token, None)

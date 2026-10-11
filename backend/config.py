@@ -172,6 +172,11 @@ DELIVERY_FIELDS = ("delivery_address", "delivery_lat", "delivery_lng", "delivery
 
 MAX_ADDRESS_CHARS = 400
 
+# The largest body any form here sends is a registration, well under a kilobyte; a
+# request that declares more than this is answered as unreadable rather than read, so a
+# thread cannot be parked waiting on bytes a client only promised.
+MAX_REQUEST_BODY_BYTES = 64 * 1024
+
 # Live weather for the analyser. Read from Open-Meteo, which is keyless like the map's
 # tiles and the address lookups, so nothing has to be registered to run this server.
 # The analyser's model knows three words for the sky; weather.py is the one place that
