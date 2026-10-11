@@ -45,12 +45,36 @@ def describe():
     }
 
 
+# The migration that gives the board the columns this writes, named where it is needed:
+# the one failure whose fix is a file rather than a setting should say which file.
+MIGRATION = "supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql"
+
+# How a board that has not been given the columns says so. It says it two ways, and which
+# one it is depends on where the write stopped: Postgres answers `42703` with "column … does
+# not exist" when it is the select or the statement that fails, while the REST layer's own
+# schema cache answers `PGRST204` with "Could not find the '…' column … in the schema
+# cache" before the statement is ever sent. Both mean the migration has not been applied.
+MISSING_COLUMN_HINTS = ("does not exist", "in the schema cache")
+
+
+def missing_column(message):
+    """Whether a board message is the board saying it lacks the allocation columns."""
+    return any(hint in message for hint in MISSING_COLUMN_HINTS)
+
+
+# Only a value long enough to be a key is ever scrubbed. Replacing a short one rewrites
+# innocent words — a one-character key turns "allocated_kg" into nonsense, and a *worse*
+# outcome than the message it was protecting is one nobody can read. No real key is this
+# short: a Supabase key is a long opaque string, publishable or secret alike.
+MIN_REDACTABLE_KEY = 12
+
+
 def redact(text):
     """A message from the board with the key taken out of it, whatever it says."""
     message = str(text or "").strip()
     if not message:
         return ""
-    if SUPABASE_KEY and SUPABASE_KEY in message:
+    if len(SUPABASE_KEY) >= MIN_REDACTABLE_KEY and SUPABASE_KEY in message:
         message = message.replace(SUPABASE_KEY, "«key»")
     return message[:300]
 
@@ -103,15 +127,23 @@ def publish_allocation(post_id, fields):
         except (OSError, ValueError):
             detail = ""
         message = redact(parsed_message(detail)) or ("the board answered %s" % error.code)
-        if error.code == 404 or "does not exist" in message:
-            message += (" · apply supabase/migrations/"
-                        "20261011000000_add_allocation_to_surplus_posts.sql first")
+        if missing_column(message) or error.code == 404:
+            message += " · apply " + MIGRATION + " first"
         return False, message
     except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
         return False, redact(error)
 
     if isinstance(payload, list):
-        return True, payload[0] if payload else None
+        # `Prefer: return=representation` is what makes this answer readable: the board
+        # sends back the row it wrote. An empty list therefore means the update matched no
+        # row at all — there is no post with that id on the board — and that is a failure
+        # however cheerfully it arrived, because the ration was computed for a row nobody
+        # can see. (An id that is not a uuid never reaches the board; this is the case of a
+        # well-formed id whose row is gone, and of a claim that was recorded against a board
+        # row that has since been deleted.)
+        if not payload:
+            return False, "no board row with the id " + str(post_id)
+        return True, payload[0]
     return True, payload
 
 
