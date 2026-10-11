@@ -63,7 +63,7 @@ the API can be inspected a topic at a time:
     claims.py     the claims: one shape, recorded by the API and read by the pass
     supabase.py   the one write this backend makes to the board: an allocation
     history.py    the logged days, and the features the model reads out of them
-    seed.py       the five test donors and their six weeks of logs
+    seed.py       the six test donors, the demo kitchen's year of logs among them
     weather.py    live conditions from Open-Meteo, in the model's three words
     surplus.py    the surplus calculator: train once, forecast per request
 """
@@ -740,9 +740,12 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.send_json(
                 401, {"error": "Your session has expired. Please sign in again."}
             )
-        # A reading looks back six weeks at most — far enough for the fourteen-day window,
-        # the week-old lag and the day-old lag — so a longer log is read for its own sake
-        # rather than every row of it being summarised.
+        # A reading looks back a year at most: a whole seasonal cycle, so the weekday the
+        # customer count averages over is one the kitchen has run many times, while the
+        # fourteen-day window and the two lags are answered by a fortnight of it. A longer
+        # log is read for its own sake rather than every row of it being summarised, and the
+        # *same* window is used here and for a forecast, so the features an answer reports
+        # are the features the next forecast is made with.
         recent = days[-HISTORY_READ_DAYS:]
         return self.send_json(
             200,
@@ -767,7 +770,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
         kitchen gets.
 
         The answer names **two** figures rather than one, because on a kitchen with more
-        than six weeks behind it they are not the same number: `logged_days` is the whole
+        than a year behind it they are not the same number: `logged_days` is the whole
         log the account holds, and `read_days` is the window of it these features were
         actually read from. A caller that writes the kitchen up — the analyser banner is
         one — can then say which it means instead of reporting the window as if it were
