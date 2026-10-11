@@ -2229,13 +2229,31 @@ def prepare_state():
     else:
         seed_report = seed_test_accounts()
     print(
-        "Test accounts: %d donors, %d recipient created, %d already there,"
-        " %d days logged"
+        "Test accounts: %d donors, %d recipient and %d shelters created, %d already"
+        " there, %d days logged"
         % (len(seed_report["created"]),
            1 if seed_report["recipient_created"] else 0,
+           len(seed_report["shelters_created"]),
            len(seed_report["skipped"]), seed_report["days_written"]),
         flush=True,
     )
+    board = seed_report["board"]
+    if (board["posts_published"] or board["posts_already"]
+            or board["claims_recorded"]):
+        print(
+            "  demo board (%s): %d posts written, %d already there, %d claims recorded,"
+            " %d claim rows written"
+            % (board["board"], len(board["posts_published"]),
+               len(board["posts_already"]), board["claims_recorded"],
+               board["board_claims_published"]),
+            flush=True,
+        )
+    if board["posts_trouble"]:
+        print("  demo board: the posts could not be written — " + board["posts_trouble"],
+              flush=True)
+    if board["claims_trouble"]:
+        print("  demo board: the claim rows could not be written — " + board["claims_trouble"],
+              flush=True)
     if seed_report["weather_from_archive"] or seed_report["weather_from_pattern"]:
         print(
             "  weather: %d donors from the Open-Meteo archive, %d from the fallback"
@@ -2251,8 +2269,7 @@ def prepare_state():
         )
     if seed_report["shelters_created"]:
         print(
-            "  Miami book: %d shelters created for %s"
-            % (len(seed_report["shelters_created"]), seed_report["orders_for"]),
+            "  shelters: %d created" % len(seed_report["shelters_created"]),
             flush=True,
         )
     if seed_report["orders_written"]:
@@ -2271,6 +2288,7 @@ def prepare_state():
     accounts = list(seed_report["created"])
     if seed_report["recipient_created"]:
         accounts.append(seed_report["recipient_created"])
+    accounts.extend(seed_report["shelters_created"])
     if accounts:
         print(
             "  sign in as " + ", ".join(accounts) + " with the password "

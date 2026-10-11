@@ -25,6 +25,14 @@ The fixture is built to be *readable*, not just plentiful:
   every time the server starts, and a second seeding adds nothing: a kitchen's past is a
   record, and a record does not change because a seed ran again.
 
+**The demo board comes with them.** The feed is Supabase's, so a deployment that has just
+come up would otherwise open on an empty one. Five shelters, eight items posted by four of
+the kitchens and the claims between them are seeded beside the accounts — written to the
+board where one is configured to be written to, and kept as this API's own claim records
+either way — so a demo has a carousel, a route and a claimant rail to show. Ortega Deli is
+the account that surface is built around. Every row is guarded by a read first, so seeding
+again adds nothing.
+
 In demo mode the server seeds these on startup, since nothing is written to disk. With
 persistence on it happens only when `RESQ_SEED=on` asks for it. Either way they sign in
 with the password below — `rosa@resq.test` and `dana@resq.test` and the rest, listed in
@@ -36,6 +44,8 @@ import json
 import random
 
 from accounts import seed_donor_metrics
+import supabase
+from claims import record_from_post, remember
 from config import (
     DEMO_ACCOUNTS,
     DEMO_DONOR_HISTORY_DAYS,
@@ -48,7 +58,7 @@ from config import (
     SURPLUS_CATEGORIES_DAYS,
 )
 from geo import haversine_km, offset_point
-from helpers import account_key, clean_email
+from helpers import account_key, clean_email, display_name
 from history import write_history
 from orders import demo_order_pair, order_payload, order_row, remember_demo_order
 from security import hash_password
@@ -310,6 +320,97 @@ TEST_CLAIMANTS = (
 )
 
 
+# ---------------------------------------------------------------------------
+# The shelters, and the demo board they claim items off
+# ---------------------------------------------------------------------------
+# The board is Supabase's, so a deployment that has just come up has an empty feed: a
+# carousel with nothing in it, a map with no route on it and a claimant rail with nobody
+# in it are the three things these rows exist to avoid. Everything below is a row the
+# pages themselves would have written — a post as the donor's compose box writes one, a
+# claim as the shelter's claim action writes one — with fixed ids and stamps counted back
+# from the moment the server starts, so the same board comes back the same way every time
+# and a second startup adds nothing.
+#
+# The demo account is Ortega Deli (`luis@resq.test`), the Miami eatery, and its items are
+# the kitchen's own three from `TEST_ORTEGA_DELIVERIES` — the same ids, the same text and the
+# same stamps, so the board and the book are one set of items rather than two. The rest are
+# items the Toronto kitchens posted and the two Toronto shelters claimed, so more than one
+# account has a pending surface to show.
+
+# The two shelters that claim the Toronto kitchens' items. Each is a real, signable-in
+# recipient account with a confirmed pin of its own — the pin is what the donor's map draws
+# a route to, and an account with neither pin nor address is a claimant that cannot be
+# routed to. The Miami kitchen's items are claimed by its own three shelters, which are
+# created for its books: one set of shelters per kitchen, named the same on both.
+TEST_BOARD_SHELTERS = (
+    {"first_name": "Adele", "last_name": "Kwan", "business_name": "Harbour Lights Shelter",
+     "email": "harbour@resq.test", "street": "12 Harbour Lane", "city": "Toronto",
+     "province": "Ontario", "postal": "M5J 1A1",
+     "needs": ("prepared_meals", "fresh_produce"), "delivery_days": ("mon", "wed", "fri"),
+     "occupancy": 210, "lat": 43.6405, "lng": -79.3782},
+    {"first_name": "Marco", "last_name": "Bellini", "business_name": "Riverside Community Pantry",
+     "email": "riverside@resq.test", "street": "88 Riverside Walk", "city": "Toronto",
+     "province": "Ontario", "postal": "M5A 4K8",
+     "needs": ("packaged_goods", "household_essentials"),
+     "delivery_days": ("tue", "thu"), "occupancy": 95,
+     "lat": 43.6602, "lng": -79.3556},
+)
+
+# The items the demo board opens with. `donor_email` rather than a donor name: the name a
+# post is filed under is the kitchen's own business name, and it is read off the account
+# here so the two can never drift apart. `posted_hours_ago` is counted back from startup
+# for the same reason every other fixture stamp is — a fixed date would have the item
+# sitting on the board for years. The first three are the Miami kitchen's open deliveries,
+# taken from its own book so the two sides of the demo name one set of items.
+TEST_BOARD_POSTS = tuple(
+    {"id": spec["id"], "donor_email": TEST_KITCHEN_EMAIL,
+     "item_name": spec["item_name"], "quantity": spec["quantity"],
+     "goods_type": spec["goods_type"], "status": "claimed",
+     "posted_hours_ago": spec["posted_hours_ago"]}
+    for spec in TEST_ORTEGA_DELIVERIES
+) + (
+    # Left open on purpose: an item a demo can claim in front of somebody.
+    {"id": "b1a10000-0000-4000-8000-000000000004", "donor_email": TEST_KITCHEN_EMAIL,
+     "item_name": "Catering trays from the lunch run", "quantity": "6 small trays of cooked food",
+     "goods_type": "prepared_meals", "status": "pending", "posted_hours_ago": 2.0},
+    {"id": "b1a10000-0000-4000-8000-000000000005", "donor_email": "dana@resq.test",
+     "item_name": "Day-old sourdough and pastries",
+     "quantity": "3 crates of loaves and pastries",
+     "goods_type": "bakery_items", "status": "claimed", "posted_hours_ago": 22.0},
+    {"id": "b1a10000-0000-4000-8000-000000000006", "donor_email": "dana@resq.test",
+     "item_name": "Back-shelf packaged goods", "quantity": "2 boxes of canned and dry goods",
+     "goods_type": "packaged_goods", "status": "claimed", "posted_hours_ago": 15.0},
+    {"id": "b1a10000-0000-4000-8000-000000000007", "donor_email": "mei@resq.test",
+     "item_name": "End-of-service noodle trays", "quantity": "12 trays of cooked noodles and broth",
+     "goods_type": "prepared_meals", "status": "claimed", "posted_hours_ago": 11.0},
+    {"id": "b1a10000-0000-4000-8000-000000000008", "donor_email": "priya@resq.test",
+     "item_name": "Produce and dairy left over",
+     "quantity": "3 crates of vegetables and 2 of milk",
+     "goods_type": "fresh_produce", "status": "claimed", "posted_hours_ago": 5.0},
+)
+
+# Which shelter claimed which item, and how long ago — one row per claim, the same shape the
+# `surplus_claims` table holds. The counts are the point: the carousel's waiting items read
+# "3 shelters", "2 shelters" and so on, so the surface shows a post being split as well as
+# one that a single shelter took. The Miami kitchen's claims are its own book's, taken from
+# `TEST_ORTEGA_DELIVERIES` for the same reason its items are.
+TEST_BOARD_CLAIMS = tuple(
+    (spec["id"], claimant["shelter"], claimant["claimed_hours_ago"])
+    for spec in TEST_ORTEGA_DELIVERIES
+    for claimant in spec["claimants"]
+) + (
+    ("b1a10000-0000-4000-8000-000000000005", TEST_RECIPIENT["email"], 20.0),
+    ("b1a10000-0000-4000-8000-000000000005", "harbour@resq.test", 18.0),
+    ("b1a10000-0000-4000-8000-000000000006", TEST_RECIPIENT["email"], 12.0),
+    ("b1a10000-0000-4000-8000-000000000006", "harbour@resq.test", 10.0),
+    ("b1a10000-0000-4000-8000-000000000007", TEST_RECIPIENT["email"], 9.0),
+    ("b1a10000-0000-4000-8000-000000000007", "harbour@resq.test", 8.0),
+    ("b1a10000-0000-4000-8000-000000000007", "riverside@resq.test", 6.0),
+    ("b1a10000-0000-4000-8000-000000000008", TEST_RECIPIENT["email"], 4.0),
+    ("b1a10000-0000-4000-8000-000000000008", "riverside@resq.test", 3.0),
+)
+
+
 def account_address(person):
     """One account's address on a single line, the way the delivery card writes one."""
     return ", ".join(part for part in
@@ -493,6 +594,15 @@ def remember_recipient(recipient):
     return remember_profile(recipient_profile(recipient))
 
 
+def remember_shelter(shelter):
+    """The same for one of the shelters that claims the demo board's items.
+
+    A shelter is a recipient account with everything a recipient's profile carries: the
+    goods it asks for, the days it takes deliveries on, its occupancy and a confirmed pin.
+    """
+    return remember_profile(recipient_profile(shelter))
+
+
 def store_profile(conn, profile):
     """Write one fixture account into the users table, unless that email is registered.
 
@@ -559,6 +669,11 @@ def store_donor(conn, donor, metrics=None):
 def store_recipient(conn, recipient):
     """The same for the fixture's recipient."""
     return store_profile(conn, recipient_profile(recipient))
+
+
+def store_shelter(conn, shelter):
+    """The same for one of the shelters that claims the demo board's items."""
+    return store_profile(conn, recipient_profile(shelter))
 
 
 def test_account(email, conn=None):
@@ -756,6 +871,113 @@ def claim_fixture(conn=None, now=None):
         }
         claims.append(fixture_claim(post, shelter, claimant, donor_lat, donor_lng, now))
     return claims
+
+
+def board_post(post, donor, now):
+    """One demo post as the board carries it, built from the kitchen's own account.
+
+    The row is the one the donor's compose box writes: the kitchen's business name as the
+    name the post is filed under, its own confirmed address as the pickup, and the item
+    the fixture lists. The stamp is counted back from the moment the pass runs, which is
+    what keeps the board's own ordering — and the carousel's first card — the same one
+    whenever the server comes up.
+    """
+    return {
+        "id": post["id"],
+        "donor_name": donor.get("business_name") or display_name(donor),
+        "item_name": post["item_name"],
+        "quantity": post["quantity"],
+        "location": donor.get("delivery_address") or account_address(donor),
+        "goods_type": post["goods_type"],
+        "status": post["status"],
+        "created_at": fixture_time(post["posted_hours_ago"], now),
+    }
+
+
+def board_claim(post_row, shelter, claimed_at):
+    """One claim as the board's own `surplus_claims` row carries it.
+
+    The two names are the two names the page writes: the person who asked under
+    `recipient_name`, and the organisation they asked for under `recipient_org`. The
+    donor's console joins the two halves of a claim on either of them, so a board row and
+    the API's record of the same claim have to name the shelter the way each side does —
+    this is that naming, written once and used by both.
+    """
+    person = ("%s %s" % (shelter.get("first_name") or "",
+                         shelter.get("last_name") or "")).strip()
+    organisation = (shelter.get("business_name") or "").strip() or None
+    return {
+        "post_id": post_row["id"],
+        "recipient_name": person or organisation or "a shelter",
+        "recipient_org": organisation,
+        "claimed_at": claimed_at,
+    }
+
+
+def seed_demo_board(conn=None, now=None):
+    """Put the demo's posts and their claims on the board, as far as they are not there.
+
+    Two halves, written the way the pages write them: the *posts* go to the board itself
+    and exist whether or not the API is up, while a *claim* is a record this API keeps —
+    and, where the board has the `surplus_claims` table, a row beside it as well. The
+    claim records are the half a donor's console reads its claimants, their pins and their
+    distances out of, so they are written whether or not a board is configured at all.
+
+    Returns what it did, and never raises: a board that cannot be reached is a line in the
+    report rather than a server that did not start. Both halves are guarded by a read
+    first, so calling this on every startup adds a row exactly once.
+    """
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    report = {
+        "posts_published": [],
+        "posts_already": [],
+        "claims_recorded": 0,
+        "board_claims_published": 0,
+        "board": supabase.describe()["mode"],
+        "posts_trouble": "",
+        "claims_trouble": "",
+    }
+
+    rows = {}
+    for post in TEST_BOARD_POSTS:
+        donor = test_account(post["donor_email"], conn)
+        if donor is None:
+            # Nothing was seeded, so there is nothing on the board to write: the same
+            # empty answer `claim_fixture` gives, for the same reason.
+            return report
+        row = board_post(post, donor, now)
+        rows[post["id"]] = row
+        if not supabase.configured():
+            continue
+        ok, detail = supabase.add_post(row)
+        if not ok:
+            report["posts_trouble"] = detail
+            continue
+        if isinstance(detail, dict) and detail.get("present"):
+            report["posts_already"].append(post["id"])
+            continue
+        report["posts_published"].append(post["id"])
+
+    for post_id, email, hours_ago in TEST_BOARD_CLAIMS:
+        shelter = test_account(email, conn)
+        row = rows.get(post_id)
+        if shelter is None or row is None:
+            continue
+        claimed_at = fixture_time(hours_ago, now)
+        # The API's own record of the claim: this is the half that carries the shelter's
+        # pin, which is what a route is drawn between.
+        remember(record_from_post(row, shelter, claimed_at), conn)
+        report["claims_recorded"] += 1
+        if not supabase.configured():
+            continue
+        ok, detail = supabase.add_claim(board_claim(row, shelter, claimed_at))
+        if ok:
+            if not (isinstance(detail, dict) and detail.get("present")):
+                report["board_claims_published"] += 1
+        elif not report["claims_trouble"]:
+            report["claims_trouble"] = detail
+
+    return report
 
 
 def donor_log_entries(donor, days):
@@ -1012,6 +1234,24 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
         else:
             shelters_created.append(shelter["email"])
 
+    # The two shelters that claim the Toronto kitchens' board items, written the same way
+    # and after the kitchens: a claim is filed against the kitchen's own post, and the posts
+    # are the kitchens'. The Miami kitchen's items are claimed by its own three shelters,
+    # which are the accounts above — one set of shelters per kitchen, so the board and the
+    # books name the same ones.
+    for shelter in TEST_BOARD_SHELTERS:
+        account = (remember_shelter(shelter) if conn is None
+                   else store_shelter(conn, shelter))
+        if account is None:
+            skipped.append(shelter["email"])
+        else:
+            shelters_created.append(shelter["email"])
+
+    # And the board itself: the posts the demo opens on and the shelters that reached for
+    # them, so a deployment that has just come up has a carousel, a route and a rail
+    # instead of an empty frame. Last, because it needs both sides to exist.
+    board = seed_demo_board(conn)
+
     return {
         "created": created,
         "recipient_created": TEST_RECIPIENT["email"] if recipient else None,
@@ -1024,6 +1264,7 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
         "delivery": seed_delivery(conn),
         "delivery_from": TEST_DELIVERY["donor_email"],
         "delivery_to": TEST_RECIPIENT["email"],
+        "board": board,
         "weather_from_archive": archived,
         "weather_from_pattern": patterned,
         "password": TEST_PASSWORD,
@@ -1040,4 +1281,17 @@ def describe_test_accounts():
             "customers_per_day": donor["customers"],
         }
         for donor in FIXTURE_DONORS
+    ]
+
+
+def describe_test_shelters():
+    """The shelters that claim the demo board's items, the way the README lists them."""
+    return [
+        {
+            "email": shelter["email"],
+            "business": shelter["business_name"],
+            "address": account_address(shelter),
+            "occupancy": shelter["occupancy"],
+        }
+        for shelter in TEST_SHELTERS
     ]

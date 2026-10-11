@@ -873,6 +873,9 @@ delivery to read rather than an empty frame:
 | --- | --- | --- | --- |
 | `noor@resq.test` | Fort York Food Bank | 40 Fort York Blvd, Toronto | Tue, Thu |
 
+It also claims items off the demo board — Whitfield Bakery's two and Chen Noodle House's
+one — so the fixture's own recipient is a claimant on the surface it is read from.
+
 The same password signs it in and the same switches create it. It arrives the same way a
 donor does — a goods profile, a confirmed pin at its own address, no impact figures, since
 those are the kitchen's own. The delivery already on the books is Whitfield Bakery's
@@ -904,6 +907,35 @@ fixture: the donor's *Ongoing Deliveries* screen opens on three real items with 
 shelters and rations rather than on an empty frame. Both are read for the accounts they
 were written about — that kitchen and its three shelters — so a deployment with claims of
 its own never has the fixture mixed into its queue, and seeding again adds nothing.
+
+**The same items are on the board, with their claims**, because the donor console reads
+Supabase rather than the books: a deployment that has just come up would otherwise open on
+a carousel with nothing in it, a map with no route on it and a claimant rail with nobody in
+it. Eight items from four kitchens are seeded onto the board itself — the Miami kitchen's
+three are **the same three items as its book**, one id, one text and one stamp, so what the
+pending orders list and what the pass splits are one set of items rather than two — and the
+claims on them are recorded beside them. The fourth Miami item is left open on purpose, so
+claiming can be shown live. Whitfield Bakery's two items and Chen Noodle House's one carry
+the fixture's own recipient and the two Toronto shelters that ship for them:
+
+| Sign in as | Organisation | Where | Claims |
+| --- | --- | --- | --- |
+| `harbour@resq.test` | Harbour Lights Shelter | 12 Harbour Lane, Toronto | Whitfield Bakery, Chen Noodle House |
+| `riverside@resq.test` | Riverside Community Pantry | 88 Riverside Walk, Toronto | Chen Noodle House, Raman Kitchens |
+
+The board's posts go to the board and a claim goes to the API's own claim records **and**,
+where the board has the `surplus_claims` table, to a row beside them — the two halves a
+donor's console reads its claimants and their pins out of. Both are written by a read
+first, so seeding again adds nothing: a post the board already holds is left where it is,
+and a shelter that has already claimed an item is not counted twice. Where a claim is both
+recorded and in the book, the record is the claim and the book is the floor under it: the
+pass reads it once, not twice. A board that is not configured to be written to
+(`RESQ_SUPABASE_URL` and `RESQ_SUPABASE_KEY`) simply keeps the claim records — which is the
+half that carries each shelter's pin — and the startup line says so; a board that is
+configured says what it wrote, and names
+`supabase/migrations/20261012000000_create_surplus_claims.sql` when the claims table is not
+there yet, since until that migration is run the board holds no claim rows and a post can
+only be claimed once.
 
 The **weather in those logs is real**: each donor's days carry the conditions Open-Meteo's
 archive actually recorded at that donor's coordinates, so the history is a record rather

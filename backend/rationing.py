@@ -826,6 +826,20 @@ def gather_claims(caller, conn=None):
     # splits on a deployment nobody has used yet. Read for the kitchen whose items they are
     # and for each shelter on them, and for nobody else — a run with claims of its own never
     # has the fixture's shelters mixed into its queue.
+    #
+    # A claim the store already holds is not read from the book a second time: the same
+    # three items are seeded onto the board as posts, and the claims on them are recorded,
+    # so counting the fixture's copy beside the record would put every claimant on a post
+    # twice and split it between two copies of itself. The book is what stands in where no
+    # record was written — the record is the claim, and this is the floor under it.
     if seed.is_miami_kitchen(caller, conn) or seed.is_miami_shelter(caller, conn):
-        claims.extend(seed.fixture_deliveries(conn))
+        seen = set()
+        for claim in claims:
+            post = claim.get("post") or {}
+            seen.add((str(post.get("id") or ""), account_key(claim.get("recipient"))))
+        claims.extend(
+            claim for claim in seed.fixture_deliveries(conn)
+            if (str((claim.get("post") or {}).get("id") or ""),
+                account_key(claim.get("recipient"))) not in seen
+        )
     return claims
