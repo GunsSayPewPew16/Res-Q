@@ -53,6 +53,13 @@ DEMO_ORDER_SEQ = count(1)
 # database; with persistence on the same rows are the account's own rows in the table.
 DEMO_HISTORY = {}
 
+# What a demo account has given away, keyed by the same contact: every board row of its
+# own that a page has handed over, and the month the fixture seeds. The analyser's category
+# mix is read from here rather than from the board, which is what keeps the month standing
+# when the board it was logged on has been cleared; with persistence on the same rows are
+# the `surplus_log` table's own.
+DEMO_SURPLUS_LOG = {}
+
 # The claims a demo run is holding, oldest first. A claim belongs to the two sides of a
 # board post — the donor who logged it and the shelter that reached for it — and not to the
 # session that made it, so like the delivery orders these live for the process rather than
@@ -151,6 +158,29 @@ CREATE TABLE IF NOT EXISTS surplus_history (
     UNIQUE (user_id, date),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS surplus_log (
+    -- What a kitchen has given away, one row per donation: the board post it came from, or
+    -- the logged day it stands for. The analyser's category mix is read from these rows
+    -- rather than from the board, because the board is a marketplace and empties while a
+    -- log is a record — a month's chart cannot go blank because the shelf beside it did.
+    -- `entry_key` is what a row is filed under — the post's id, or a seeded day and
+    -- category — so the same board read twice, or a re-seed, adds nothing.
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    entry_key  TEXT    NOT NULL,
+    logged_on  TEXT    NOT NULL,
+    goods_type TEXT,
+    item_name  TEXT,
+    kg         REAL    NOT NULL,
+    source     TEXT    NOT NULL DEFAULT 'text',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, entry_key),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS surplus_log_user_day_idx
+    ON surplus_log (user_id, logged_on);
 """
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -236,6 +266,13 @@ HISTORY_FIELDS = (
     "date", "weather", "weather_code", "temp_c",
     "customers_served", "expected_customers", "surplus_kg",
 )
+
+# The surplus log: one row per donation out of a kitchen — the board post it came from or
+# the logged day it stands for, what the goods were, and what they came to in kilos. It is
+# where the analyser's category mix reads its month from. `source` says how the kilos were
+# arrived at: the pass's own reading of a post's written quantity (`text`, or `assumed`
+# when the pack table had to stand in), or the kitchen's own log (`logged`).
+SURPLUS_LOG_FIELDS = ("entry_key", "logged_on", "goods_type", "item_name", "kg", "source")
 
 # How far back a reading looks. The fourteen-day window, the week-old lag and the day-old
 # lag are all satisfied by a fortnight, but the fourth feature is not: the customer count
@@ -408,8 +445,10 @@ RATION_PERCENT_DECIMALS = 1
 
 # The category mix a donor's own month is read as: the window the analyser counts over,
 # and the most board rows one request will weigh. The rows come from the page — the board
-# is Supabase's and this API does not read it — so the cap is what keeps one request from
-# asking for a summary of a whole year of posts.
+# is Supabase's and this API does not read it — and are filed into the kitchen's own log
+# (`surplus_log.py`) before they are counted, so the cap is what keeps one request from
+# asking for a summary of a whole year of posts. The fixture seeds the same window of days
+# into that log, which is what leaves the month standing on a board nobody has posted to.
 SURPLUS_CATEGORIES_DAYS = 30
 
 SURPLUS_CATEGORIES_MAX_POSTS = 500

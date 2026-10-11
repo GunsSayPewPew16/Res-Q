@@ -63,6 +63,7 @@ the API can be inspected a topic at a time:
     claims.py     the claims: one shape, recorded by the API and read by the pass
     supabase.py   the one write this backend makes to the board: an allocation
     history.py    the logged days, and the features the model reads out of them
+    surplus_log.py the donations the analyser's category mix charts a month from
     seed.py       the six test donors, the demo kitchen's year of logs among them
     weather.py    live conditions from Open-Meteo, in the model's three words
     surplus.py    the surplus calculator: train once, forecast per request
@@ -158,7 +159,6 @@ from orders import (
 )
 from rationing import (
     gather_claims,
-    hours_since,
     parse_quantity,
     rationing_pass,
     same_business,
@@ -172,6 +172,7 @@ from supabase import (
 )
 from security import hash_password, verify_password
 from surplus import NoTrainingHistory, forecast_surplus
+from surplus_log import entry_from_post, read_entries, within_days, write_entries
 from weather import WeatherUnavailable, fetch_outlook, fetch_weather
 
 
@@ -1445,18 +1446,23 @@ class ResQHandler(SimpleHTTPRequestHandler):
         return self.send_json(200, payload)
 
     def api_surplus_categories(self):
-        """The mix of what this account has logged, by category, over the last month.
+        """The mix of what this account has given away, by category, over the last month.
 
-        The board is Supabase's and this API does not read it, so the rows arrive from the
-        page — the ones it read for its own account — and are summarised here rather than in
-        the browser, because the reading of a written quantity is the rationing pass's own:
-        "4 trays, still warm" weighs the same here as it does in a split, and a bar in this
-        chart and a share in that pie cannot disagree about what an item was worth.
+        The reading of a written quantity is the rationing pass's own: "4 trays, still warm"
+        weighs the same here as it does in a split, so a bar in this chart and a share in
+        that pie cannot disagree about what an item was worth. The board is Supabase's and
+        this API does not read it, so the page hands over the rows it read for its own
+        account — and those rows are *filed* into the kitchen's own surplus log before the
+        month is counted, rather than counted straight off the board. The answer is read
+        back out of that log, which the fixture seeds a past month into, and that is what
+        leaves the month standing when the board itself is cleared: a post taken off the
+        board is still something the kitchen gave away.
 
-        Only rows this account's own name is on, and only ones logged inside the window, are
-        counted, so the answer is the account's own month whatever the page hands over. A
-        row with no readable date is counted rather than dropped: what is being read is what
-        this account logged, and a date the board did not write is no reason to hide it.
+        Only rows this account's own name is on are filed, and each row is filed once — the
+        post's id is what it is filed under — so the same board read twice adds nothing. A
+        row with no readable date is filed under today rather than dropped: what is being
+        read is what this account gave away, and a date the board did not write is no reason
+        to hide it.
         """
         me, problem = self.session_account()
         if problem:
@@ -1481,41 +1487,61 @@ class ResQHandler(SimpleHTTPRequestHandler):
         if days is None:
             days = SURPLUS_CATEGORIES_DAYS
         days = max(1, min(365, days))
-        window_hours = days * 24.0
 
         name = display_name(me)
-        categories = {}
-        counted = 0
+        handed_over = []
         skipped = 0
         for row in rows[:SURPLUS_CATEGORIES_MAX_POSTS]:
             if not isinstance(row, dict):
                 skipped += 1
                 continue
-            # Somebody else's row, however it got here: the board is public, and a summary
-            # is still this account's own.
+            # Somebody else's row, however it got here: the board is public, and a log is
+            # still this account's own.
             if not same_business(row.get("donor_name"), name):
-                skipped += 1
-                continue
-            age = hours_since(row.get("created_at"))
-            if age is not None and age > window_hours:
                 skipped += 1
                 continue
             goods_type = (row.get("goods_type") or "").strip().lower() or None
             kg, source = parse_quantity(row.get("quantity"), goods_type)
+            handed_over.append(entry_from_post(row, kg, source))
+
+        # Filed first, then read back: the month is the log's own, not the board's. The
+        # window is applied when the log is read, so a row older than the window is still
+        # filed — the month it belongs to is simply not the one being charted.
+        if PERSIST:
+            with connect() as conn:
+                filed = write_entries(handed_over, me, conn)
+                stored = read_entries(me, conn)
+        else:
+            filed = write_entries(handed_over, me)
+            stored = read_entries(me)
+        window = within_days(stored, days)
+
+        categories = {}
+        for entry in window:
+            goods_type = (entry.get("goods_type") or "").strip().lower() or None
             bucket = categories.get(goods_type)
             if bucket is None:
                 bucket = {"goods_type": goods_type, "posts": 0, "kg": 0.0,
                           "sources": set()}
                 categories[goods_type] = bucket
             bucket["posts"] += 1
-            bucket["kg"] = round(bucket["kg"] + kg, METRIC_DECIMALS)
-            bucket["sources"].add(source)
-            counted += 1
+            bucket["kg"] = round(bucket["kg"] + float(entry.get("kg") or 0.0),
+                                 METRIC_DECIMALS)
+            bucket["sources"].add(entry.get("source") or "assumed")
 
         total_kg = round(sum(bucket["kg"] for bucket in categories.values()), METRIC_DECIMALS)
         answer = []
         for bucket in categories.values():
             share = (bucket["kg"] / total_kg * 100.0) if total_kg else 0.0
+            readings = bucket["sources"]
+            if readings == {"text"}:
+                quantity_source = "text"
+            elif readings == {"logged"}:
+                quantity_source = "logged"
+            elif "assumed" in readings:
+                quantity_source = "assumed"
+            else:
+                quantity_source = "mixed"
             answer.append({
                 "goods_type": bucket["goods_type"],
                 "label": (bucket["goods_type"] or "untagged").replace("_", " ").title(),
@@ -1523,9 +1549,9 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "kg": bucket["kg"],
                 "share_percent": round(share, RATION_PERCENT_DECIMALS),
                 # A category whose items were all read from written packs is not the same
-                # reading as one that fell back to an assumed pack weight, so the answer
-                # says which of the two a bar is.
-                "quantity_source": ("text" if bucket["sources"] == {"text"} else "assumed"),
+                # reading as one that fell back to an assumed pack weight or than one read
+                # out of the kitchen's own log, so the answer says which a bar is.
+                "quantity_source": quantity_source,
             })
         # Heaviest first, and ties broken by the key, so the same month charts the same way.
         answer.sort(key=lambda entry: (-entry["kg"], entry["goods_type"] or ""))
@@ -1533,12 +1559,16 @@ class ResQHandler(SimpleHTTPRequestHandler):
         payload = {
             "ok": True,
             "days": days,
-            "counted": counted,
+            "counted": len(window),
             "skipped": skipped,
+            # What this call did to the log: how many rows it filed, and what the whole log
+            # holds now. The month is read back out of the log either way.
+            "filed": filed,
+            "stored": len(stored),
             "total_kg": total_kg,
             "categories": answer,
         }
-        if not counted:
+        if not window:
             payload["note"] = (
                 "Nothing logged under this account in the last %d days, so there is no mix"
                 " to read yet." % days

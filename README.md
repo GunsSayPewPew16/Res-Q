@@ -601,7 +601,8 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/supabase.py` | The one write this backend makes to the board: an allocation, PATCHed onto one row with `urllib`, and reported per post rather than raising |
 | `backend/surplus.py` | The surplus calculator: the regression pipeline, fitted to the store's logged days once and cached, forecasting per request |
 | `backend/history.py` | The logged days — one row per kitchen per day — the features the model reads out of them, and the whole store's log it is fitted to |
-| `backend/seed.py` | The six test donors, the one recipient and the agreed delivery between them, with the demo account's year of logs, six weeks for each of the others, and the weather taken from Open-Meteo's archive for every day of them |
+| `backend/surplus_log.py` | The kitchen's own surplus log — one row per donation, filed once under the post's id or a seeded day's key — which the analyser's category mix reads its month from |
+| `backend/seed.py` | The six test donors, the one recipient and the agreed delivery between them, with the demo account's year of logs, six weeks for each of the others, the weather taken from Open-Meteo's archive for every day of them, and each kitchen's last month filed into the surplus log |
 | `backend/measure_read_window.py` | Not part of the API: the measurement behind the window a forecast reads a log through, scoring the held-out days at six weeks, a year and the whole log |
 | `backend/weather.py` | The live conditions at a point — now, day by day for the week ahead, and the days behind it — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
 | `backend/wsgi.py` | The same handler as a WSGI application, which is how a host runs it; see [Deployment](#deployment) |
@@ -790,6 +791,11 @@ uninvited. `RESQ_SEED=off` turns it back off in demo mode. Each donor arrives wo
 goods profile, a confirmed pin at its own address and its impact figures, because a test
 account that has to be walked through onboarding first is not one.
 
+Each kitchen also arrives with its **last month in the surplus log**: the same days' own
+logged surplus, split across the categories that kitchen handles, in the window the
+analyser's category mix charts. That is what the mix reads — so the chart shows a real
+month on a board nobody has posted to, and keeps showing it after the board is cleared.
+
 **One recipient and one delivery ship beside them**, so the recipient's console has a
 delivery to read rather than an empty frame:
 
@@ -857,7 +863,7 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
 | `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing. Only the caller's own ration and share are named — other claimants are a count. The caller's own business name travels with the request, so a donor also gets `owned`: one entry per post of theirs a claim is on, with every claimant named beside its ration and share |
-| `POST` | `/api/surplus-categories` | The last month of the caller's own board rows, summarised by goods category: kilograms, post count, share of the total and whether the weight was read from the written quantity or assumed. The rows arrive in the body as `posts` (`400` `no_posts` without the key), with an optional `days` window (default 30, clamped to 1–365). Only rows carrying the caller's own business name, and only ones inside the window, are counted — the rest are reported as `skipped` |
+| `POST` | `/api/surplus-categories` | The last month of the caller's own surplus log, summarised by goods category: kilograms, entry count, share of the total and how each bar was read — `text`, `assumed`, `logged` or `mixed`. The caller's board rows arrive in the body as `posts` (`400` `no_posts` without the key) and are **filed into the log first**, each row once, under its own post id; the window (`days`, default 30, clamped to 1–365) is applied when the log is read rather than when the board is. Only rows carrying the caller's own business name are filed — the rest are reported as `skipped` — and the answer carries `filed` and `stored` beside the summary. A month of logged days is seeded into the log for the fixture kitchens, so the mix stands on a board that has been cleared |
 | `POST` | `/api/rations` | Run the same pass and publish the caller's own shares back to the board, writing `allocated_kg`, `allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at` onto each row it claimed — and nothing else about the row. Answers `503` `board_unconfigured` when `RESQ_SUPABASE_URL`/`RESQ_SUPABASE_KEY` are not set, and `200` with a per-post result otherwise — including when a row refuses the write, which the result says per post rather than failing the request |
 | `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
 | `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201` |
@@ -1001,13 +1007,18 @@ on it for the donor's own screen.
 
 `POST /api/surplus-categories` is the pass's own reading of a written quantity, borrowed
 for the other screen that asks what a month of surplus came to. The board is Supabase's and
-this API does not read it, so the donor's own rows arrive from the page and are summarised
-by the backend — kilograms per goods category, heaviest first, with the share each is of the
-total and whether a bar is a written quantity or the category's own assumed pack weight.
-Only rows the caller's own name is on, and only ones logged inside the window (thirty days
-by default, `days` in the body), are counted; a board row carries the timestamp Postgres
-wrote, an offset and fractional seconds, which the pass's own time reader now understands
-because a live claim's post is written in that shape too.
+this API does not read it, so the donor's own rows arrive from the page — and they are
+**filed into the kitchen's own surplus log** (`surplus_log.py`) rather than counted straight
+off the board, which is what leaves the month standing when the board itself is cleared. The
+month is read back out of that log: kilograms per goods category, heaviest first, with the
+share each is of the total and how a bar was read — a written quantity, the category's own
+assumed pack weight, or the kitchen's own logged month (`logged`), which is what the fixture
+seeds a past month of days into. Only rows the caller's own name is on are filed, and each
+row is filed once — the post's id is its key — so reading the same board again adds nothing.
+The window (thirty days by default, `days` in the body) is applied when the log is read, and
+the answer says what this call filed (`filed`) beside what the log holds (`stored`). A board
+row carries the timestamp Postgres wrote, an offset and fractional seconds, which the pass's
+own time reader understands because a live claim's post is written in that shape too.
 
 How the pieces connect:
 

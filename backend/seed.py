@@ -44,12 +44,14 @@ from config import (
     LIVE_ORDER_STATUSES,
     METRIC_DECIMALS,
     SEED_HISTORY_DAYS,
+    SURPLUS_CATEGORIES_DAYS,
 )
 from geo import haversine_km, offset_point
 from helpers import account_key, clean_email
 from history import write_history
 from orders import demo_order_pair, order_payload, order_row, remember_demo_order
 from security import hash_password
+from surplus_log import entry_key_day, write_entries
 from weather import WeatherUnavailable, fetch_archive
 
 # One password for every fixture account, donors and the recipient alike: these are demo
@@ -649,6 +651,43 @@ def claim_fixture(conn=None, now=None):
     return claims
 
 
+def donor_log_entries(donor, days):
+    """One kitchen's logged month, split across the categories it handles.
+
+    The log the analyser charts is not a second record of the kitchen: its kilos are that
+    kitchen's *own* logged surplus — the rows beside it in `surplus_history` — split across
+    the goods it says it handles, so what the month's chart adds up to is what the kitchen
+    actually gave away. The split is drawn from the donor's own seed, which is what makes
+    the month the same one every time the fixture is seeded again.
+
+    Only the window the chart reads is written: a year of days would be a year of entries
+    nothing looks at, and the log is the kitchen's *month*.
+    """
+    rng = random.Random(donor["seed"] + 11)
+    categories = list(donor.get("surplus_types") or ())
+    entries = []
+    for row in days[-SURPLUS_CATEGORIES_DAYS:]:
+        total = float(row.get("surplus_kg") or 0.0)
+        if not categories or total <= 0:
+            continue
+        weights = [0.5 + rng.random() for _ in categories]
+        shares = [round(total * weight / sum(weights), 2) for weight in weights]
+        # The last share carries the rounding, so the day's categories add up to the day.
+        shares[-1] = round(total - sum(shares[:-1]), 2)
+        for category, kg in zip(categories, shares):
+            if kg <= 0:
+                continue
+            entries.append({
+                "entry_key": entry_key_day(row["date"], category),
+                "logged_on": row["date"],
+                "goods_type": category,
+                "item_name": None,
+                "kg": kg,
+                "source": "logged",
+            })
+    return entries
+
+
 def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
     """Create the fixture's accounts, their logs and their one delivery, as far as they are
     not there already.
@@ -667,6 +706,7 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
     created = []
     skipped = []
     days_written = 0
+    log_written = 0
     archived = 0
     patterned = 0
 
@@ -688,6 +728,10 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
             patterned += 1
         created.append(donor["email"])
         days_written += write_history(rows, account, conn)
+        # The same kitchen's logged month goes into the surplus log beside the history, so
+        # the analyser's category chart has a past of its own — one that stays when the
+        # board the month's posts were made on is cleared.
+        log_written += write_entries(donor_log_entries(donor, rows), account, conn)
 
     # The other side of the board, and the one delivery between the two. The recipient is
     # written after the donors: the delivery needs a kitchen to run from, and that kitchen
@@ -704,6 +748,7 @@ def seed_test_accounts(conn=None, days=SEED_HISTORY_DAYS, today=None):
         "recipient_created": TEST_RECIPIENT["email"] if recipient else None,
         "skipped": skipped,
         "days_written": days_written,
+        "log_written": log_written,
         "delivery": seed_delivery(conn),
         "delivery_from": TEST_DELIVERY["donor_email"],
         "delivery_to": TEST_RECIPIENT["email"],

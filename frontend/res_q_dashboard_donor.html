@@ -854,8 +854,10 @@
                      under it. Both rows are written at runtime, and before anything has run the
                      bars hold a flat baseline that prints no figures — an empty chart is
                      honest, a shaped one would not be. The category split beside it is the
-                     real thing too: the last month of this kitchen's own board rows, weighed
-                     by the pass's own pack table and labelled by category. -->
+                     real thing too: the last month of this kitchen's own log, labelled by
+                     category. The rows the board hands over are filed into that log rather
+                     than counted straight off the board, so clearing the board does not blank
+                     the month — it only takes away the posts the log already has. -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
 
                     <div class="panel p-6 md:p-8">
@@ -884,7 +886,7 @@
                                 <span id="mixWindow" class="shrink-0 organic-chip px-4 py-2 text-[10px] uppercase tracking-[0.15em] bg-[#DAF1DE]/40 text-[#051F20]">last 30 days</span>
                             </div>
                             <div id="mixChart" class="space-y-4">
-                                <span class="block text-[11px] text-[#8EB69B]">Reading your last month on the board…</span>
+                                <span class="block text-[11px] text-[#8EB69B]">Reading your last month…</span>
                             </div>
                         </div>
                         <div class="flex items-center justify-between gap-4 pt-6 mt-6 border-t border-[#235347]">
@@ -2889,7 +2891,10 @@
                 setChip('mySurplusState', rows.length ? rows.length + ' logged' : 'empty', CHIP_DONE);
                 renderMySurplus(rows, '');
                 // The analyser's category mix is read from these same rows: one read of the
-                // board feeds both the list under the form and the screen's own month.
+                // board feeds both the list under the form and the screen's own month. The
+                // rows are handed to the API, which files them into the kitchen's own log —
+                // and the month is read back out of that log, so a board cleared later
+                // still leaves the month on the chart.
                 loadCategoryMix(rows);
             });
         }
@@ -3355,10 +3360,36 @@
                 + ' A' + rInner + ' ' + rInner + ' 0 ' + large + ' 0 ' + d[0].toFixed(2) + ' ' + d[1].toFixed(2) + ' Z';
         }
 
+        // A shelter's name as the one or two lines that fit beside the ring: about twenty
+        // characters of room per line, and a long name wraps at a word boundary rather than
+        // being cut off — the label exists to say *who* is getting what, so the name it
+        // writes should be the name. A name too long for two lines is ellipsised on the
+        // second, which is the truncation a single-line label used to carry.
+        function rationLabelLines(name) {
+            var text = String(name || 'Another shelter').trim();
+            if (text.length <= 20) { return [text]; }
+            var lines = [];
+            var line = '';
+            text.split(/\s+/).forEach(function (word) {
+                if (line && (line + ' ' + word).length > 20) {
+                    lines.push(line);
+                    line = word;
+                } else {
+                    line = line ? line + ' ' + word : word;
+                }
+            });
+            if (line) { lines.push(line); }
+            if (lines.length > 2) {
+                lines = [lines[0], lines[1].slice(0, 19) + '\u2026'];
+            }
+            return lines;
+        }
+
         // The ring, with every slice labelled outside it by the shelter it belongs to and
         // the share it was allotted — who is getting how much, written on the chart itself
         // rather than left to a legend. Labels on the same side are pushed apart so two
-        // adjacent shelters do not print on top of each other.
+        // adjacent shelters do not print on top of each other, and a wrapped label is
+        // pushed by its own two lines' worth of room rather than by one.
         function renderRationPie(post) {
             var holder = document.getElementById('rationPie');
             if (!holder) { return; }
@@ -3386,14 +3417,19 @@
 
                 var mid = (angle + end) / 2;
                 var right = Math.cos(mid) >= 0;
+                var lines = rationLabelLines(recipient.claimant_name);
+                var stride = 12 * lines.length + 22;
                 var y = cy + Math.sin(mid) * (rOuter + 26);
                 var last = right ? labelRight : labelLeft;
-                if (last !== null && Math.abs(y - last) < 34) { y = last + (Math.sin(mid) >= 0 ? 34 : -34); }
+                if (last !== null && Math.abs(y - last) < stride) {
+                    y = last + (Math.sin(mid) >= 0 ? stride : -stride);
+                }
                 var x = cx + Math.cos(mid) * (rOuter + 14);
                 slices[slices.length - 1].label = {
                     x: right ? x : x,
                     y: y,
-                    anchor: right ? 'start' : 'end'
+                    anchor: right ? 'start' : 'end',
+                    lines: lines
                 };
                 if (right) { labelRight = y; } else { labelLeft = y; }
                 angle = end;
@@ -3413,13 +3449,16 @@
             }).join('');
 
             var labels = slices.map(function (slice) {
-                var label = slice.label || { x: cx, y: cy, anchor: 'start' };
-                var name = String(slice.recipient.claimant_name || 'Another shelter');
-                if (name.length > 20) { name = name.slice(0, 19) + '\u2026'; }
-                return '<text x="' + label.x.toFixed(1) + '" y="' + label.y.toFixed(1) + '" text-anchor="' + label.anchor + '" '
-                    + 'font-size="11" fill="#DAF1DE">' + rationText(name) + '</text>'
-                    + '<text x="' + label.x.toFixed(1) + '" y="' + (label.y + 13).toFixed(1) + '" text-anchor="' + label.anchor + '" '
-                    + 'font-size="10" fill="#8EB69B">' + rationKg(slice.recipient.ration_kg) + ' \u00b7 ' + rationPercent(slice.recipient.share_percent) + '</text>';
+                var label = slice.label || { x: cx, y: cy, anchor: 'start', lines: ['Another shelter'] };
+                var lines = label.lines || ['Another shelter'];
+                return lines.map(function (line, index) {
+                    return '<text x="' + label.x.toFixed(1) + '" y="' + (label.y + index * 12).toFixed(1) + '" '
+                        + 'text-anchor="' + label.anchor + '" font-size="11" fill="#DAF1DE">'
+                        + rationText(line) + '</text>';
+                }).join('')
+                    + '<text x="' + label.x.toFixed(1) + '" y="' + (label.y + lines.length * 12).toFixed(1) + '" '
+                    + 'text-anchor="' + label.anchor + '" font-size="10" fill="#8EB69B">'
+                    + rationKg(slice.recipient.ration_kg) + ' \u00b7 ' + rationPercent(slice.recipient.share_percent) + '</text>';
             }).join('');
 
             holder.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" class="w-full h-auto" role="img" '
@@ -3520,11 +3559,13 @@
         }
 
         // ---------------------------------------------------------------------------
-        // The category mix: the last month of this kitchen's own board rows, weighed by the
-        // same reading of a written quantity the rationing pass uses. The rows are the ones
-        // the board gave this account a moment ago, and the summary is the API's — it owns
-        // the pack-weight table, so a bar here and a share on the rationing screen cannot
-        // disagree about what "4 trays" came to.
+        // The category mix: the last month of this kitchen's own surplus log, weighed by
+        // the same reading of a written quantity the rationing pass uses. The rows the
+        // board gave this account a moment ago are handed over, and the API *files* them
+        // into the log before it answers from it — so a row is counted once however often
+        // the screen reads, and the month keeps standing when the board it came from is
+        // cleared. The API owns the pack-weight table, so a bar here and a share on the
+        // rationing screen cannot disagree about what "4 trays" came to.
         // ---------------------------------------------------------------------------
         var mixBusy = false;
 
@@ -3566,7 +3607,7 @@
             }
             if (mixBusy) { return; }
             mixBusy = true;
-            mixMessage('Reading your last month on the board\u2026');
+            mixMessage('Reading your last month\u2026');
             fetch(apiUrl('/api/surplus-categories'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
@@ -3600,7 +3641,7 @@
                 mix.counted
                     ? mix.counted + (mix.counted === 1 ? ' item' : ' items') + ' \u00b7 ' + rationKg(mix.total_kg) + ' in ' + (mix.days || 30) + ' days'
                     : 'nothing logged in the last ' + (mix.days || 30) + ' days',
-                mix.counted ? 'weighed by the pass\u2019s own pack table' : '\u2014');
+                mix.counted ? 'from your log, weighed by the pass' : '\u2014');
             if (!categories.length) {
                 mixMessage(mix.note || 'Nothing logged under this account in the last month, so there is no mix to read yet.');
                 return;
@@ -3619,7 +3660,7 @@
                     + (emoji ? '<span aria-hidden="true">' + emoji + '</span> ' : '')
                     + rationText(goodsName(entry.goods_type))
                     + '<span class="text-[#8EB69B]"> \u00b7 ' + entry.posts + (entry.posts === 1 ? ' item' : ' items') + '</span>'
-                    + '<span class="text-[#8EB69B]/70">' + (entry.quantity_source === 'assumed' ? ' \u00b7 assumed weight' : '') + '</span>'
+                    + '<span class="text-[#8EB69B]/70">' + (entry.quantity_source === 'assumed' ? ' \u00b7 assumed weight' : (entry.quantity_source === 'logged' ? ' \u00b7 from your log' : '')) + '</span>'
                     + '</span>'
                     + '<span class="shrink-0 text-xs text-[#DAF1DE]">' + rationKg(kg) + ' \u00b7 ' + rationPercent(entry.share_percent) + '</span>'
                     + '</div>'
