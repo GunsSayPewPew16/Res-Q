@@ -853,8 +853,9 @@
                      first and the one bar drawn in the accent, with the coming week's names
                      under it. Both rows are written at runtime, and before anything has run the
                      bars hold a flat baseline that prints no figures — an empty chart is
-                     honest, a shaped one would not be. The category split beside it is still
-                     held open by bare placeholder bars. -->
+                     honest, a shaped one would not be. The category split beside it is the
+                     real thing too: the last month of this kitchen's own board rows, weighed
+                     by the pass's own pack table and labelled by category. -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
 
                     <div class="panel p-6 md:p-8">
@@ -873,49 +874,22 @@
                         </div>
                     </div>
 
-                    <div class="panel p-6 md:p-8 flex flex-col justify-between">
+                                        <div class="panel p-6 md:p-8 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between gap-4 mb-6">
                                 <div class="space-y-2">
-                                    <span class="block h-5 w-52 max-w-full organic-inner bg-[#163832]"></span>
-                                    <span class="block h-3 w-40 max-w-full organic-chip bg-[#163832]"></span>
+                                    <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Category mix</span>
+                                    <span class="block font-display text-2xl leading-none">What you donated</span>
                                 </div>
-                                <span class="block h-8 w-20 shrink-0 organic-inner bg-[#0B2B26] border border-[#235347]"></span>
+                                <span id="mixWindow" class="shrink-0 organic-chip px-4 py-2 text-[10px] uppercase tracking-[0.15em] bg-[#DAF1DE]/40 text-[#051F20]">last 30 days</span>
                             </div>
-                            <div class="space-y-4">
-                                <div>
-                                    <div class="flex items-center justify-between gap-3 mb-1.5">
-                                        <span class="block h-3 w-44 max-w-full organic-chip bg-[#163832]"></span>
-                                        <span class="block h-3 w-8 shrink-0 organic-chip bg-[#163832]"></span>
-                                    </div>
-                                    <div class="w-full h-2 organic-chip bg-[#0B2B26] overflow-hidden"><div class="h-full organic-chip bg-[#DAF1DE]" style="width: 45%;"></div></div>
-                                </div>
-                                <div>
-                                    <div class="flex items-center justify-between gap-3 mb-1.5">
-                                        <span class="block h-3 w-40 max-w-full organic-chip bg-[#163832]"></span>
-                                        <span class="block h-3 w-8 shrink-0 organic-chip bg-[#163832]"></span>
-                                    </div>
-                                    <div class="w-full h-2 organic-chip bg-[#0B2B26] overflow-hidden"><div class="h-full organic-chip bg-[#8EB69B]" style="width: 25%;"></div></div>
-                                </div>
-                                <div>
-                                    <div class="flex items-center justify-between gap-3 mb-1.5">
-                                        <span class="block h-3 w-36 max-w-full organic-chip bg-[#163832]"></span>
-                                        <span class="block h-3 w-8 shrink-0 organic-chip bg-[#163832]"></span>
-                                    </div>
-                                    <div class="w-full h-2 organic-chip bg-[#0B2B26] overflow-hidden"><div class="h-full organic-chip bg-[#235347]" style="width: 20%;"></div></div>
-                                </div>
-                                <div>
-                                    <div class="flex items-center justify-between gap-3 mb-1.5">
-                                        <span class="block h-3 w-32 max-w-full organic-chip bg-[#163832]"></span>
-                                        <span class="block h-3 w-8 shrink-0 organic-chip bg-[#163832]"></span>
-                                    </div>
-                                    <div class="w-full h-2 organic-chip bg-[#0B2B26] overflow-hidden"><div class="h-full organic-chip bg-[#163832]" style="width: 10%;"></div></div>
-                                </div>
+                            <div id="mixChart" class="space-y-4">
+                                <span class="block text-[11px] text-[#8EB69B]">Reading your last month on the board…</span>
                             </div>
                         </div>
                         <div class="flex items-center justify-between gap-4 pt-6 mt-6 border-t border-[#235347]">
-                            <span class="block h-3 w-36 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 w-20 shrink-0 organic-chip bg-[#163832]"></span>
+                            <span id="mixTotal" class="text-xs text-[#8EB69B]">—</span>
+                            <span id="mixSource" class="shrink-0 text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">—</span>
                         </div>
                     </div>
                 </div>
@@ -937,180 +911,103 @@
             <!-- The remaining section screens: picking any other rail tab wipes the working
                  area and opens this blank frame, which carries the tone and nothing else until
                  that section has content of its own. -->
-            <!-- Rationing Allocation: what the Ongoing Deliveries tab opens now. The layout is
-                 the reference's three-up figures row, its weekly column chart and its recent
-                 orders table, rebuilt out of this site's own ramp — a mint surface, a sage one
-                 and the one gradient — rather than the reference's hues. Only the boxes are
-                 carried over: every reading, name and label is held open as a bare bar so the
-                 words can be set later without moving a box. -->
+            <!-- Rationing Allocation: what the Ongoing Deliveries tab opens. The screen is the
+                 rationing pass read from the donor's own side of it — every item this kitchen
+                 logged that a shelter reached for, split between the shelters that reached —
+                 so its boxes carry readings rather than placeholders: three figures, a ring
+                 whose slices are the claimants of one post with each named beside the share it
+                 was allotted, and the queue those shares came out of under it. The pass can ask
+                 a model to read a claim, so it runs when the screen is opened or asked for and
+                 never on a timer. -->
             <div id="viewRationingAllocation" class="hidden space-y-6 md:space-y-8">
 
-                <!-- Title row: the section's name. -->
+                <!-- Title row: the section's name, the pass's own state and the button that
+                     runs it again. -->
                 <div class="flex flex-wrap items-end justify-between gap-4">
                     <div class="space-y-2">
                         <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Ongoing deliveries</span>
                         <h1 class="font-display text-4xl md:text-5xl leading-none">Rationing Allocation</h1>
                     </div>
+                    <div class="flex items-center gap-3">
+                        <span id="rationState" class="organic-chip px-4 h-10 inline-flex items-center text-[10px] uppercase tracking-[0.2em] bg-[#051F20] border border-[#235347] text-[#8EB69B]">idle</span>
+                        <button type="button" id="rationRunButton" onclick="loadRationing()" class="h-10 px-6 organic-chip bg-[#DAF1DE] text-[#051F20] text-xs font-medium uppercase tracking-[0.15em] hover:bg-[#8EB69B] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                            Run the pass
+                        </button>
+                    </div>
                 </div>
 
-                <!-- The three figure cards. The reference reads light to vivid; here that is
-                     the mint surface, the sage one and the gradient, each keeping its own
-                     composition — a chip and a pill over a headline set over a wave. -->
+                <!-- The three figures: the items claimed, the shelters sharing them, and what
+                     goes out to them — each with the line that says what the number is made of. -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
 
-                    <!-- Card one: the mint surface. -->
-                    <div class="surface-light p-6 md:p-7 flex flex-col justify-between gap-8 min-h-[200px]">
+                    <div class="surface-light p-6 md:p-7 flex flex-col justify-between gap-5 min-h-[200px]">
                         <div class="flex items-start justify-between gap-4">
-                            <span class="w-10 h-10 organic-chip bg-[#051F20]/10 flex items-center justify-center">
-                                <span class="w-4 h-4 organic-chip bg-[#051F20]/70"></span>
-                            </span>
-                            <span class="organic-chip px-3.5 py-1.5 bg-[#051F20]/10">
-                                <span class="block h-2.5 w-10 organic-chip bg-[#051F20]/40"></span>
-                            </span>
+                            <span class="text-[10px] uppercase tracking-[0.2em] text-[#051F20]/70">Items claimed</span>
+                            <span id="rationItemsChip" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.15em] bg-[#051F20]/10 text-[#051F20]">—</span>
                         </div>
-                        <span class="block h-8 w-40 max-w-full organic-inner bg-[#051F20]/25"></span>
-                        <svg viewBox="0 0 200 40" preserveAspectRatio="none" class="w-full h-10 text-[#051F20]/60" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M2 30 C 20 24, 34 34, 52 26 S 86 12, 104 22 S 140 34, 158 20 S 186 8, 198 14"></path>
-                        </svg>
+                        <span id="rationItems" class="block font-display text-5xl leading-none text-[#051F20]">—</span>
+                        <span id="rationItemsNote" class="block text-xs leading-relaxed text-[#051F20]/70">items of yours a shelter has reached for</span>
                     </div>
 
-                    <!-- Card two: the sage surface. -->
-                    <div class="bg-[#8EB69B] text-[#051F20] organic-block p-6 md:p-7 flex flex-col justify-between gap-8 min-h-[200px]">
+                    <div class="bg-[#8EB69B] text-[#051F20] organic-block p-6 md:p-7 flex flex-col justify-between gap-5 min-h-[200px]">
                         <div class="flex items-start justify-between gap-4">
-                            <span class="w-10 h-10 organic-chip bg-[#051F20]/12 flex items-center justify-center">
-                                <span class="w-4 h-4 organic-chip bg-[#051F20]/70"></span>
-                            </span>
-                            <span class="organic-chip px-3.5 py-1.5 bg-[#051F20]/12">
-                                <span class="block h-2.5 w-10 organic-chip bg-[#051F20]/40"></span>
-                            </span>
+                            <span class="text-[10px] uppercase tracking-[0.2em] text-[#051F20]/70">Shelters sharing</span>
+                            <span id="rationSheltersChip" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.15em] bg-[#051F20]/10 text-[#051F20]">—</span>
                         </div>
-                        <span class="block h-8 w-40 max-w-full organic-inner bg-[#051F20]/25"></span>
-                        <svg viewBox="0 0 200 40" preserveAspectRatio="none" class="w-full h-10 text-[#051F20]/60" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M2 26 C 22 32, 36 18, 56 24 S 90 32, 108 18 S 144 10, 162 22 S 188 30, 198 16"></path>
-                        </svg>
+                        <span id="rationShelters" class="block font-display text-5xl leading-none">—</span>
+                        <span id="rationSheltersNote" class="block text-xs leading-relaxed text-[#051F20]/70">distinct shelters across those items</span>
                     </div>
 
-                    <!-- Card three: the gradient, the screen's vivid surface. -->
-                    <div class="gradient-banner p-6 md:p-7 flex flex-col justify-between gap-8 min-h-[200px]">
-                        <div class="space-y-4">
-                            <span class="block h-6 w-36 max-w-full organic-inner bg-[#051F20]/25"></span>
-                            <div class="space-y-2">
-                                <span class="block h-3 w-48 max-w-full organic-chip bg-[#051F20]/18"></span>
-                                <span class="block h-3 w-40 max-w-full organic-chip bg-[#051F20]/18"></span>
-                            </div>
+                    <div class="gradient-banner p-6 md:p-7 flex flex-col justify-between gap-5 min-h-[200px]">
+                        <div class="flex items-start justify-between gap-4">
+                            <span class="text-[10px] uppercase tracking-[0.2em] text-[#051F20]/70">Allotted out</span>
+                            <span id="rationReaderChip" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.15em] bg-[#051F20]/12 text-[#051F20]">—</span>
                         </div>
-                        <span class="self-start organic-chip px-6 py-2.5 bg-[#051F20]/12 border border-[#051F20]/20">
-                            <span class="block h-2.5 w-12 organic-chip bg-[#051F20]/50"></span>
-                        </span>
+                        <span id="rationKg" class="block font-display text-5xl leading-none text-[#051F20]">—</span>
+                        <span id="rationKgNote" class="block text-xs leading-relaxed text-[#051F20]/80">kilograms the pass split between them</span>
                     </div>
                 </div>
 
-                <!-- The weekly column chart. Seven columns, each a track with the filled share
-                     sitting at its foot, the centre column carrying the tooltip and the dashed
-                     cursor in mint. Axis readings and the day row stay as bare bars. -->
+                <!-- The split itself: one ring per item, sliced by claimant and labelled with
+                     who is getting how much, over the same split written out in kilograms. -->
                 <div class="panel p-6 md:p-8">
-                    <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
-                        <div class="space-y-3">
-                            <span class="block h-3 w-44 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-8 w-28 organic-inner bg-[#163832]"></span>
+                    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+                        <div class="space-y-2 min-w-0">
+                            <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Who is getting what</span>
+                            <span id="rationPostName" class="block font-display text-2xl leading-none">Nothing claimed yet</span>
+                            <span id="rationPostLine" class="block text-xs text-[#8EB69B]">a split appears once a shelter claims an item this account logged</span>
                         </div>
-                        <span class="block h-4 w-48 max-w-full organic-chip bg-[#163832]"></span>
+                        <div id="rationPostPicker" class="flex flex-wrap gap-2"></div>
                     </div>
 
-                    <div class="flex gap-3 md:gap-5">
-                        <!-- Axis readings. -->
-                        <div class="flex flex-col justify-between h-56 shrink-0">
-                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
-                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
-                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
-                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
-                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
-                        </div>
-
-                        <!-- The columns, with the tooltip and the dashed cursor over the centre one. -->
-                        <div class="relative flex-1">
-                            <div class="absolute left-1/2 -translate-x-1/2 top-0 z-10 organic-inner bg-[#051F20] border border-[#235347] px-3 py-2">
-                                <span class="block h-3 w-14 organic-chip bg-[#8EB69B]"></span>
-                            </div>
-                            <div class="absolute left-1/2 top-0 bottom-0 border-l border-dashed border-[#8EB69B]/70" aria-hidden="true"></div>
-                            <div class="grid grid-cols-7 gap-2 md:gap-3 h-56 border-b border-[#235347] pb-px">
-                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 24%;"></div></div>
-                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 86%;"></div></div>
-                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#DAF1DE]" style="height: 96%;"></div></div>
-                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 40%;"></div></div>
-                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 30%;"></div></div>
-                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 80%;"></div></div>
-                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 72%;"></div></div>
-                            </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-center">
+                        <div id="rationPie" class="w-full"></div>
+                        <div id="rationLegend" class="space-y-2">
+                            <span class="block text-[11px] text-[#8EB69B]">Run the pass to see the split.</span>
                         </div>
                     </div>
 
-                    <!-- The day row. -->
-                    <div class="flex gap-3 md:gap-5 mt-3">
-                        <span class="block w-9 shrink-0"></span>
-                        <div class="grid grid-cols-7 gap-2 md:gap-3 flex-1">
-                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
-                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
-                        </div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 mt-6 pt-5 border-t border-[#235347]">
+                        <span id="rationPieNote" class="text-xs text-[#8EB69B]">—</span>
+                        <span id="rationFormula" class="shrink-0 text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">—</span>
                     </div>
                 </div>
 
-                <!-- Recent orders: the reference's table. A header row, then one row per order —
-                     an avatar, the name, the amount, the status dot and the date — with the
-                     middle row settled a rung up rather than onto a second light surface. -->
+                <!-- The queue: every claimant of this account's items, in the order a round
+                     would serve them, with the item and the score behind its share. -->
                 <div class="panel p-6 md:p-8">
                     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                        <span class="block h-6 w-40 organic-inner bg-[#163832]"></span>
-                        <div class="flex items-center gap-3">
-                            <span class="organic-chip px-4 h-9 inline-flex items-center bg-[#051F20] border border-[#235347]">
-                                <span class="block h-2.5 w-36 organic-chip bg-[#163832]"></span>
-                            </span>
-                            <span class="block h-3 w-24 organic-chip bg-[#163832]"></span>
+                        <div class="space-y-1">
+                            <h2 class="font-display text-2xl leading-none">The queue</h2>
+                            <span class="block text-xs text-[#8EB69B]">highest score first — the order a delivery round would serve them in</span>
                         </div>
+                        <span id="rationQueueNote" class="shrink-0 text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">—</span>
                     </div>
 
-                    <div class="space-y-3">
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] p-4 flex items-center gap-4 md:gap-6">
-                            <span class="w-11 h-11 rounded-full border border-[#235347] bg-[#163832] shrink-0"></span>
-                            <span class="block h-3 w-28 shrink-0 organic-chip bg-[#163832]"></span>
-                            <span class="flex-1"></span>
-                            <span class="block h-3 w-16 shrink-0 organic-chip bg-[#163832]"></span>
-                            <span class="hidden md:flex items-center gap-2 shrink-0">
-                                <span class="w-2.5 h-2.5 rounded-[3px] bg-[#8EB69B]"></span>
-                                <span class="block h-3 w-24 organic-chip bg-[#163832]"></span>
-                            </span>
-                            <span class="block h-3 w-24 shrink-0 organic-chip bg-[#163832]"></span>
-                        </div>
-                        <div class="organic-inner bg-[#163832] border border-[#8EB69B] p-4 flex items-center gap-4 md:gap-6">
-                            <span class="w-11 h-11 rounded-full border border-[#8EB69B]/60 bg-[#051F20] shrink-0"></span>
-                            <span class="block h-3 w-28 shrink-0 organic-chip bg-[#235347]"></span>
-                            <span class="flex-1"></span>
-                            <span class="block h-3 w-16 shrink-0 organic-chip bg-[#235347]"></span>
-                            <span class="hidden md:flex items-center gap-2 shrink-0">
-                                <span class="w-2.5 h-2.5 rounded-[3px] bg-[#DAF1DE]"></span>
-                                <span class="block h-3 w-24 organic-chip bg-[#235347]"></span>
-                            </span>
-                            <span class="block h-3 w-24 shrink-0 organic-chip bg-[#235347]"></span>
-                        </div>
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] p-4 flex items-center gap-4 md:gap-6">
-                            <span class="w-11 h-11 rounded-full border border-[#235347] bg-[#163832] shrink-0"></span>
-                            <span class="block h-3 w-28 shrink-0 organic-chip bg-[#163832]"></span>
-                            <span class="flex-1"></span>
-                            <span class="block h-3 w-16 shrink-0 organic-chip bg-[#163832]"></span>
-                            <span class="hidden md:flex items-center gap-2 shrink-0">
-                                <span class="w-2.5 h-2.5 rounded-[3px] bg-[#8EB69B]"></span>
-                                <span class="block h-3 w-24 organic-chip bg-[#163832]"></span>
-                            </span>
-                            <span class="block h-3 w-24 shrink-0 organic-chip bg-[#163832]"></span>
-                        </div>
+                    <div id="rationQueue" class="space-y-3">
+                        <span class="block text-[11px] text-[#8EB69B]">Nothing to serve yet.</span>
                     </div>
                 </div>
-
             </div>
 
             <div id="viewBlank" class="hidden">
@@ -1326,6 +1223,7 @@
             });
             if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
             if (wanted === 'viewSurplusAnalyser') { openMySurplus(); openSurplusForecast(); } else { closeMySurplus(); }
+            if (wanted === 'viewRationingAllocation') { openRationing(); } else { closeRationing(); }
             if (wanted === 'viewDashboard') { openDashboardOrders(); } else { closeDashboardOrders(); }
         }
 
@@ -2990,6 +2888,9 @@
                 renderOrdersFigure();
                 setChip('mySurplusState', rows.length ? rows.length + ' logged' : 'empty', CHIP_DONE);
                 renderMySurplus(rows, '');
+                // The analyser's category mix is read from these same rows: one read of the
+                // board feeds both the list under the form and the screen's own month.
+                loadCategoryMix(rows);
             });
         }
 
@@ -3130,6 +3031,9 @@
                 setChip('feedState', rows.length ? db.feedSummary(rows) : 'no posts',
                     rows.length ? CHIP_DONE : CHIP_IDLE);
                 renderFeed(rows, '');
+                // The board is one board, and this row of it filters the same read, so the
+                // analyser's mix is taken from the same answer rather than a second call.
+                loadCategoryMix(rows.filter(function (row) { return db.isOwnPost(row, donorName()); }));
             });
         }
 
@@ -3205,6 +3109,529 @@
                 feedUnwatch();
                 feedUnwatch = null;
             }
+        }
+
+        // ---------------------------------------------------------------------------
+        // The rationing pass, read from the donor's own side of it. The API computes the
+        // split — every claim on the board scored and each post divided between its
+        // claimants — and answers a donor with `owned`: one entry per item this account
+        // logged that somebody reached for, each carrying its claimants by name beside the
+        // ration each was allotted. Nothing here recomputes a share: the ring, the figures
+        // and the queue are all drawn from that one answer, so a slice cannot disagree with
+        // the kilogram it stands for.
+        //
+        // The pass can ask a model to read a claim's written half, so it runs when the
+        // screen is opened or when the button is pressed, and never on a timer: a screen
+        // left open should not spend a model call every few seconds.
+        // ---------------------------------------------------------------------------
+        var rationData = null;
+        var rationChosenPost = null;
+
+        // The ring's own palette: the site's ramp, mint through to the darkest green, so a
+        // slice is read against the panel rather than against a brightness nobody chose.
+        var RATION_SLICE_COLOURS = ['#DAF1DE', '#8EB69B', '#3C7A63', '#235347', '#164A3E'];
+
+        function setRationState(text, mode) {
+            var chip = document.getElementById('rationState');
+            if (!chip) { return; }
+            chip.textContent = text;
+            chip.className = 'organic-chip px-4 h-10 inline-flex items-center text-[10px] uppercase tracking-[0.2em] '
+                + (mode === 'busy'
+                    ? 'bg-[#051F20] border border-[#8EB69B] text-[#DAF1DE]'
+                    : 'bg-[#051F20] border border-[#235347] text-[#8EB69B]');
+        }
+
+        function rationBusy(busy) {
+            var button = document.getElementById('rationRunButton');
+            if (button) { button.disabled = !!busy; }
+        }
+
+        // One reading into the cards: the figure, the line under it, and the chip beside it.
+        function rationFigure(id, noteId, chipId, figure, note, chip) {
+            var value = document.getElementById(id);
+            var line = document.getElementById(noteId);
+            var tag = document.getElementById(chipId);
+            if (value) { value.textContent = figure; }
+            if (line && note) { line.textContent = note; }
+            if (tag && chip) { tag.textContent = chip; }
+        }
+
+        function loadRationing() {
+            var token = readStore(TOKEN_KEY);
+            if (!token) {
+                setRationState('no session', 'idle');
+                rationEmpty('This screen reads the pass for the signed-in account, so sign in again to see it.');
+                return;
+            }
+            setRationState('reading\u2026', 'busy');
+            rationBusy(true);
+            fetch(apiUrl('/api/rations'), { headers: { Authorization: 'Bearer ' + token } })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; })
+                        .then(function (data) { return { status: response.status, data: data }; });
+                })
+                .then(function (res) {
+                    rationBusy(false);
+                    if (res.status !== 200 || !res.data || !res.data.ok) {
+                        setRationState('unavailable', 'idle');
+                        rationEmpty((res.data && res.data.error) || 'The pass could not be reached.');
+                        return;
+                    }
+                    setRationState('read', 'idle');
+                    renderRationing(res.data);
+                })
+                .catch(function () {
+                    rationBusy(false);
+                    setRationState('offline', 'idle');
+                    rationEmpty('The pass could not be reached. Is the backend server running?');
+                });
+        }
+
+        function rationText(value) {
+            var db = resqDb();
+            return db ? db.escapeHtml(value) : String(value === null || value === undefined ? '' : value);
+        }
+
+        function rationKg(value) {
+            var number = Number(value);
+            if (!isFinite(number)) { return '\u2014'; }
+            return (Math.round(number * 10) / 10) + ' kg';
+        }
+
+        function rationPercent(value) {
+            var number = Number(value);
+            if (!isFinite(number)) { return '\u2014'; }
+            return (Math.round(number * 10) / 10) + '%';
+        }
+
+        // What the pass read a claim's written half with: the model, its own tables, or a
+        // model that was asked and did not answer — which is a different thing from no
+        // model being configured, and is said differently.
+        function rationReader(payload) {
+            var normalizer = payload.normalizer || {};
+            var model = normalizer.model || 'the model';
+            if (normalizer.mode === 'llm' && normalizer.answered) {
+                return { text: 'read by ' + model, note: 'quantities, perishability and need' };
+            }
+            if (normalizer.mode === 'llm') {
+                return { text: 'model silent', note: 'asked ' + model + '; the pass\'s own tables answered' };
+            }
+            return { text: 'pass\'s own tables', note: 'no model configured' };
+        }
+
+        // The selected post: the one last picked, or the busiest split on the list — the
+        // item the most shelters reached for, which is the one worth opening on.
+        function rationPost(payload) {
+            var posts = (payload && payload.owned) || [];
+            if (!posts.length) { return null; }
+            for (var i = 0; i < posts.length; i++) {
+                if (posts[i].post_id === rationChosenPost) { return posts[i]; }
+            }
+            return posts[0];
+        }
+
+        function chooseRationPost(postId) {
+            rationChosenPost = postId;
+            renderRationing(rationData);
+        }
+
+        function rationEmpty(message) {
+            rationFigure('rationItems', 'rationItemsNote', 'rationItemsChip', '0',
+                'items of yours a shelter has reached for', 'none');
+            rationFigure('rationShelters', 'rationSheltersNote', 'rationSheltersChip', '0',
+                'distinct shelters across those items', 'none');
+            rationFigure('rationKg', 'rationKgNote', 'rationReaderChip', '0 kg',
+                'kilograms the pass split between them', '\u2014');
+            var name = document.getElementById('rationPostName');
+            var line = document.getElementById('rationPostLine');
+            var pie = document.getElementById('rationPie');
+            var legend = document.getElementById('rationLegend');
+            var queue = document.getElementById('rationQueue');
+            var picker = document.getElementById('rationPostPicker');
+            if (name) { name.textContent = 'Nothing claimed yet'; }
+            if (line) { line.textContent = message || 'a split appears once a shelter claims an item this account logged'; }
+            if (picker) { picker.innerHTML = ''; }
+            if (pie) {
+                pie.innerHTML = '<div class="flex items-center justify-center h-[260px] organic-inner bg-[#0B2B26] border border-[#235347]">'
+                    + '<span class="text-xs text-[#8EB69B] px-6 text-center">' + rationText(message || 'no split to draw yet') + '</span></div>';
+            }
+            if (legend) {
+                legend.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
+                    + rationText(message || 'No shelter has reached for an item of yours yet.') + '</span>';
+            }
+            if (queue) {
+                queue.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">' + rationText(message || 'Nothing to serve yet.') + '</span>';
+            }
+            var pieNote = document.getElementById('rationPieNote');
+            var formula = document.getElementById('rationFormula');
+            if (pieNote) { pieNote.textContent = '\u2014'; }
+            if (formula) { formula.textContent = '\u2014'; }
+        }
+
+        function renderRationing(payload) {
+            rationData = payload;
+            var posts = (payload && payload.owned) || [];
+            var reader = rationReader(payload || {});
+
+            if (!posts.length) {
+                rationEmpty(payload && payload.note);
+                return;
+            }
+
+            var shelters = {};
+            var claims = 0;
+            var totalKg = 0;
+            posts.forEach(function (post) {
+                claims += post.claimants || 0;
+                (post.recipients || []).forEach(function (recipient) {
+                    totalKg += Number(recipient.ration_kg) || 0;
+                    if (recipient.claimant_name) { shelters[recipient.claimant_name] = true; }
+                });
+            });
+
+            rationFigure('rationItems', 'rationItemsNote', 'rationItemsChip', String(posts.length),
+                posts.length === 1 ? '1 item of yours a shelter has reached for' : posts.length + ' items of yours shelters have reached for',
+                claims + (claims === 1 ? ' claim' : ' claims'));
+            rationFigure('rationShelters', 'rationSheltersNote', 'rationSheltersChip',
+                String(Object.keys(shelters).length),
+                'distinct shelters across those items',
+                posts.length === 1 ? '1 item' : posts.length + ' items');
+            rationFigure('rationKg', 'rationKgNote', 'rationReaderChip', rationKg(totalKg),
+                'split between ' + Object.keys(shelters).length + ' shelters by the pass',
+                reader.text);
+
+            var post = rationPost(payload);
+            var name = document.getElementById('rationPostName');
+            var line = document.getElementById('rationPostLine');
+            if (name) { name.textContent = post.item_name || 'Untitled item'; }
+            if (line) {
+                line.textContent = (post.quantity || 'no quantity written')
+                    + ' \u00b7 ' + rationKg(post.total_kg) + ' altogether,'
+                    + ' read from the ' + (post.quantity_source === 'llm' ? 'model' : (post.quantity_source === 'text' ? 'written quantity' : 'category\'s own pack weight'))
+                    + ' \u00b7 ' + (post.claimants === 1 ? '1 shelter' : post.claimants + ' shelters');
+            }
+            renderRationPicker(posts);
+            renderRationPie(post);
+            renderRationLegend(post);
+            renderRationQueue(posts, payload);
+
+            var pieNote = document.getElementById('rationPieNote');
+            var formula = document.getElementById('rationFormula');
+            if (pieNote) {
+                pieNote.textContent = 'score = ' + (payload.formula || 'the pass\'s own weighted score')
+                    + ' \u00b7 ' + reader.note;
+            }
+            if (formula) { formula.textContent = reader.text; }
+        }
+
+        function renderRationPicker(posts) {
+            var picker = document.getElementById('rationPostPicker');
+            if (!picker) { return; }
+            if (posts.length < 2) { picker.innerHTML = ''; return; }
+            var chosen = rationPost(rationData);
+            picker.innerHTML = posts.map(function (post) {
+                var on = chosen && post.post_id === chosen.post_id;
+                var label = String(post.item_name || 'Untitled');
+                if (label.length > 22) { label = label.slice(0, 21) + '\u2026'; }
+                return '<button type="button" onclick="chooseRationPost(\'' + rationText(post.post_id) + '\')" '
+                    + 'class="organic-chip px-3.5 py-2 text-[10px] uppercase tracking-[0.15em] border transition-colors cursor-pointer '
+                    + (on ? 'bg-[#DAF1DE] text-[#051F20] border-[#DAF1DE]' : 'bg-[#051F20] text-[#8EB69B] border-[#235347] hover:text-[#DAF1DE]') + '">'
+                    + rationText(label) + ' \u00b7 ' + (post.claimants || 0) + ' shelters</button>';
+            }).join('');
+        }
+
+        // One slice of the ring, as a path: the outer arc one way and the inner arc back,
+        // so the ring is a shape rather than a stroke and the gaps between slices are real.
+        function rationSlicePath(cx, cy, rOuter, rInner, start, end) {
+            var large = (end - start) > Math.PI ? 1 : 0;
+            function point(radius, angle) {
+                return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+            }
+            var a = point(rOuter, start), b = point(rOuter, end);
+            var c = point(rInner, end), d = point(rInner, start);
+            return 'M' + a[0].toFixed(2) + ' ' + a[1].toFixed(2)
+                + ' A' + rOuter + ' ' + rOuter + ' 0 ' + large + ' 1 ' + b[0].toFixed(2) + ' ' + b[1].toFixed(2)
+                + ' L' + c[0].toFixed(2) + ' ' + c[1].toFixed(2)
+                + ' A' + rInner + ' ' + rInner + ' 0 ' + large + ' 0 ' + d[0].toFixed(2) + ' ' + d[1].toFixed(2) + ' Z';
+        }
+
+        // The ring, with every slice labelled outside it by the shelter it belongs to and
+        // the share it was allotted — who is getting how much, written on the chart itself
+        // rather than left to a legend. Labels on the same side are pushed apart so two
+        // adjacent shelters do not print on top of each other.
+        function renderRationPie(post) {
+            var holder = document.getElementById('rationPie');
+            if (!holder) { return; }
+            var recipients = (post && post.recipients) || [];
+            if (!recipients.length) {
+                holder.innerHTML = '<div class="flex items-center justify-center h-[260px] organic-inner bg-[#0B2B26] border border-[#235347]">'
+                    + '<span class="text-xs text-[#8EB69B]">No shelter reached for this item.</span></div>';
+                return;
+            }
+
+            var width = 460, height = 300;
+            var cx = width / 2, cy = height / 2;
+            var rOuter = 96, rInner = 56;
+            var total = recipients.reduce(function (sum, recipient) { return sum + (Number(recipient.ration_kg) || 0); }, 0) || 1;
+            var angle = -Math.PI / 2;
+            var slices = [];
+            var labelRight = null;
+            var labelLeft = null;
+
+            recipients.forEach(function (recipient, index) {
+                var share = (Number(recipient.ration_kg) || 0) / total;
+                var end = angle + share * Math.PI * 2;
+                var colour = RATION_SLICE_COLOURS[index % RATION_SLICE_COLOURS.length];
+                slices.push({ recipient: recipient, start: angle, end: end, colour: colour, share: share });
+
+                var mid = (angle + end) / 2;
+                var right = Math.cos(mid) >= 0;
+                var y = cy + Math.sin(mid) * (rOuter + 26);
+                var last = right ? labelRight : labelLeft;
+                if (last !== null && Math.abs(y - last) < 34) { y = last + (Math.sin(mid) >= 0 ? 34 : -34); }
+                var x = cx + Math.cos(mid) * (rOuter + 14);
+                slices[slices.length - 1].label = {
+                    x: right ? x : x,
+                    y: y,
+                    anchor: right ? 'start' : 'end'
+                };
+                if (right) { labelRight = y; } else { labelLeft = y; }
+                angle = end;
+            });
+
+            var paths = slices.map(function (slice) {
+                // One slice that is the whole post: a ring drawn as two halves, because an
+                // arc from an angle back to itself is a line and not the circle it means.
+                if (slice.share > 0.999) {
+                    var half = rationSlicePath(cx, cy, rOuter, rInner, slice.start, slice.start + Math.PI);
+                    var other = rationSlicePath(cx, cy, rOuter, rInner, slice.start + Math.PI, slice.start + Math.PI * 2);
+                    return '<path d="' + half + '" fill="' + slice.colour + '"></path>'
+                        + '<path d="' + other + '" fill="' + slice.colour + '"></path>';
+                }
+                return '<path d="' + rationSlicePath(cx, cy, rOuter, rInner, slice.start, slice.end)
+                    + '" fill="' + slice.colour + '" stroke="#051F20" stroke-width="1.5"></path>';
+            }).join('');
+
+            var labels = slices.map(function (slice) {
+                var label = slice.label || { x: cx, y: cy, anchor: 'start' };
+                var name = String(slice.recipient.claimant_name || 'Another shelter');
+                if (name.length > 20) { name = name.slice(0, 19) + '\u2026'; }
+                return '<text x="' + label.x.toFixed(1) + '" y="' + label.y.toFixed(1) + '" text-anchor="' + label.anchor + '" '
+                    + 'font-size="11" fill="#DAF1DE">' + rationText(name) + '</text>'
+                    + '<text x="' + label.x.toFixed(1) + '" y="' + (label.y + 13).toFixed(1) + '" text-anchor="' + label.anchor + '" '
+                    + 'font-size="10" fill="#8EB69B">' + rationKg(slice.recipient.ration_kg) + ' \u00b7 ' + rationPercent(slice.recipient.share_percent) + '</text>';
+            }).join('');
+
+            holder.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" class="w-full h-auto" role="img" '
+                + 'aria-label="Each shelter\'s share of the item">'
+                + paths + labels
+                + '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" font-size="11" fill="#8EB69B">' + rationKg(post.total_kg) + '</text>'
+                + '<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" font-size="10" fill="#8EB69B">between ' + recipients.length + '</text>'
+                + '</svg>';
+        }
+
+        // The same split written out: one row per shelter, with the address the delivery
+        // goes to, its distance from this kitchen and the score behind its share.
+        function renderRationLegend(post) {
+            var legend = document.getElementById('rationLegend');
+            if (!legend) { return; }
+            var recipients = (post && post.recipients) || [];
+            if (!recipients.length) {
+                legend.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">No shelter has reached for this item yet.</span>';
+                return;
+            }
+            var db = resqDb();
+            legend.innerHTML = recipients.map(function (recipient, index) {
+                var colour = RATION_SLICE_COLOURS[index % RATION_SLICE_COLOURS.length];
+                var details = [];
+                if (recipient.address) { details.push(recipient.address); }
+                if (recipient.distance_km !== null && recipient.distance_km !== undefined) {
+                    details.push(recipient.distance_km + ' km away');
+                }
+                details.push('rank ' + recipient.rank + ' of ' + recipients.length);
+                if (recipient.score && recipient.score.source === 'llm') { details.push('scored by the model'); }
+                return '<div class="organic-inner bg-[#0B2B26] border border-[#235347] p-3 flex items-center gap-3">'
+                    + '<span class="w-3 h-3 shrink-0 rounded-[3px]" style="background:' + colour + '"></span>'
+                    + '<div class="min-w-0 flex-1">'
+                    + '<span class="block text-sm text-[#DAF1DE] truncate">' + rationText(recipient.claimant_name || 'Another shelter') + '</span>'
+                    + '<span class="block text-[10px] text-[#8EB69B] truncate">' + rationText(details.join(' \u00b7 ')) + '</span>'
+                    + (recipient.reason ? '<span class="block text-[10px] text-[#8EB69B]/80 truncate">' + rationText(recipient.reason) + '</span>' : '')
+                    + '</div>'
+                    + '<span class="shrink-0 text-right">'
+                    + '<span class="block text-sm text-[#DAF1DE]">' + rationKg(recipient.ration_kg) + '</span>'
+                    + '<span class="block text-[10px] text-[#8EB69B]">' + rationPercent(recipient.share_percent) + '</span>'
+                    + '</span>'
+                    + '</div>';
+            }).join('');
+            if (db) { /* the shared client is only used for its escaper above */ }
+        }
+
+        // The queue: every claimant of every item this account logged, highest score first,
+        // which is the order a delivery round would serve them in.
+        function renderRationQueue(posts, payload) {
+            var list = document.getElementById('rationQueue');
+            var note = document.getElementById('rationQueueNote');
+            if (!list) { return; }
+            var entries = [];
+            posts.forEach(function (post) {
+                (post.recipients || []).forEach(function (recipient) {
+                    entries.push({ post: post, recipient: recipient });
+                });
+            });
+            entries.sort(function (a, b) {
+                var left = (a.recipient.score && a.recipient.score.total) || 0;
+                var right = (b.recipient.score && b.recipient.score.total) || 0;
+                return right - left;
+            });
+            if (note) {
+                note.textContent = entries.length
+                    ? entries.length + (entries.length === 1 ? ' shelter' : ' shelters') + ' waiting'
+                    : '\u2014';
+            }
+            if (!entries.length) {
+                list.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">Nothing to serve yet.</span>';
+                return;
+            }
+            list.innerHTML = entries.map(function (entry) {
+                var recipient = entry.recipient;
+                var post = entry.post;
+                var score = recipient.score || {};
+                return '<div class="organic-inner bg-[#0B2B26] border border-[#235347] p-4 flex flex-wrap items-center gap-4 md:gap-6">'
+                    + '<span class="w-11 h-11 rounded-full border border-[#235347] bg-[#163832] shrink-0 flex items-center justify-center text-[10px] uppercase tracking-widest text-[#8EB69B]">'
+                    + rationText((recipient.claimant_name || '?').slice(0, 2)) + '</span>'
+                    + '<div class="min-w-0">'
+                    + '<span class="block text-sm text-[#DAF1DE] truncate">' + rationText(recipient.claimant_name || 'Another shelter') + '</span>'
+                    + '<span class="block text-[10px] text-[#8EB69B] truncate">' + rationText(post.item_name || 'Untitled item')
+                    + ' \u00b7 ' + (post.goods_type ? rationText(goodsName(post.goods_type)) : 'untagged') + '</span>'
+                    + '</div>'
+                    + '<span class="flex-1"></span>'
+                    + '<span class="hidden sm:flex items-center gap-2 shrink-0">'
+                    + '<span class="w-2.5 h-2.5 rounded-[3px] bg-[#8EB69B]"></span>'
+                    + '<span class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">score ' + rationText(score.total === undefined ? '\u2014' : score.total) + '</span>'
+                    + '</span>'
+                    + '<span class="text-sm text-[#DAF1DE] shrink-0">' + rationKg(recipient.ration_kg) + '</span>'
+                    + '<span class="text-[10px] text-[#8EB69B] shrink-0">' + rationPercent(recipient.share_percent) + '</span>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function openRationing() {
+            loadRationing();
+        }
+
+        // ---------------------------------------------------------------------------
+        // The category mix: the last month of this kitchen's own board rows, weighed by the
+        // same reading of a written quantity the rationing pass uses. The rows are the ones
+        // the board gave this account a moment ago, and the summary is the API's — it owns
+        // the pack-weight table, so a bar here and a share on the rationing screen cannot
+        // disagree about what "4 trays" came to.
+        // ---------------------------------------------------------------------------
+        var mixBusy = false;
+
+        function goodsName(value) {
+            var db = resqDb();
+            var label = db && db.goodsLabel ? db.goodsLabel(value) : '';
+            return label || String(value || 'untagged').replace(/_/g, ' ');
+        }
+
+        function goodsEmoji(value) {
+            var types = goodsTypes();
+            for (var i = 0; i < types.length; i++) {
+                if (types[i].value === value) { return types[i].emoji || ''; }
+            }
+            return '';
+        }
+
+        function setMixNote(total, source) {
+            var line = document.getElementById('mixTotal');
+            var tag = document.getElementById('mixSource');
+            if (line && total) { line.textContent = total; }
+            if (tag && source) { tag.textContent = source; }
+        }
+
+        function mixMessage(text) {
+            var chart = document.getElementById('mixChart');
+            if (chart) {
+                chart.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">' + rationText(text) + '</span>';
+            }
+        }
+
+        function loadCategoryMix(rows) {
+            var chart = document.getElementById('mixChart');
+            if (!chart) { return; }
+            var token = readStore(TOKEN_KEY);
+            if (!token) {
+                mixMessage('Sign in again to read this month\u2019s mix.');
+                return;
+            }
+            if (mixBusy) { return; }
+            mixBusy = true;
+            mixMessage('Reading your last month on the board\u2026');
+            fetch(apiUrl('/api/surplus-categories'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify({ posts: rows || [], days: 30 })
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; })
+                        .then(function (data) { return { status: response.status, data: data }; });
+                })
+                .then(function (res) {
+                    mixBusy = false;
+                    if (res.status !== 200 || !res.data || !res.data.ok) {
+                        mixMessage((res.data && res.data.error) || 'The mix could not be read from the backend.');
+                        setMixNote('nothing read', '\u2014');
+                        return;
+                    }
+                    renderCategoryMix(res.data);
+                })
+                .catch(function () {
+                    mixBusy = false;
+                    mixMessage('The mix could not be read. Is the backend server running?');
+                    setMixNote('nothing read', '\u2014');
+                });
+        }
+
+        function renderCategoryMix(mix) {
+            var chart = document.getElementById('mixChart');
+            if (!chart) { return; }
+            var categories = (mix && mix.categories) || [];
+            setMixNote(
+                mix.counted
+                    ? mix.counted + (mix.counted === 1 ? ' item' : ' items') + ' \u00b7 ' + rationKg(mix.total_kg) + ' in ' + (mix.days || 30) + ' days'
+                    : 'nothing logged in the last ' + (mix.days || 30) + ' days',
+                mix.counted ? 'weighed by the pass\u2019s own pack table' : '\u2014');
+            if (!categories.length) {
+                mixMessage(mix.note || 'Nothing logged under this account in the last month, so there is no mix to read yet.');
+                return;
+            }
+            var heaviest = categories.reduce(function (max, entry) {
+                return Math.max(max, Number(entry.kg) || 0);
+            }, 0) || 1;
+            chart.innerHTML = categories.map(function (entry, index) {
+                var kg = Number(entry.kg) || 0;
+                var width = Math.max(4, Math.round((kg / heaviest) * 100));
+                var colour = RATION_SLICE_COLOURS[index % RATION_SLICE_COLOURS.length];
+                var emoji = goodsEmoji(entry.goods_type);
+                return '<div>'
+                    + '<div class="flex items-center justify-between gap-3 mb-1.5">'
+                    + '<span class="text-xs text-[#DAF1DE] truncate">'
+                    + (emoji ? '<span aria-hidden="true">' + emoji + '</span> ' : '')
+                    + rationText(goodsName(entry.goods_type))
+                    + '<span class="text-[#8EB69B]"> \u00b7 ' + entry.posts + (entry.posts === 1 ? ' item' : ' items') + '</span>'
+                    + '<span class="text-[#8EB69B]/70">' + (entry.quantity_source === 'assumed' ? ' \u00b7 assumed weight' : '') + '</span>'
+                    + '</span>'
+                    + '<span class="shrink-0 text-xs text-[#DAF1DE]">' + rationKg(kg) + ' \u00b7 ' + rationPercent(entry.share_percent) + '</span>'
+                    + '</div>'
+                    + '<div class="w-full h-2.5 organic-chip bg-[#0B2B26] border border-[#235347] overflow-hidden">'
+                    + '<div class="h-full organic-chip" style="width:' + width + '%; background:' + colour + '"></div>'
+                    + '</div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function closeRationing() {
+            rationData = null;
         }
 
     </script>

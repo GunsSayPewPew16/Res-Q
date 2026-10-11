@@ -142,7 +142,7 @@ the matching logic, and invites visitors into the flow above.
 | `backend/server.py` | Backend: serves the pages out of `frontend/` and the onboarding API (demo mode by default, SQLite when persistence is on). The HTTP handler and the routes; everything it calls lives in the topic modules beside it |
 | `frontend/res_q_homepage.html` | Onboarding — the role gate and the About You form, plus a copy of the marketing sections |
 | `frontend/res_q_surplus_profile.html` | The goods profile step both roles land on after onboarding |
-| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes, plus the delivery-location card |
+| `frontend/res_q_dashboard_donor.html` | Donor dashboard — post-profile landing page: a top rail of section tabs, the donor's own stored impact figures beside the delivery card, one light box headed *Pending orders* under its filter labels, the *Latest completed orders* cards, a *Feed* section that opens on the *Log surplus* compose box (item, quantity, the goods-category pill and the pickup address) and runs into the whole board read back, its three views being the whole board, a donor's own posts and the posts tagged with the goods they handle; the *Surplus Analyser* section reading only their own rows under the predictor layout's boxes — its second panel the last month's mix by goods category, weighed by the backend and labelled one bar per category — plus the delivery-location card; and the *Ongoing Deliveries* section, which is the rationing pass for this kitchen: three figures, a ring of one post's claimants with every slice labelled by shelter and share, and the queue under it |
 | `frontend/res_q_dashboard_recipient.html` | Recipient dashboard — the same arrangement for recipients, carrying the same top rail under its own section names (*Incoming Deliveries*, *Delivery Status*, *Received Deliveries*) and the same Dashboard screen with its own counters; its *Feed* section is that same live board in three views (all posts, open, and the posts tagged with the goods this recipient needs), with a claim button on every open post |
 | `frontend/resq_supabase.js` | The shared Supabase client and the `surplus_posts` calls both dashboards use: it lazy-loads the library on first use, reads, inserts and claims rows, streams changes, holds the six goods categories one time, and draws every post as the one shared card both roles see |
 | `supabase/migrations/20261008000000_create_surplus_posts.sql` | The `surplus_posts` table with its row level security policies, its claim-only update guard and its realtime publication entry — run once against the project |
@@ -843,7 +843,8 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
-| `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing. Only the caller's own ration and share are named — other claimants are a count |
+| `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing. Only the caller's own ration and share are named — other claimants are a count. The caller's own business name travels with the request, so a donor also gets `owned`: one entry per post of theirs a claim is on, with every claimant named beside its ration and share |
+| `POST` | `/api/surplus-categories` | The last month of the caller's own board rows, summarised by goods category: kilograms, post count, share of the total and whether the weight was read from the written quantity or assumed. The rows arrive in the body as `posts` (`400` `no_posts` without the key), with an optional `days` window (default 30, clamped to 1–365). Only rows carrying the caller's own business name, and only ones inside the window, are counted — the rest are reported as `skipped` |
 | `POST` | `/api/rations` | Run the same pass and publish the caller's own shares back to the board, writing `allocated_kg`, `allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at` onto each row it claimed — and nothing else about the row. Answers `503` `board_unconfigured` when `RESQ_SUPABASE_URL`/`RESQ_SUPABASE_KEY` are not set, and `200` with a per-post result otherwise — including when a row refuses the write, which the result says per post rather than failing the request |
 | `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
 | `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201` |
@@ -940,6 +941,22 @@ console reads that count rather than a list. The recipient console's three figur
 are that answer on screen: *Your ration*, *Share of the post* and *Weighted score*, with
 the three scores each total was built from under the last of them.
 
+**The one reader who sees the whole split is the donor of the post.** The item is theirs,
+the shelters are asking *them* for it, and where it went is the donor's own business rather
+than another claimant's — so the pass is told the caller's own business name and answers
+`owned`: one entry per post of theirs that a claim is on, each carrying every claimant's
+name beside the ration and share it was allotted, the address the delivery goes to, its
+distance from the kitchen, the rank that share came out of and, when a model read it, the
+model's own line. A post is filed under the name that logged it, so that name is the only
+thing a pass can tell whose post it is reading: the same comparison `accounts.account_by_business`
+already makes when it places a claim's pickup end. A caller nobody named — or one whose
+items nobody has reached for — gets an empty `owned` list and the recipient's reading of the
+same pass, which is what keeps a shelter from ever being handed another shelter's numbers.
+The donor's **Ongoing Deliveries** screen is that answer drawn: a ring whose slices are one
+post's claimants, every slice labelled with the shelter and the share it was allotted, over
+the same split written out in kilograms with the distance and score behind each one, and the
+queue under it in the order a round would serve them.
+
 The claims come from the API's own store (`backend/claims.py`): a shelter's claim is
 recorded by `POST /api/claims` against its own session, so a deployment keeps its claims the
 way it keeps its accounts — in the process in demo mode, in the `claims` table with
@@ -962,9 +979,22 @@ the item and the timestamp the claim guard freezes cannot be touched by it.
 
 A fresh deployment has no claims on its board yet, so `seed.py` carries one claimed post
 with three shelters on it — the fixture's own recipient among them — and the pass reads it
-for that one account only, which is what keeps the fixture's claimants out of a run that
-has claims of its own. That is what gives a deployment nobody has used yet a share that is
-not a hundred percent.
+for the two accounts it was written about: the shelter that claimed it, whose ration it is,
+and the kitchen whose item it was, which is the account that reads the whole split. Anybody
+else's pass reads the claims the board really has, which is what keeps the fixture's
+claimants out of a run that has claims of its own. That is what gives a deployment nobody
+has used yet a share that is not a hundred percent, and a split with three named shelters
+on it for the donor's own screen.
+
+`POST /api/surplus-categories` is the pass's own reading of a written quantity, borrowed
+for the other screen that asks what a month of surplus came to. The board is Supabase's and
+this API does not read it, so the donor's own rows arrive from the page and are summarised
+by the backend — kilograms per goods category, heaviest first, with the share each is of the
+total and whether a bar is a written quantity or the category's own assumed pack weight.
+Only rows the caller's own name is on, and only ones logged inside the window (thirty days
+by default, `days` in the body), are counted; a board row carries the timestamp Postgres
+wrote, an offset and fractional seconds, which the pass's own time reader now understands
+because a live claim's post is written in that shape too.
 
 How the pieces connect:
 

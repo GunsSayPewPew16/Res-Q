@@ -32,8 +32,9 @@ Endpoints
     GET  /api/matches               rank the counterparts near the account, nearest first
     GET  /api/orders                list the delivery orders the account is part of
     POST /api/orders                bind the account and one counterpart into an order
-    GET  /api/rations               the account's own ration of the posts it claimed
+    GET  /api/rations               the account's own ration, and a donor's own splits
     POST /api/rations               ration the account's claims and publish its shares
+    POST /api/surplus-categories    the account's own logged month, by goods category
     GET  /api/claims                the account's own claims, newest first
     POST /api/claims                record the account's claim on one board row
     GET  /api/history               the account's own logged days, and what they answer
@@ -118,9 +119,12 @@ from config import (
     METRIC_DECIMALS,
     PERSIST,
     PUBLIC_FIELDS,
+    RATION_PERCENT_DECIMALS,
     RECIPIENT_NEEDS,
     SEED_ON_START,
     STAMP_FORMAT,
+    SURPLUS_CATEGORIES_DAYS,
+    SURPLUS_CATEGORIES_MAX_POSTS,
     WEATHER_MAX_OUTLOOK_DAYS,
     WEATHER_OUTLOOK_DAYS,
 )
@@ -152,7 +156,13 @@ from orders import (
     order_row,
     remember_demo_order,
 )
-from rationing import gather_claims, rationing_pass
+from rationing import (
+    gather_claims,
+    hours_since,
+    parse_quantity,
+    rationing_pass,
+    same_business,
+)
 from seed import seed_test_accounts
 from supabase import (
     allocation_fields,
@@ -379,6 +389,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_claim_create()
         if path == "/api/rations":
             return self.api_rations_publish()
+        if path == "/api/surplus-categories":
+            return self.api_surplus_categories()
         if path == "/api/surplus-forecast":
             return self.api_surplus_forecast()
         if path == "/api/dev/switch-role":
@@ -1318,6 +1330,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
         another shelter's name and amount are never in the answer — with the queue the
         share came out of beside it, every other claimant named by count alone. This verb
         only reads: publishing a share to the board is the `POST` below.
+
+        The caller's own business name travels with it, because the one reader who is shown
+        the whole split is the donor: a post is filed under the name that logged it, so the
+        pass can tell which posts are the caller's and answer with their claimants named.
         """
         me, problem = self.session_account()
         if problem:
@@ -1328,18 +1344,33 @@ class ResQHandler(SimpleHTTPRequestHandler):
             with connect() as conn:
                 claims = gather_claims(me, conn)
 
-        payload = rationing_pass(claims, account_key(me))
+        payload = rationing_pass(claims, account_key(me), display_name(me))
         payload["ok"] = True
         payload["board"] = board_state()
         if not PERSIST:
             payload["demo"] = True
-        if not payload["allocations"]:
-            payload["note"] = (
-                "No surplus post is claimed under this account yet. A ration is a share of"
-                " an item more than one shelter asked for, so it appears here once this"
-                " account has claimed one on the board."
-            )
+        if not payload["allocations"] and not payload["owned"]:
+            payload["note"] = self.rationing_note(me)
         return self.send_json(200, payload)
+
+    def rationing_note(self, me):
+        """What a pass with nothing to show says, in the words of the side reading it.
+
+        A shelter sees a ration when an item it claimed was claimed by somebody else too,
+        and a donor sees a split when a shelter reaches for an item of theirs: the same
+        empty answer means two different next steps, so it is said differently to each.
+        """
+        if (me.get("role") or "") == "donor":
+            return (
+                "Nothing of yours has been claimed on the board yet. A split appears here"
+                " once a shelter claims an item this account logged — and only for the"
+                " items this account logged."
+            )
+        return (
+            "No surplus post is claimed under this account yet. A ration is a share of"
+            " an item more than one shelter asked for, so it appears here once this"
+            " account has claimed one on the board."
+        )
 
     def api_rations_publish(self):
         """Run the pass and write the caller's own shares back to the board.
@@ -1379,7 +1410,7 @@ class ResQHandler(SimpleHTTPRequestHandler):
             with connect() as conn:
                 claims = gather_claims(me, conn)
 
-        payload = rationing_pass(claims, account_key(me))
+        payload = rationing_pass(claims, account_key(me), display_name(me))
         written_at = stamp()
         results = []
         for allocation in payload["allocations"]:
@@ -1408,6 +1439,109 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "No surplus post is claimed under this account yet, so there is no share to"
                 " publish to the board."
             )
+        return self.send_json(200, payload)
+
+    def api_surplus_categories(self):
+        """The mix of what this account has logged, by category, over the last month.
+
+        The board is Supabase's and this API does not read it, so the rows arrive from the
+        page — the ones it read for its own account — and are summarised here rather than in
+        the browser, because the reading of a written quantity is the rationing pass's own:
+        "4 trays, still warm" weighs the same here as it does in a split, and a bar in this
+        chart and a share in that pie cannot disagree about what an item was worth.
+
+        Only rows this account's own name is on, and only ones logged inside the window, are
+        counted, so the answer is the account's own month whatever the page hands over. A
+        row with no readable date is counted rather than dropped: what is being read is what
+        this account logged, and a date the board did not write is no reason to hide it.
+        """
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        rows = data.get("posts")
+        if not isinstance(rows, list):
+            return self.send_json(
+                400,
+                {
+                    "error": "Send posts: the board rows this account logged.",
+                    "field": "posts",
+                    "code": "no_posts",
+                },
+            )
+
+        days = clean_id(data.get("days"))
+        if days is None:
+            days = SURPLUS_CATEGORIES_DAYS
+        days = max(1, min(365, days))
+        window_hours = days * 24.0
+
+        name = display_name(me)
+        categories = {}
+        counted = 0
+        skipped = 0
+        for row in rows[:SURPLUS_CATEGORIES_MAX_POSTS]:
+            if not isinstance(row, dict):
+                skipped += 1
+                continue
+            # Somebody else's row, however it got here: the board is public, and a summary
+            # is still this account's own.
+            if not same_business(row.get("donor_name"), name):
+                skipped += 1
+                continue
+            age = hours_since(row.get("created_at"))
+            if age is not None and age > window_hours:
+                skipped += 1
+                continue
+            goods_type = (row.get("goods_type") or "").strip().lower() or None
+            kg, source = parse_quantity(row.get("quantity"), goods_type)
+            bucket = categories.get(goods_type)
+            if bucket is None:
+                bucket = {"goods_type": goods_type, "posts": 0, "kg": 0.0,
+                          "sources": set()}
+                categories[goods_type] = bucket
+            bucket["posts"] += 1
+            bucket["kg"] = round(bucket["kg"] + kg, METRIC_DECIMALS)
+            bucket["sources"].add(source)
+            counted += 1
+
+        total_kg = round(sum(bucket["kg"] for bucket in categories.values()), METRIC_DECIMALS)
+        answer = []
+        for bucket in categories.values():
+            share = (bucket["kg"] / total_kg * 100.0) if total_kg else 0.0
+            answer.append({
+                "goods_type": bucket["goods_type"],
+                "label": (bucket["goods_type"] or "untagged").replace("_", " ").title(),
+                "posts": bucket["posts"],
+                "kg": bucket["kg"],
+                "share_percent": round(share, RATION_PERCENT_DECIMALS),
+                # A category whose items were all read from written packs is not the same
+                # reading as one that fell back to an assumed pack weight, so the answer
+                # says which of the two a bar is.
+                "quantity_source": ("text" if bucket["sources"] == {"text"} else "assumed"),
+            })
+        # Heaviest first, and ties broken by the key, so the same month charts the same way.
+        answer.sort(key=lambda entry: (-entry["kg"], entry["goods_type"] or ""))
+
+        payload = {
+            "ok": True,
+            "days": days,
+            "counted": counted,
+            "skipped": skipped,
+            "total_kg": total_kg,
+            "categories": answer,
+        }
+        if not counted:
+            payload["note"] = (
+                "Nothing logged under this account in the last %d days, so there is no mix"
+                " to read yet." % days
+            )
+        if not PERSIST:
+            payload["demo"] = True
         return self.send_json(200, payload)
 
     def api_order_create(self):

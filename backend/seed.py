@@ -548,6 +548,20 @@ def is_fixture_recipient(caller, conn=None):
     return test_account(email, conn) is not None
 
 
+def is_fixture_donor(caller, conn=None):
+    """Whether this account is the kitchen the fixture's claimed post belongs to.
+
+    The same rule from the other end: the fixture's post is the one item on the board with
+    demo claimants on it, and the account that posted it is the one account that may read
+    their names beside their rations. Anybody else's pass reads the claims the board really
+    has, which is what keeps the fixture out of a run with claims of its own.
+    """
+    email = clean_email((caller or {}).get("email"))
+    if not email or email != clean_email(TEST_CLAIM["donor_email"]):
+        return False
+    return test_account(email, conn) is not None
+
+
 def fixture_time(hours_ago, now):
     """A moment that many hours back, written the way the claim recorder writes one."""
     return (now - datetime.timedelta(hours=hours_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")

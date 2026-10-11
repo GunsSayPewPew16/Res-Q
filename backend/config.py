@@ -393,6 +393,14 @@ RATION_MAX_PAIRS = 40
 # A share is a percentage of a post, so one decimal is as fine as it is honest.
 RATION_PERCENT_DECIMALS = 1
 
+# The category mix a donor's own month is read as: the window the analyser counts over,
+# and the most board rows one request will weigh. The rows come from the page — the board
+# is Supabase's and this API does not read it — so the cap is what keeps one request from
+# asking for a summary of a whole year of posts.
+SURPLUS_CATEGORIES_DAYS = 30
+
+SURPLUS_CATEGORIES_MAX_POSTS = 500
+
 # Where the claim recorder writes what it records, and where the rationing pass reads the
 # same file from the other side of that boundary: one post, many claimants, tied together
 # by the post id each record carries. The API records claims itself now (`claims.py`), so

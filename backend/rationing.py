@@ -41,6 +41,13 @@ shelter's name or amount: the queue the answer carries names every other claiman
 alone, which is what lets a dashboard show "43% of the post, shared with 3 shelters"
 without handing one shelter another's business.
 
+The one reader who does see the whole split is the donor of the post. The item is theirs,
+the shelters are asking *them* for it, and where it went is the donor's own business rather
+than another claimant's: a pass told `owner_name` answers with `owned` — one entry per post
+that name has on the board, each carrying every claimant's name, ration and share. A pass
+nobody named an owner for, or one whose owner has no claimed posts, carries an empty list,
+so a shelter reading its own ration is never handed another's.
+
 **Where the claims come from.** A shelter's claim is recorded by the API itself
 (`claims.py`), so a deployment keeps claims the way it keeps its accounts: in the process in
 demo mode, in the `claims` table with persistence on, and in `claim_records.json` only when
@@ -197,7 +204,18 @@ def parse_time(value):
                 tzinfo=datetime.timezone.utc)
         except ValueError:
             continue
-    return None
+    # The board writes its own timestamps the way Postgres does — an offset and fractional
+    # seconds, `2026-10-11T05:06:59.245346+00:00` — which none of the shapes above cover.
+    # A live claim's post was written in that shape, so the one writer this project does
+    # not control is the one it would otherwise read as no time at all: a post's age, and
+    # with it how long a shelter waited for it, is read from here.
+    try:
+        parsed = datetime.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
 
 
 def hours_since(value, now=None):
@@ -535,6 +553,18 @@ def post_weight(post, refined):
     return local_kg, source
 
 
+def same_business(name, other):
+    """Whether two written business names are the same name, compared as names are.
+
+    A post carries its donor by business name and nothing else, so this is the only way a
+    pass can tell whose post it is reading. Case and surrounding space are not part of a
+    name: the board writes what the form was given, and the API knows the account it signed
+    in, and the two have to meet for a donor to be shown their own split.
+    """
+    return bool(name) and bool(other) and \
+        str(name).strip().lower() == str(other).strip().lower()
+
+
 def group_claims(claims):
     """The claims gathered into posts, in the order the posts were first seen.
 
@@ -579,13 +609,19 @@ def claimant_pair(post_entry, claim, now=None):
     }
 
 
-def rationing_pass(claims, caller_key, now=None):
+def rationing_pass(claims, caller_key, owner_name=None, now=None):
     """Score every claim, split every post, and answer with the caller's own ration.
 
     The answer carries the caller's allocations — their own ration and their own share of
     each post they claimed — and the queue those came out of, which names every other
     claimant by count alone. Ranked highest score first, because the order is the point:
     it is the order a delivery round would serve these claimants in.
+
+    `owner_name` is the caller's own business name, and naming it is what lets a donor read
+    the split of the posts that are theirs: those posts land in `owned`, one entry each,
+    with every claimant named beside the ration it was allotted. It is the caller's own name
+    rather than a flag, because the board files a post under the donor's name and that is
+    the only thing a claim carries about who logged it.
     """
     now = now or utcnow()
     posts = group_claims(claims)
@@ -607,11 +643,15 @@ def rationing_pass(claims, caller_key, now=None):
     posts_by_id, pairs_by_id, answered = model_refinements(posts, now)
 
     allocations = []
+    owned_posts = []
     queue = []
     for post_entry in posts:
         post = post_entry["post"]
         refined_post = posts_by_id.get(post.get("id")) or {}
         total_kg, weight_source = post_weight(post, refined_post)
+        # Whose post this is: the one reader who may be shown the whole split.
+        owned = same_business(post.get("donor_name"), owner_name)
+        splits = []
 
         scored = []
         for pair in post_entry["pairs"]:
@@ -680,9 +720,36 @@ def rationing_pass(claims, caller_key, now=None):
                 if pair["reason"]:
                     entry["reason"] = pair["reason"]
                 allocations.append(entry)
+            if owned:
+                # The donor of the item reads the whole split: who is getting how much of
+                # it, by name, which is the one view no shelter is ever handed.
+                entry["claimant_name"] = pair["name"]
+                entry["ration_kg"] = ration_kg
+                entry["share_percent"] = round(share * 100.0, RATION_PERCENT_DECIMALS)
+                entry["needs"] = list(pair["needs"])
+                entry["address"] = pair["address"]
+                entry["distance_km"] = pair["distance_km"]
+                if pair["reason"]:
+                    entry["reason"] = pair["reason"]
+                splits.append(entry)
             queue.append(entry)
 
+        if owned:
+            owned_posts.append({
+                "post_id": post.get("id"),
+                "item_name": post.get("item_name"),
+                "goods_type": post.get("goods_type"),
+                "quantity": post.get("quantity"),
+                "quantity_source": weight_source,
+                "location": post.get("location"),
+                "posted_at": post.get("created_at"),
+                "total_kg": total_kg,
+                "claimants": len(scored),
+                "recipients": splits,
+            })
+
     allocations.sort(key=lambda entry: (-entry["score"]["total"], entry["rank"]))
+    owned_posts.sort(key=lambda entry: (-entry["claimants"], entry["item_name"] or ""))
     return {
         "formula": RATION_FORMULA,
         "weights": dict(RATION_WEIGHTS),
@@ -690,6 +757,8 @@ def rationing_pass(claims, caller_key, now=None):
         "normalizer": dict(llm.describe(), answered=answered),
         "count": len(allocations),
         "allocations": allocations,
+        "owned": owned_posts,
+        "owner": owner_name or None,
         "queue": queue,
     }
 
@@ -746,6 +815,9 @@ def gather_claims(caller, conn=None):
         claim = claim_from_record(record, conn)
         if claim is not None:
             claims.append(claim)
-    if seed.is_fixture_recipient(caller, conn):
+    # The fixture's claimed post is read for the two accounts it was written about: the
+    # shelter that claimed it, whose ration it is, and the kitchen whose item it was, which
+    # is the account that reads the whole split.
+    if seed.is_fixture_recipient(caller, conn) or seed.is_fixture_donor(caller, conn):
         claims.extend(seed.claim_fixture(conn))
     return claims
