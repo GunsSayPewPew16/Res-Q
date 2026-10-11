@@ -2197,6 +2197,12 @@ def prepare_state():
                           seed_report["weather_from_pattern"]),
             flush=True,
         )
+    if seed_report["log_written"]:
+        print(
+            "  surplus log: %d entries filed — each kitchen's last month, by category"
+            % seed_report["log_written"],
+            flush=True,
+        )
     if seed_report["delivery"] is not None:
         print(
             "  delivery: order %s accepted, %s to %s"
