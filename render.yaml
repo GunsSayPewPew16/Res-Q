@@ -36,6 +36,23 @@ services:
       # the front-end's URL. `sync: false` means "ask me for this, don't store it here".
       - key: RESQ_ALLOWED_ORIGINS
         sync: false
+      # Where the board is, and a key to write one thing to it: the allocation the
+      # rationing pass works out for a shelter, published with `POST /api/rations`. The
+      # URL names the Supabase project and the key is either the publishable one — which
+      # goes through the table's policies, and those already allow that write — or a
+      # secret one, which bypasses them. Left unset, rations are computed and shown but
+      # nothing is published. `sync: false` means "ask me for these, don't store them
+      # here": a URL is as much a deployment's own as an origin is.
+      - key: RESQ_SUPABASE_URL
+        sync: false
+      - key: RESQ_SUPABASE_KEY
+        sync: false
+      # A model key for the rationing pass, optional in both directions: without it the
+      # pass reads the written half of a claim from its own tables instead. Set
+      # RESQ_LLM_MODEL and RESQ_LLM_BASE_URL as well to use a model or an endpoint other
+      # than the defaults (gpt-4o-mini at api.openai.com).
+      - key: RESQ_LLM_API_KEY
+        sync: false
       # A free instance's disk is ephemeral: anything written is gone on the next deploy,
       # restart or wake-up, so the deployment runs in demo mode — accounts, sessions and
       # the seeded logs live in the worker's memory for as long as it is up. Turn this to

@@ -53,6 +53,12 @@ DEMO_ORDER_SEQ = count(1)
 # database; with persistence on the same rows are the account's own rows in the table.
 DEMO_HISTORY = {}
 
+# The claims a demo run is holding, oldest first. A claim belongs to the two sides of a
+# board post — the donor who logged it and the shelter that reached for it — and not to the
+# session that made it, so like the delivery orders these live for the process rather than
+# for a token. With persistence on the same rows are the `claims` table's own.
+DEMO_CLAIMS = []
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,6 +80,8 @@ CREATE TABLE IF NOT EXISTS users (
     firm_type     TEXT,
     delivery_days TEXT,
     surplus_types TEXT,
+    occupancy     INTEGER,
+    business_name_changed_at TEXT,
     delivery_address TEXT,
     delivery_lat  REAL,
     delivery_lng  REAL,
@@ -108,6 +116,23 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (donor_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS claims (
+    -- One record per claim, in the shape the claim recorder wrote and the rationing pass
+    -- reads: the board row that was claimed, and who claimed it. The record is kept whole
+    -- in `payload` rather than spread across columns, because it is one shape shared by
+    -- four readers — the API, the recorder, the pass and the file — and a table that
+    -- mirrored every field would be a fifth place to keep in step. What the table adds is
+    -- what a query needs: the post it joins on, when it happened, and the claimant, so one
+    -- shelter cannot claim one post twice.
+    record_id    TEXT PRIMARY KEY,
+    post_id      TEXT NOT NULL,
+    claimant_key TEXT NOT NULL,
+    claimed_at   TEXT NOT NULL,
+    payload      TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (post_id, claimant_key)
 );
 
 CREATE TABLE IF NOT EXISTS surplus_history (
@@ -158,9 +183,10 @@ CORS_ALLOWED_HEADERS = "Authorization, Content-Type"
 CORS_MAX_AGE_SECONDS = 600
 
 PUBLIC_FIELDS = (
-    "id", "role", "first_name", "last_name", "business_name", "email", "phone",
+    "id", "role", "first_name", "last_name", "business_name",
+    "business_name_changed_at", "email", "phone",
     "dial_code", "street", "sub_locality", "locality", "province", "city",
-    "postal", "firm_type", "delivery_days", "surplus_types",
+    "postal", "firm_type", "delivery_days", "surplus_types", "occupancy",
     "delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at",
     "surplus_saved", "meals_served", "orders_completed",
     "created_at",
@@ -286,6 +312,29 @@ FIRM_SURPLUS = {
 # Every profile question takes at most two answers.
 MAX_PICKS = 2
 
+# The establishments a donor's goods profile offers. Named here because the goods profile
+# and the rule that vets its categories both read the same two words.
+FIRM_TYPES = ("retail", "eatery")
+
+# A shelter's occupancy: how many people it takes in. Asked of recipients only — a donor
+# has no shelter — and kept inside a range a real building could hold, so a slipped digit
+# is refused rather than stored.
+MIN_OCCUPANCY = 1
+
+MAX_OCCUPANCY = 100000
+
+# Both roles may rename their business, but each rename costs a month: the first is free,
+# and every one after it has to sit at least this far past the last. `business_name_changed_at`
+# is what the wait is measured from, and it rides back on the profile so the page can say
+# when the next change falls due.
+BUSINESS_NAME_MONTHS = 1
+
+MAX_BUSINESS_NAME_CHARS = 120
+
+# Timestamps this API writes are UTC and in the shape a browser reads back with `new
+# Date(...)` without help, which is what lets the page turn one into "in 23 days" itself.
+STAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
 # A delivery is worth proposing only when both sides have a point on the map: the donor's
 # pickup and the recipient's drop-off. Candidates are therefore filtered by distance from
 # the caller's own confirmed pin, must share at least one category, and are ranked
@@ -301,6 +350,120 @@ MAX_MATCH_LIMIT = 50
 KM_PER_DEGREE = 111.32
 
 EARTH_RADIUS_KM = 6371.0088
+
+# The rationing pass. When several shelters have claimed the same surplus post, no single
+# one of them gets the whole item: the post is split between its claimants in proportion
+# to how much each of them needs it, and this is the score that decides by how much.
+#
+# The formula is the project's own, and the three names are the fields the model is asked
+# to fill, so the arithmetic in `rationing.py` and the prompt it sends cannot drift apart:
+#
+#     (distance_score * 0.3) + (need_score * 0.4) + (expiry_urgency_multiplier * 3.0)
+#
+# Distance and need are weighted against each other; urgency is *multiplied* rather than
+# weighted, because it is the one term that changes what the goods are worth at all —
+# produce that spoils tonight is worth nothing tomorrow, and no distance is short enough
+# to save it. That is also why it carries the largest coefficient: it dominates a
+# comparison between two claims on food that is close to its end.
+RATION_WEIGHTS = {
+    "distance_score": 0.3,
+    "need_score": 0.4,
+    "expiry_urgency_multiplier": 3.0,
+}
+
+# The same formula as one line, so an answer can carry the arithmetic it used.
+RATION_FORMULA = "(distance_score * 0.3) + (need_score * 0.4) + (expiry_urgency_multiplier * 3.0)"
+
+# Distance is scored against the same radius a match is measured inside, so a claimant at
+# the edge of that radius scores nothing on the term and one at the donor's own door
+# scores all of it. Every score the formula takes is a fraction of one for this reason:
+# the three terms are only comparable if they are all on the same scale.
+RATION_DISTANCE_RADIUS_KM = DEFAULT_RADIUS_KM
+
+# What the pass is willing to believe a single post weighs, in kilograms. A quantity that
+# parses to more than this is a parsing accident rather than a pallet of food, so the
+# assumed pack weight stands in for it.
+RATION_MAX_POST_KG = 5000.0
+
+# How many claimant pairs one pass will show the model. A pass is one request, and a
+# request that carries a hundred claimants is a request the model answers slowly and
+# unevenly; anything past this is scored by the pass's own reading of the same fields.
+RATION_MAX_PAIRS = 40
+
+# A share is a percentage of a post, so one decimal is as fine as it is honest.
+RATION_PERCENT_DECIMALS = 1
+
+# Where the claim recorder writes what it records, and where the rationing pass reads the
+# same file from the other side of that boundary: one post, many claimants, tied together
+# by the post id each record carries. The API records claims itself now (`claims.py`), so
+# this file is no longer the only place they live — but a local run that used the
+# standalone recorder still has its claims read from here instead of them being lost.
+CLAIM_RECORDS_PATH = os.path.join(BACKEND_DIR, "claim_records.json")
+
+# The one claim shape. A claim is the board row that was claimed, in the six fields the
+# board itself carries, plus the shelter that reached for it — copied from the profile of
+# whoever was signed in rather than taken from the request, so a claim cannot be filed
+# against somebody else's account. Anything else a caller sends is dropped.
+CLAIM_POST_FIELDS = ("id", "donor_name", "item_name", "quantity", "location",
+                     "goods_type", "created_at")
+
+CLAIM_RECIPIENT_FIELDS = ("id", "first_name", "last_name", "business_name", "email",
+                          "phone", "dial_code", "city", "province", "postal",
+                          "delivery_address", "delivery_lat", "delivery_lng",
+                          "delivery_confirmed_at", "surplus_types", "delivery_days")
+
+# The columns the allocation is written back to on the board, and what they mean. The
+# rationing pass computes a share; publishing it is what puts that share in front of the
+# dohar who owns the goods as well as the shelter that gets them, on the row they are both
+# already looking at. `supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql`
+# adds them.
+ALLOCATION_FIELDS = ("allocated_kg", "allocation_percent", "allocation_score",
+                     "allocated_to", "allocated_at")
+
+# The board itself, for the one thing this backend ever writes to it. The pages hold the
+# publishable key and write the board directly; the API needs its own copy of the project's
+# URL and a key to publish an allocation with. Either key works and they differ in reach: a
+# publishable key goes through the table's row level security, whose update policy already
+# allows a claimed row's allocation to be written, while a secret (service) key bypasses
+# those policies and is the one to use when the board's policies are tightened later.
+# Nothing is published while these are unset, which is the default.
+SUPABASE_URL = (os.environ.get("RESQ_SUPABASE_URL")
+                or os.environ.get("SUPABASE_URL")
+                or "").strip().rstrip("/")
+
+SUPABASE_KEY = (os.environ.get("RESQ_SUPABASE_KEY")
+                or os.environ.get("RESQ_SUPABASE_SERVICE_KEY")
+                or os.environ.get("SUPABASE_SERVICE_KEY")
+                or "").strip()
+
+SUPABASE_TABLE = "surplus_posts"
+
+SUPABASE_TIMEOUT_SECONDS = 8
+
+# The model that reads the qualitative half of a claim: how much a written quantity comes
+# to, how perishable the item is, and how pressing a shelter's need looks. It is optional
+# by design — with no key configured the pass answers from its own reading of the same
+# fields, and a call that fails falls back to it the same way, so a ration is never held
+# up by a model being unavailable. Any OpenAI-compatible endpoint works: the base URL is
+# a setting, which is what lets a self-hosted or gateway endpoint stand in.
+LLM_API_KEY = (os.environ.get("RESQ_LLM_API_KEY")
+               or os.environ.get("OPENAI_API_KEY")
+               or "").strip()
+
+LLM_MODEL = os.environ.get("RESQ_LLM_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+LLM_BASE_URL = (os.environ.get("RESQ_LLM_BASE_URL", "https://api.openai.com/v1").strip()
+                or "https://api.openai.com/v1")
+
+# A rationing pass waits on the model rather than failing without it, but not for long:
+# the pass's own reading of the same fields is a perfectly good answer, so a model that
+# has not spoken within this many seconds is one the pass stops waiting for.
+LLM_TIMEOUT_SECONDS = 12
+
+# What the model is told to be. Temperature zero because the same claims should ration the
+# same way twice: a share that moved between two reads of one post would be a number
+# nobody could act on.
+LLM_TEMPERATURE = 0
 
 # An order starts life proposed. Until the status transitions land that is the only
 # status one can be in, and these are the two that stop a second order for the same pair
