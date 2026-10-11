@@ -426,12 +426,15 @@
                 </nav>
 
                 <div class="ml-auto flex items-center gap-2">
-                    <!-- The bell opens a small notification panel under itself instead of a
-                         browser alert. Nothing feeds the list yet, so it is left empty on
-                         purpose: the panel carries its own frame and nothing else. -->
+                    <!-- The bell beside the account pill: what the board has done to this
+                         kitchen's own items. A shelter reaching for a post logged here puts a
+                         claim in the list, and the dot on the bell is how many of them are
+                         still unread. The list is the rationing pass's own answer — the reading
+                         that names the claimants on a post of this account's — so a claim and
+                         the split it produced are read from one source. -->
                     <div id="notifyWrap" class="relative">
-                        <button type="button" id="notifyButton" onclick="toggleHeaderPanel(this)" aria-label="System notifications" aria-expanded="false" aria-controls="notifyPanel" class="w-11 h-11 organic-chip bg-[#051F20] border border-[#235347] text-[#8EB69B] hover:text-[#DAF1DE] hover:border-[#8EB69B] transition-all relative flex items-center justify-center">
-                            <span class="absolute top-3 right-3 w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
+                        <button type="button" id="notifyButton" onclick="toggleHeaderPanel(this)" aria-label="Notifications" aria-expanded="false" aria-controls="notifyPanel" class="w-11 h-11 organic-chip bg-[#051F20] border border-[#235347] text-[#8EB69B] hover:text-[#DAF1DE] hover:border-[#8EB69B] transition-all relative flex items-center justify-center">
+                            <span id="notifyDot" class="hidden absolute top-3 right-3 w-2 h-2 rounded-full bg-[#DAF1DE]"></span>
                             <span aria-hidden="true">🔔</span>
                         </button>
 
@@ -440,12 +443,17 @@
                         <div id="notifyPanel" data-header-panel role="dialog" aria-label="Notifications" class="hidden absolute right-0 top-full mt-4 w-80 max-w-[calc(100vw-2rem)] overflow-hidden organic-inner border border-[#235347] bg-[#051F20] shadow-2xl shadow-black/60">
                             <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-[#235347]">
                                 <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">Notifications</span>
-                                <span class="text-[10px] text-[#8EB69B]">00</span>
+                                <span id="notifyCount" class="text-[10px] text-[#8EB69B]">00</span>
                             </div>
                             <div class="p-4">
-                                <div class="h-32 organic-inner bg-[#0B2B26] border border-[#235347] flex items-center justify-center">
-                                    <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">No notifications yet</span>
+                                <!-- Filled by paintNotifications: one card per claimed item of
+                                     this account's, reading the split it now stands in and
+                                     opening that split when the card is followed. -->
+                                <div id="notifyList" class="space-y-2 max-h-[22rem] overflow-y-auto"></div>
+                                <div id="notifyEmpty" class="h-32 organic-inner bg-[#0B2B26] border border-[#235347] flex items-center justify-center px-4">
+                                    <span id="notifyEmptyText" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] text-center">No notifications yet</span>
                                 </div>
+                                <p id="notifyNote" class="mt-3 text-[10px] leading-relaxed text-[#8EB69B]/70"></p>
                             </div>
                         </div>
                     </div>
@@ -1152,6 +1160,9 @@
                     writeStore(ROLE_KEY, role);
                     setHome(dashboardFor(role) || 'index.html');
                     renderUser(user);
+                    // The bell's list, beside the name it belongs to: read once here, then
+                    // kept current by the claims stream and the slow backstop.
+                    startNotifications();
                     // The impact panel is this donor's own figures, straight from the profile.
                     renderDonorMetrics(user);
                     // The map overlay opens on the location this account confirmed, or on
@@ -1850,7 +1861,12 @@
             closeHeaderPanels();
             panel.classList.toggle('hidden', !opening);
             button.setAttribute('aria-expanded', opening ? 'true' : 'false');
-            if (opening) { positionHeaderPanel(panel); }
+            if (opening) {
+                positionHeaderPanel(panel);
+                // The bell's own panel is read as it opens rather than left showing a stale
+                // answer, and opening it is also what marks its list read.
+                if (panel.id === 'notifyPanel') { openNotifications(); }
+            }
         }
 
         // Rotating a phone, or resizing the window, re-checks whichever panel is open.
@@ -1859,6 +1875,231 @@
                 if (!panel.classList.contains('hidden')) { positionHeaderPanel(panel); }
             });
         });
+
+        // ---------------------------------------------------------------------------
+        // Notifications: what the board has done to this kitchen's own items.
+        //
+        // The bell beside the account pill carries every post of this account's a shelter
+        // has reached for, with the claimants the rationing pass named beside it. The list
+        // is that pass's own answer — /api/rations hands back the caller's own `owned`
+        // splits, one entry per post of theirs somebody claimed — so it is the reading the
+        // Ongoing Deliveries screen is drawn from, said in one line, and nothing is invented
+        // for an account the board has been quiet about.
+        //
+        // A post gaining another claimant is what makes a notification: an id is the post
+        // and how many shelters are on it, so a second shelter reaching for the same tray is
+        // news rather than a repaint of old news. The ids already read live in local storage,
+        // the dot on the bell is how many of the list are still unread, and opening the panel
+        // is what reads them.
+        // ---------------------------------------------------------------------------
+        var NOTIFY_SEEN_KEY = 'resqSeenNotificationsDonor';
+        // The bell is chrome, and the read behind it is the rationing pass's — the one that
+        // weighs claims and can spend a model call — so it is refreshed when something
+        // actually moves (a claim arriving, the panel opening, the tab coming back to the
+        // front) and on this slow backstop, rather than on the board's own faster beat.
+        var NOTIFY_REFRESH_MS = 300000;
+        var NOTIFY_EMPTY_NOTE = 'Nothing of yours has been claimed on the board yet.';
+
+        var notifyItems = [];
+        var notifyPoll = null;
+        var notifyUnwatch = null;
+        var notifyReading = false;
+
+        function notifyText(value) {
+            var db = resqDb();
+            return db ? db.escapeHtml(value) : String(value === null || value === undefined ? '' : value);
+        }
+
+        function notifyPad(count) {
+            return count < 10 ? '0' + count : String(count);
+        }
+
+        function notifySeenIds() {
+            try {
+                var parsed = JSON.parse(readStore(NOTIFY_SEEN_KEY) || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (err) {
+                return [];
+            }
+        }
+
+        // The last two hundred ids, oldest dropped: enough that an account keeps every
+        // notification it can still see, and bounded so storage does not grow forever.
+        function notifyRememberSeen(ids) {
+            writeStore(NOTIFY_SEEN_KEY, JSON.stringify(ids.slice(-200)));
+        }
+
+        // This kitchen's own claimed posts, as notifications. A post with nobody on it is
+        // skipped rather than shown as a claim nobody made.
+        function donorNotifications(payload) {
+            var items = [];
+            ((payload && payload.owned) || []).forEach(function (post) {
+                var claimants = Number(post.claimants) || 0;
+                if (!claimants || !post.post_id) { return; }
+                var named = (post.recipients || []).filter(function (recipient) {
+                    return recipient.claimant_name;
+                });
+                items.push({
+                    id: 'claimed:' + post.post_id + ':' + claimants,
+                    title: claimants === 1
+                        ? 'Your post was claimed'
+                        : claimants + ' shelters claimed your post',
+                    body: (post.item_name || 'An item') + ' \u00b7 ' + rationKg(post.total_kg)
+                        + ' to split between them',
+                    detail: named.map(function (recipient) {
+                        return recipient.claimant_name + ' ' + rationKg(recipient.ration_kg)
+                            + ' (' + rationPercent(recipient.share_percent) + ')';
+                    }).join(' \u00b7 '),
+                    view: 'ongoing-deliveries'
+                });
+            });
+            return items;
+        }
+
+        // The count on the panel, the dot on the bell and the cards themselves all read from
+        // one list: a card counts as unread until its own id has been read, and the dot is
+        // exactly those.
+        function paintNotifications(items, note) {
+            notifyItems = items;
+            var list = document.getElementById('notifyList');
+            var empty = document.getElementById('notifyEmpty');
+            var count = document.getElementById('notifyCount');
+            var noteEl = document.getElementById('notifyNote');
+            if (!list) { return; }
+            var seen = notifySeenIds();
+            list.innerHTML = items.map(function (item) {
+                var unread = seen.indexOf(item.id) === -1;
+                return '<button type="button" data-view="' + notifyText(item.view) + '"'
+                    + ' onclick="openNotifiedSection(this)"'
+                    + ' class="w-full text-left organic-inner border '
+                    + (unread ? 'border-[#8EB69B]' : 'border-[#235347]')
+                    + ' bg-[#0B2B26] p-3 hover:border-[#DAF1DE] transition-all">'
+                    + '<span class="flex items-start gap-2">'
+                    + '<span class="mt-1 w-1.5 h-1.5 rounded-full '
+                    + (unread ? 'bg-[#DAF1DE]' : 'bg-[#235347]') + ' shrink-0"></span>'
+                    + '<span class="min-w-0">'
+                    + '<span class="block text-xs text-[#DAF1DE]">' + notifyText(item.title) + '</span>'
+                    + '<span class="block text-[11px] text-[#8EB69B] mt-1">' + notifyText(item.body) + '</span>'
+                    + (item.detail
+                        ? '<span class="block text-[10px] text-[#8EB69B]/70 mt-1">'
+                            + notifyText(item.detail) + '</span>'
+                        : '')
+                    + '</span></span></button>';
+            }).join('');
+            if (empty) { empty.classList.toggle('hidden', items.length > 0); }
+            if (count) { count.textContent = notifyPad(items.length); }
+            if (noteEl) { noteEl.textContent = items.length ? '' : (note || NOTIFY_EMPTY_NOTE); }
+            notifyDot();
+        }
+
+        // The bell's dot and the label a screen reader reads are both the unread count, so a
+        // bell with nothing new on it wears nothing.
+        function notifyDot() {
+            var seen = notifySeenIds();
+            var unread = notifyItems.filter(function (item) {
+                return seen.indexOf(item.id) === -1;
+            }).length;
+            var dot = document.getElementById('notifyDot');
+            var button = document.getElementById('notifyButton');
+            if (dot) { dot.classList.toggle('hidden', unread === 0); }
+            if (button) {
+                button.setAttribute('aria-label', unread
+                    ? 'Notifications, ' + unread + ' unread'
+                    : 'Notifications');
+            }
+        }
+
+        function notifyMarkAllRead() {
+            var ids = notifySeenIds();
+            notifyItems.forEach(function (item) {
+                if (ids.indexOf(item.id) === -1) { ids.push(item.id); }
+            });
+            notifyRememberSeen(ids);
+            notifyDot();
+        }
+
+        // The list could not be read at all — a backend that is down, or a session that has
+        // gone. The panel says so rather than showing an empty box that reads like quiet.
+        function notifyUnreadable(message) {
+            notifyItems = [];
+            var list = document.getElementById('notifyList');
+            var empty = document.getElementById('notifyEmpty');
+            var text = document.getElementById('notifyEmptyText');
+            var count = document.getElementById('notifyCount');
+            var noteEl = document.getElementById('notifyNote');
+            if (list) { list.innerHTML = ''; }
+            if (empty) { empty.classList.remove('hidden'); }
+            if (text) { text.textContent = message || 'The board could not be read.'; }
+            if (count) { count.textContent = '\u2014'; }
+            if (noteEl) { noteEl.textContent = ''; }
+            notifyDot();
+        }
+
+        // One read of the pass, painted. `markRead` is set when the reader is looking at the
+        // list — the panel opening — rather than when the bell is only being kept current.
+        function loadNotifications(markRead) {
+            var token = readStore(TOKEN_KEY);
+            if (!token || notifyReading) { return; }
+            notifyReading = true;
+            return fetch(apiUrl('/api/rations'), {
+                headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    notifyReading = false;
+                    if (res.status !== 200 || !res.data || !res.data.ok) {
+                        notifyUnreadable((res.data && res.data.error) || 'The board could not be read.');
+                        return;
+                    }
+                    paintNotifications(donorNotifications(res.data), res.data.note);
+                    if (markRead) { notifyMarkAllRead(); }
+                })
+                .catch(function () {
+                    notifyReading = false;
+                    notifyUnreadable('The board could not be read. Is the backend server running?');
+                });
+        }
+
+        // Opening the panel reads the list afresh, and having it on screen is what reads it:
+        // the cards are marked read as they are shown, which is what clears the dot.
+        function openNotifications() {
+            if (notifyItems.length) { notifyMarkAllRead(); }
+            loadNotifications(true);
+        }
+
+        // A card opens the screen its notification is about — the split, for an item of this
+        // account's that a shelter reached for — with the panel closed behind it, since the
+        // notification has been read by the time it is followed.
+        function openNotifiedSection(element) {
+            var view = element && element.getAttribute('data-view');
+            closeHeaderPanels();
+            if (view) { openNavSection(view); }
+        }
+
+        // Started with the signed-in profile: the list is read once, then kept current by the
+        // claims stream, the backstop, and the tab coming back to the front.
+        function startNotifications() {
+            loadNotifications(false);
+            var db = resqDb();
+            if (db) {
+                if (!notifyUnwatch && db.watchClaims) {
+                    notifyUnwatch = db.watchClaims(function () { loadNotifications(false); });
+                }
+                if (!notifyPoll) {
+                    notifyPoll = window.setInterval(function () {
+                        loadNotifications(false);
+                    }, NOTIFY_REFRESH_MS);
+                }
+            }
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) { loadNotifications(false); }
+            });
+        }
+
 
         // ---------------------------------------------------------------------------
         // Account actions. Signing out drops the session on the backend — so the token is
