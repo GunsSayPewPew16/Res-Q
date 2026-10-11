@@ -937,6 +937,182 @@
             <!-- The remaining section screens: picking any other rail tab wipes the working
                  area and opens this blank frame, which carries the tone and nothing else until
                  that section has content of its own. -->
+            <!-- Rationing Allocation: what the Ongoing Deliveries tab opens now. The layout is
+                 the reference's three-up figures row, its weekly column chart and its recent
+                 orders table, rebuilt out of this site's own ramp — a mint surface, a sage one
+                 and the one gradient — rather than the reference's hues. Only the boxes are
+                 carried over: every reading, name and label is held open as a bare bar so the
+                 words can be set later without moving a box. -->
+            <div id="viewRationingAllocation" class="hidden space-y-6 md:space-y-8">
+
+                <!-- Title row: the section's name. -->
+                <div class="flex flex-wrap items-end justify-between gap-4">
+                    <div class="space-y-2">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Ongoing deliveries</span>
+                        <h1 class="font-display text-4xl md:text-5xl leading-none">Rationing Allocation</h1>
+                    </div>
+                </div>
+
+                <!-- The three figure cards. The reference reads light to vivid; here that is
+                     the mint surface, the sage one and the gradient, each keeping its own
+                     composition — a chip and a pill over a headline set over a wave. -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+
+                    <!-- Card one: the mint surface. -->
+                    <div class="surface-light p-6 md:p-7 flex flex-col justify-between gap-8 min-h-[200px]">
+                        <div class="flex items-start justify-between gap-4">
+                            <span class="w-10 h-10 organic-chip bg-[#051F20]/10 flex items-center justify-center">
+                                <span class="w-4 h-4 organic-chip bg-[#051F20]/70"></span>
+                            </span>
+                            <span class="organic-chip px-3.5 py-1.5 bg-[#051F20]/10">
+                                <span class="block h-2.5 w-10 organic-chip bg-[#051F20]/40"></span>
+                            </span>
+                        </div>
+                        <span class="block h-8 w-40 max-w-full organic-inner bg-[#051F20]/25"></span>
+                        <svg viewBox="0 0 200 40" preserveAspectRatio="none" class="w-full h-10 text-[#051F20]/60" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M2 30 C 20 24, 34 34, 52 26 S 86 12, 104 22 S 140 34, 158 20 S 186 8, 198 14"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Card two: the sage surface. -->
+                    <div class="bg-[#8EB69B] text-[#051F20] organic-block p-6 md:p-7 flex flex-col justify-between gap-8 min-h-[200px]">
+                        <div class="flex items-start justify-between gap-4">
+                            <span class="w-10 h-10 organic-chip bg-[#051F20]/12 flex items-center justify-center">
+                                <span class="w-4 h-4 organic-chip bg-[#051F20]/70"></span>
+                            </span>
+                            <span class="organic-chip px-3.5 py-1.5 bg-[#051F20]/12">
+                                <span class="block h-2.5 w-10 organic-chip bg-[#051F20]/40"></span>
+                            </span>
+                        </div>
+                        <span class="block h-8 w-40 max-w-full organic-inner bg-[#051F20]/25"></span>
+                        <svg viewBox="0 0 200 40" preserveAspectRatio="none" class="w-full h-10 text-[#051F20]/60" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M2 26 C 22 32, 36 18, 56 24 S 90 32, 108 18 S 144 10, 162 22 S 188 30, 198 16"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Card three: the gradient, the screen's vivid surface. -->
+                    <div class="gradient-banner p-6 md:p-7 flex flex-col justify-between gap-8 min-h-[200px]">
+                        <div class="space-y-4">
+                            <span class="block h-6 w-36 max-w-full organic-inner bg-[#051F20]/25"></span>
+                            <div class="space-y-2">
+                                <span class="block h-3 w-48 max-w-full organic-chip bg-[#051F20]/18"></span>
+                                <span class="block h-3 w-40 max-w-full organic-chip bg-[#051F20]/18"></span>
+                            </div>
+                        </div>
+                        <span class="self-start organic-chip px-6 py-2.5 bg-[#051F20]/12 border border-[#051F20]/20">
+                            <span class="block h-2.5 w-12 organic-chip bg-[#051F20]/50"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- The weekly column chart. Seven columns, each a track with the filled share
+                     sitting at its foot, the centre column carrying the tooltip and the dashed
+                     cursor in mint. Axis readings and the day row stay as bare bars. -->
+                <div class="panel p-6 md:p-8">
+                    <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
+                        <div class="space-y-3">
+                            <span class="block h-3 w-44 max-w-full organic-chip bg-[#163832]"></span>
+                            <span class="block h-8 w-28 organic-inner bg-[#163832]"></span>
+                        </div>
+                        <span class="block h-4 w-48 max-w-full organic-chip bg-[#163832]"></span>
+                    </div>
+
+                    <div class="flex gap-3 md:gap-5">
+                        <!-- Axis readings. -->
+                        <div class="flex flex-col justify-between h-56 shrink-0">
+                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
+                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
+                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
+                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
+                            <span class="block h-2.5 w-9 organic-chip bg-[#163832]"></span>
+                        </div>
+
+                        <!-- The columns, with the tooltip and the dashed cursor over the centre one. -->
+                        <div class="relative flex-1">
+                            <div class="absolute left-1/2 -translate-x-1/2 top-0 z-10 organic-inner bg-[#051F20] border border-[#235347] px-3 py-2">
+                                <span class="block h-3 w-14 organic-chip bg-[#8EB69B]"></span>
+                            </div>
+                            <div class="absolute left-1/2 top-0 bottom-0 border-l border-dashed border-[#8EB69B]/70" aria-hidden="true"></div>
+                            <div class="grid grid-cols-7 gap-2 md:gap-3 h-56 border-b border-[#235347] pb-px">
+                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 24%;"></div></div>
+                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 86%;"></div></div>
+                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#DAF1DE]" style="height: 96%;"></div></div>
+                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 40%;"></div></div>
+                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 30%;"></div></div>
+                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 80%;"></div></div>
+                                <div class="relative w-full organic-inner bg-[#163832] overflow-hidden"><div class="absolute inset-x-0 bottom-0 organic-inner bg-[#8EB69B]" style="height: 72%;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- The day row. -->
+                    <div class="flex gap-3 md:gap-5 mt-3">
+                        <span class="block w-9 shrink-0"></span>
+                        <div class="grid grid-cols-7 gap-2 md:gap-3 flex-1">
+                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
+                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
+                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
+                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
+                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
+                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
+                            <span class="block h-3 mx-auto w-8 max-w-full organic-chip bg-[#163832]"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent orders: the reference's table. A header row, then one row per order —
+                     an avatar, the name, the amount, the status dot and the date — with the
+                     middle row settled a rung up rather than onto a second light surface. -->
+                <div class="panel p-6 md:p-8">
+                    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                        <span class="block h-6 w-40 organic-inner bg-[#163832]"></span>
+                        <div class="flex items-center gap-3">
+                            <span class="organic-chip px-4 h-9 inline-flex items-center bg-[#051F20] border border-[#235347]">
+                                <span class="block h-2.5 w-36 organic-chip bg-[#163832]"></span>
+                            </span>
+                            <span class="block h-3 w-24 organic-chip bg-[#163832]"></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] p-4 flex items-center gap-4 md:gap-6">
+                            <span class="w-11 h-11 rounded-full border border-[#235347] bg-[#163832] shrink-0"></span>
+                            <span class="block h-3 w-28 shrink-0 organic-chip bg-[#163832]"></span>
+                            <span class="flex-1"></span>
+                            <span class="block h-3 w-16 shrink-0 organic-chip bg-[#163832]"></span>
+                            <span class="hidden md:flex items-center gap-2 shrink-0">
+                                <span class="w-2.5 h-2.5 rounded-[3px] bg-[#8EB69B]"></span>
+                                <span class="block h-3 w-24 organic-chip bg-[#163832]"></span>
+                            </span>
+                            <span class="block h-3 w-24 shrink-0 organic-chip bg-[#163832]"></span>
+                        </div>
+                        <div class="organic-inner bg-[#163832] border border-[#8EB69B] p-4 flex items-center gap-4 md:gap-6">
+                            <span class="w-11 h-11 rounded-full border border-[#8EB69B]/60 bg-[#051F20] shrink-0"></span>
+                            <span class="block h-3 w-28 shrink-0 organic-chip bg-[#235347]"></span>
+                            <span class="flex-1"></span>
+                            <span class="block h-3 w-16 shrink-0 organic-chip bg-[#235347]"></span>
+                            <span class="hidden md:flex items-center gap-2 shrink-0">
+                                <span class="w-2.5 h-2.5 rounded-[3px] bg-[#DAF1DE]"></span>
+                                <span class="block h-3 w-24 organic-chip bg-[#235347]"></span>
+                            </span>
+                            <span class="block h-3 w-24 shrink-0 organic-chip bg-[#235347]"></span>
+                        </div>
+                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] p-4 flex items-center gap-4 md:gap-6">
+                            <span class="w-11 h-11 rounded-full border border-[#235347] bg-[#163832] shrink-0"></span>
+                            <span class="block h-3 w-28 shrink-0 organic-chip bg-[#163832]"></span>
+                            <span class="flex-1"></span>
+                            <span class="block h-3 w-16 shrink-0 organic-chip bg-[#163832]"></span>
+                            <span class="hidden md:flex items-center gap-2 shrink-0">
+                                <span class="w-2.5 h-2.5 rounded-[3px] bg-[#8EB69B]"></span>
+                                <span class="block h-3 w-24 organic-chip bg-[#163832]"></span>
+                            </span>
+                            <span class="block h-3 w-24 shrink-0 organic-chip bg-[#163832]"></span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
             <div id="viewBlank" class="hidden">
                 <div class="panel p-6">
                     <div class="w-full min-h-[520px] organic-inner border border-[#235347] bg-[#0B2B26]"></div>
@@ -1137,9 +1313,10 @@
         var SECTION_VIEWS = {
             dashboard: 'viewDashboard',
             feed: 'viewFeed',
-            'surplus-analyser': 'viewSurplusAnalyser'
+            'surplus-analyser': 'viewSurplusAnalyser',
+            'ongoing-deliveries': 'viewRationingAllocation'
         };
-        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewSurplusAnalyser', 'viewBlank'];
+        var ALL_VIEWS = ['viewDashboard', 'viewFeed', 'viewSurplusAnalyser', 'viewRationingAllocation', 'viewBlank'];
 
         function showView(name) {
             var wanted = SECTION_VIEWS[name] || 'viewBlank';
