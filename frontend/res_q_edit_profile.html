@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Res-Q | Edit Personal Info</title>
+    <!-- Where the API is (see resq_api.js). Loaded first so every page builds its API URLs the same way. -->
+    <script src="resq_api.js"></script>
+    <!-- Crake is a commercial high-contrast serif by Narrow Type, so its webfonts are not
+         in this repository. The display stack asks for Crake first — an installed copy
+         wins, and a licensed woff2 dropped in beside these pages takes over with no other
+         edit — and falls back to Bodoni Moda, a free high-contrast serif of the same
+         family, so the screens can be judged before that licence is settled. Inter
+         carries the body, the labels and the data. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        /* The green ramp, named the way the dashboards name it. */
+                        ink: '#051F20',
+                        canvas: '#0B2B26',
+                        raised: '#163832',
+                        line: '#235347',
+                        sage: '#8EB69B',
+                        mint: '#DAF1DE'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        display: ['Crake', 'Bodoni Moda', 'ui-serif', 'Didot', 'Georgia', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* THE DASHBOARDS' SHAPE LANGUAGE: one canvas, derived radii, one hover gesture.
+           This screen is a placeholder — the rail and the frame are real, the working
+           area is deliberately empty until the profile form is built. */
+
+        :root {
+            --canvas-r: clamp(1.5rem, 3.5vw, 2.75rem);
+            --gutter: 0.75rem;
+            --step: 0.75rem;
+        }
+        @media (min-width: 768px) {
+            :root { --gutter: 1.25rem; --step: 0.9rem; }
+        }
+
+        .organic-canvas { border-radius: var(--canvas-r); }
+        .organic-block { border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter))); }
+        .organic-inner { border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step))); }
+        .organic-chip { border-radius: 9999px; }
+
+        .panel {
+            background-color: #051F20;
+            border: 1px solid #235347;
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+        }
+
+        .spark {
+            display: inline-block;
+            width: 0.9rem;
+            height: 0.9rem;
+            background: currentColor;
+            clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #051F20; }
+        ::-webkit-scrollbar-thumb { background: #235347; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8EB69B; }
+    </style>
+</head>
+<body class="bg-[#051F20] text-[#DAF1DE] font-sans antialiased selection:bg-[#DAF1DE] selection:text-[#051F20] min-h-screen p-3 md:p-5">
+
+    <!-- EDIT PERSONAL INFO: opened from the account menu on either dashboard. The frame
+         and the rail match the dashboards; the working area is intentionally empty for
+         now, ready for the profile form that will fill it. -->
+    <div class="organic-canvas bg-[#0B2B26] border border-[#235347] min-h-[calc(100vh-1.5rem)] md:min-h-[calc(100vh-2.5rem)] flex flex-col">
+
+        <!-- TOP RAIL: the brand on the left, the way back to the dashboard on the right. -->
+        <header class="sticky top-0 z-50 bg-[#0B2B26]/95 backdrop-blur-md border-b border-[#235347]"
+                style="border-top-left-radius: var(--canvas-r); border-top-right-radius: var(--canvas-r);">
+            <div class="w-full px-4 md:px-6 py-3 flex items-center gap-3">
+                <a href="index.html" class="brand-home organic-chip flex items-center gap-2.5 px-3.5 py-2 bg-[#051F20] border border-[#235347] hover:border-[#8EB69B] transition-colors">
+                    <span class="spark text-[#DAF1DE]" aria-hidden="true"></span>
+                    <span class="font-display text-xl leading-none">Res-Q</span>
+                </a>
+
+                <a href="res_q_dashboard_donor.html" id="backLink"
+                   class="ml-auto organic-chip inline-flex items-center gap-2 px-5 py-2.5 border border-[#235347] text-[#8EB69B] text-sm hover:border-[#8EB69B] hover:text-[#DAF1DE] transition-all">
+                    <span aria-hidden="true">&larr;</span> Back to dashboard
+                </a>
+            </div>
+        </header>
+
+        <main class="flex-1 w-full max-w-[1500px] mx-auto px-4 md:px-8 py-6 md:py-8">
+
+            <!-- Title row -->
+            <div class="space-y-2 mb-6 md:mb-8">
+                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Account settings</span>
+                <h1 class="font-display text-4xl md:text-5xl leading-none">Edit Personal Info</h1>
+            </div>
+
+            <!-- The working area: kept empty on purpose until the form is built. -->
+            <section class="panel p-8 md:p-12 min-h-[40vh] flex items-center justify-center">
+                <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]/70">Nothing here yet</span>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // The role travels in the query so the way back lands on the dashboard the visitor
+        // came from; the stored session settles it when no role is given.
+        (function resolveBack() {
+            var TOKEN_KEY = 'resqToken';
+            var ROLE_KEY = 'resqRole';
+            var DASHBOARDS = {
+                donor: 'res_q_dashboard_donor.html',
+                recipient: 'res_q_dashboard_recipient.html'
+            };
+
+            function readStore(key) {
+                try { return window.localStorage.getItem(key) || ''; } catch (err) { return ''; }
+            }
+
+            var match = window.location.search.match(/[?&]role=([^&]+)/);
+            var role = match ? decodeURIComponent(match[1]) : readStore(ROLE_KEY);
+            var target = DASHBOARDS[role] || 'index.html';
+
+            document.getElementById('backLink').setAttribute('href', target);
+            Array.prototype.forEach.call(document.querySelectorAll('.brand-home'), function (link) {
+                link.setAttribute('href', DASHBOARDS[role] || 'index.html');
+            });
+
+            // If there is no session at all, this screen has nothing to edit — send the
+            // visitor to sign in rather than leave a dead end.
+            if (!readStore(TOKEN_KEY)) {
+                window.location.replace('res_q_homepage.html');
+            }
+        })();
+    </script>
+</body>
+</html>
