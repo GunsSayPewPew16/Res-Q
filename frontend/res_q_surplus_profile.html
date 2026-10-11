@@ -370,6 +370,16 @@
                         </div>
                     </div>
 
+                    <!-- 03. Shelter occupancy (recipients): the same text box the business
+                         name uses, narrowed to digits because it is a count of people. -->
+                    <div id="occupancyStep" class="hidden">
+                        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+                            <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">03 · Shelter occupancy</span>
+                            <span class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]/70">how many people you take in</span>
+                        </div>
+                        <input id="occupancyInput" type="text" name="occupancy" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="e.g. 120" class="field">
+                    </div>
+
                     <p id="profileMessage" role="status" class="hidden text-xs rounded-xl px-5 py-4 leading-relaxed border"></p>
 
                     <button type="submit"
@@ -412,6 +422,7 @@
             var isRecipient = currentRole === 'recipient';
             document.getElementById('firmStep').classList.toggle('hidden', isRecipient);
             document.getElementById('dayStep').classList.toggle('hidden', !isRecipient);
+            document.getElementById('occupancyStep').classList.toggle('hidden', !isRecipient);
             document.getElementById('stepOneLabel').textContent = isRecipient
                 ? '01 · Preferred delivery days'
                 : '01 · Select firm classification';
@@ -542,6 +553,12 @@
             });
         });
 
+        // The occupancy is a count of people, so the box keeps digits and drops everything
+        // else as it is typed: the business name's own field, narrowed to numbers.
+        document.getElementById('occupancyInput').addEventListener('input', function () {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
         renderPicked();
 
         // Close the selector when clicking outside
@@ -656,6 +673,13 @@
                     return;
                 }
                 payload.deliveryDays = days;
+
+                var occupancy = document.getElementById('occupancyInput').value.trim();
+                if (!/^[0-9]+$/.test(occupancy) || Number(occupancy) < 1) {
+                    showProfileMessage('Enter how many people your shelter takes in — a whole number of 1 or more.');
+                    return;
+                }
+                payload.occupancy = Number(occupancy);
             } else {
                 var firmType = document.querySelector('input[name="firmType"]:checked');
                 if (!firmType) {

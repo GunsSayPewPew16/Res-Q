@@ -103,6 +103,9 @@ TEST_RECIPIENT = {
     "province": "Ontario", "postal": "M5V 3Z3",
     "needs": ("packaged_goods", "fresh_produce"),
     "delivery_days": ("tue", "thu"),
+    # How many people the shelter takes in, stated the way a real one states it, so the
+    # account settings screen opens on a number instead of a blank box.
+    "occupancy": 140,
     "lat": 43.6386, "lng": -79.4005,
 }
 
@@ -283,6 +286,10 @@ def donor_profile(donor, metrics=None):
         "firm_type": donor.get("firm_type"),
         "delivery_days": [],
         "surplus_types": list(donor["surplus_types"]),
+        # A donor has no shelter to state an occupancy for, and its name has never been
+        # changed, so both are present and empty the way every other account answers them.
+        "occupancy": None,
+        "business_name_changed_at": None,
         "delivery_address": account_address(donor),
         "delivery_lat": donor["lat"],
         "delivery_lng": donor["lng"],
@@ -320,6 +327,8 @@ def recipient_profile(recipient):
         "firm_type": None,
         "delivery_days": list(recipient["delivery_days"]),
         "surplus_types": list(recipient["needs"]),
+        "occupancy": recipient.get("occupancy"),
+        "business_name_changed_at": None,
         "delivery_address": account_address(recipient),
         "delivery_lat": recipient["lat"],
         "delivery_lng": recipient["lng"],
@@ -366,9 +375,10 @@ def store_profile(conn, profile):
                role, first_name, last_name, business_name, email, phone, dial_code,
                street, sub_locality, locality, province, city, postal,
                password_hash, password_salt, firm_type, delivery_days, surplus_types,
+               occupancy, business_name_changed_at,
                delivery_address, delivery_lat, delivery_lng, delivery_confirmed_at,
                surplus_saved, meals_served, orders_completed
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             profile["role"],
             profile["first_name"],
@@ -388,6 +398,8 @@ def store_profile(conn, profile):
             profile.get("firm_type"),
             json.dumps(profile.get("delivery_days") or []),
             json.dumps(profile.get("surplus_types") or []),
+            profile.get("occupancy"),
+            profile.get("business_name_changed_at"),
             profile.get("delivery_address"),
             profile.get("delivery_lat"),
             profile.get("delivery_lng"),

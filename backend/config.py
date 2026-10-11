@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS users (
     firm_type     TEXT,
     delivery_days TEXT,
     surplus_types TEXT,
+    occupancy     INTEGER,
+    business_name_changed_at TEXT,
     delivery_address TEXT,
     delivery_lat  REAL,
     delivery_lng  REAL,
@@ -181,9 +183,10 @@ CORS_ALLOWED_HEADERS = "Authorization, Content-Type"
 CORS_MAX_AGE_SECONDS = 600
 
 PUBLIC_FIELDS = (
-    "id", "role", "first_name", "last_name", "business_name", "email", "phone",
+    "id", "role", "first_name", "last_name", "business_name",
+    "business_name_changed_at", "email", "phone",
     "dial_code", "street", "sub_locality", "locality", "province", "city",
-    "postal", "firm_type", "delivery_days", "surplus_types",
+    "postal", "firm_type", "delivery_days", "surplus_types", "occupancy",
     "delivery_address", "delivery_lat", "delivery_lng", "delivery_confirmed_at",
     "surplus_saved", "meals_served", "orders_completed",
     "created_at",
@@ -296,6 +299,29 @@ FIRM_SURPLUS = {
 
 # Every profile question takes at most two answers.
 MAX_PICKS = 2
+
+# The establishments a donor's goods profile offers. Named here because the goods profile
+# and the rule that vets its categories both read the same two words.
+FIRM_TYPES = ("retail", "eatery")
+
+# A shelter's occupancy: how many people it takes in. Asked of recipients only — a donor
+# has no shelter — and kept inside a range a real building could hold, so a slipped digit
+# is refused rather than stored.
+MIN_OCCUPANCY = 1
+
+MAX_OCCUPANCY = 100000
+
+# Both roles may rename their business, but each rename costs a month: the first is free,
+# and every one after it has to sit at least this far past the last. `business_name_changed_at`
+# is what the wait is measured from, and it rides back on the profile so the page can say
+# when the next change falls due.
+BUSINESS_NAME_MONTHS = 1
+
+MAX_BUSINESS_NAME_CHARS = 120
+
+# Timestamps this API writes are UTC and in the shape a browser reads back with `new
+# Date(...)` without help, which is what lets the page turn one into "in 23 days" itself.
+STAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 # A delivery is worth proposing only when both sides have a point on the map: the donor's
 # pickup and the recipient's drop-off. Candidates are therefore filtered by distance from

@@ -47,6 +47,16 @@ def init_db():
         ):
             if column not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
+        # A shelter's occupancy and the moment the business name last changed arrived with
+        # the account settings screen. A profile from before them gets the columns here; its
+        # occupancy stays NULL until the shelter states one, and its name — never renamed —
+        # carries no timestamp, which is exactly what "the first change is free" reads.
+        for column, kind in (
+            ("occupancy", "INTEGER"),
+            ("business_name_changed_at", "TEXT"),
+        ):
+            if column not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN %s %s" % (column, kind))
         if "delivery_day" in columns or "surplus_type" in columns:
             old_day = "delivery_day" if "delivery_day" in columns else "NULL"
             old_type = "surplus_type" if "surplus_type" in columns else "NULL"

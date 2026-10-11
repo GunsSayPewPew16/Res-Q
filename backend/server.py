@@ -104,11 +104,13 @@ from config import (
     DONOR_SURPLUS,
     EMAIL_RE,
     FIRM_SURPLUS,
+    FIRM_TYPES,
     FRONTEND_DIR,
     HISTORY_READ_DAYS,
     LIST_FIELDS,
     LIVE_ORDER_STATUSES,
     MAX_ADDRESS_CHARS,
+    MAX_BUSINESS_NAME_CHARS,
     MAX_MATCH_LIMIT,
     MAX_PICKS,
     MAX_RADIUS_KM,
@@ -117,6 +119,7 @@ from config import (
     PUBLIC_FIELDS,
     RECIPIENT_NEEDS,
     SEED_ON_START,
+    STAMP_FORMAT,
     WEATHER_MAX_OUTLOOK_DAYS,
     WEATHER_OUTLOOK_DAYS,
 )
@@ -125,8 +128,10 @@ from geo import bounding_box, haversine_km, offset_point
 from history import as_day, features_from_history, history_summary, read_history
 from helpers import (
     account_key,
+    business_name_change_state,
     clean_email,
     clean_id,
+    clean_occupancy,
     clean_phone,
     clean_selection,
     decode_list,
@@ -135,6 +140,7 @@ from helpers import (
     origin_allowed,
     password_problem,
     query_number,
+    utc_stamp,
 )
 from claims import caller_claims, record_from_post, remember, stamp
 from matching import routing_problem, shared_categories
@@ -347,6 +353,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_logout()
         if path == "/api/profile":
             return self.api_profile()
+        if path == "/api/business-name":
+            return self.api_business_name()
         if path == "/api/delivery-location":
             return self.api_delivery_location()
         if path == "/api/orders":
@@ -453,6 +461,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 "firm_type": None,
                 "delivery_days": [],
                 "surplus_types": [],
+                # A shelter's occupancy is a recipient's own number and a donor's nothing,
+                # and the name has never been renamed, so neither carries a value yet.
+                "occupancy": None,
+                "business_name_changed_at": None,
                 "delivery_address": None,
                 "delivery_lat": None,
                 "delivery_lng": None,
@@ -1640,6 +1652,11 @@ class ResQHandler(SimpleHTTPRequestHandler):
         raw_types = data.get("surplusTypes", data.get("surplusType"))
         delivery_days = []
         surplus_types = []
+        occupancy = None
+        # The occupancy arrived with the shelter's own answers, but a caller from before it
+        # existed sends none. Reading it only when it is present is what lets an older page
+        # keep saving a profile without being forced to state a number it never asked for.
+        occupancy_given = "occupancy" in data
 
         if role == "recipient":
             days = clean_selection(raw_days, DELIVERY_DAYS)
@@ -1657,11 +1674,21 @@ class ResQHandler(SimpleHTTPRequestHandler):
                     400,
                     {"error": "Select up to 2 goods you need.", "field": "surplusTypes"},
                 )
+            if occupancy_given:
+                occupancy = clean_occupancy(data.get("occupancy"))
+                if occupancy is None:
+                    return self.send_json(
+                        400,
+                        {
+                            "error": "Enter how many people your shelter takes in — a whole number of 1 or more.",
+                            "field": "occupancy",
+                        },
+                    )
             firm_type = None
             delivery_days = days
             surplus_types = needs
         else:
-            if firm_type not in ("retail", "eatery"):
+            if firm_type not in FIRM_TYPES:
                 return self.send_json(
                     400,
                     {
@@ -1695,21 +1722,119 @@ class ResQHandler(SimpleHTTPRequestHandler):
             session_user["firm_type"] = firm_type
             session_user["delivery_days"] = delivery_days
             session_user["surplus_types"] = surplus_types
+            if occupancy_given and role == "recipient":
+                session_user["occupancy"] = occupancy
             return self.send_json(200, {"ok": True, "demo": True, "user": session_user})
+
+        # The occupancy is written only when the caller stated one, so a page that does not
+        # ask for it cannot blank a number another one already saved.
+        columns = ["firm_type = ?", "delivery_days = ?", "surplus_types = ?"]
+        values = [firm_type, json.dumps(delivery_days), json.dumps(surplus_types)]
+        if occupancy_given and role == "recipient":
+            columns.append("occupancy = ?")
+            values.append(occupancy)
+        values.append(session_user["id"])
 
         with connect() as conn:
             conn.execute(
-                "UPDATE users SET firm_type = ?, delivery_days = ?, surplus_types = ? WHERE id = ?",
-                (
-                    firm_type,
-                    json.dumps(delivery_days),
-                    json.dumps(surplus_types),
-                    session_user["id"],
-                ),
+                "UPDATE users SET %s WHERE id = ?" % ", ".join(columns),
+                tuple(values),
             )
             conn.commit()
             updated = conn.execute(
                 "SELECT * FROM users WHERE id = ?", (session_user["id"],)
+            ).fetchone()
+
+        return self.send_json(200, {"ok": True, "user": self.public_user(updated)})
+
+    def api_business_name(self):
+        """Rename the account's business, at most once a month.
+
+        The business name is what the dashboard greets the account by and what every match
+        is listed under, so it is the one profile field that is not free to rewrite: the
+        first change is allowed, and each one after it has to sit `BUSINESS_NAME_MONTHS`
+        past the last. The moment of the last change rides back on the profile as
+        `business_name_changed_at`, which is how the page knows to lock the field and when
+        to say the next change falls due.
+
+        Submitting the name the account already has is not a change at all, so it is
+        answered `200` without spending the month's allowance — otherwise merely opening
+        the screen and saving would cost the one rename the account had left.
+        """
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        token = self.bearer_token()
+        if not PERSIST:
+            user = DEMO_SESSIONS.get(token)
+            if user is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+        else:
+            with connect() as conn:
+                row = self.user_for_token(conn, token)
+            if row is None:
+                return self.send_json(
+                    401,
+                    {
+                        "error": "Your session has expired. Please sign in again.",
+                        "code": "no_session",
+                    },
+                )
+            user = self.public_user(row)
+
+        name = (data.get("businessName") or "").strip()
+        if not name:
+            return self.send_json(
+                400,
+                {"error": "Enter the name your business goes by.", "field": "businessName"},
+            )
+        if len(name) > MAX_BUSINESS_NAME_CHARS:
+            return self.send_json(
+                400,
+                {
+                    "error": "That name is too long — keep it under %d characters."
+                             % MAX_BUSINESS_NAME_CHARS,
+                    "field": "businessName",
+                },
+            )
+
+        if name == (user.get("business_name") or "").strip():
+            return self.send_json(200, {"ok": True, "unchanged": True, "user": user})
+
+        allowed, next_at = business_name_change_state(user.get("business_name_changed_at"))
+        if not allowed:
+            return self.send_json(
+                409,
+                {
+                    "error": "The business name can only be changed once a month.",
+                    "field": "businessName",
+                    "code": "name_locked",
+                    "nextAllowedAt": next_at.strftime(STAMP_FORMAT),
+                },
+            )
+
+        stamp = utc_stamp()
+
+        if not PERSIST:
+            user["business_name"] = name
+            user["business_name_changed_at"] = stamp
+            return self.send_json(200, {"ok": True, "demo": True, "user": user})
+
+        with connect() as conn:
+            conn.execute(
+                "UPDATE users SET business_name = ?, business_name_changed_at = ? WHERE id = ?",
+                (name, stamp, user["id"]),
+            )
+            conn.commit()
+            updated = conn.execute(
+                "SELECT * FROM users WHERE id = ?", (user["id"],)
             ).fetchone()
 
         return self.send_json(200, {"ok": True, "user": self.public_user(updated)})

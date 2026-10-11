@@ -7,10 +7,18 @@ naming helpers sit here too, because what an account is called on the dashboard
 is decided the same way everywhere.
 """
 
+import datetime
 import json
 import re
 
-from config import ALLOWED_ORIGINS, MAX_PICKS
+from config import (
+    ALLOWED_ORIGINS,
+    BUSINESS_NAME_MONTHS,
+    MAX_OCCUPANCY,
+    MAX_PICKS,
+    MIN_OCCUPANCY,
+    STAMP_FORMAT,
+)
 
 def clean_selection(value, allowed, limit=MAX_PICKS):
     """Normalise a 1..limit multi-select answer. None means it is not a valid answer.
@@ -148,6 +156,83 @@ def clean_id(value):
         if text.lstrip("+-").isdigit():
             return int(text)
     return None
+
+def clean_occupancy(value):
+    """A shelter's occupancy as a whole number, or None when it is not one.
+
+    The field is typed in, so it arrives as text; a value that is not a run of digits — a
+    sign, a decimal point, a stray letter — is not an occupancy and is refused rather than
+    quietly rounded. The range is the one config names, so a slipped digit is caught here
+    instead of becoming a shelter that claims a million beds.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text.isdigit():
+            return None
+        value = int(text)
+    elif isinstance(value, float):
+        if not value.is_integer():
+            return None
+        value = int(value)
+    if not isinstance(value, int):
+        return None
+    if value < MIN_OCCUPANCY or value > MAX_OCCUPANCY:
+        return None
+    return value
+
+
+def utc_stamp(now=None):
+    """The moment, written the way every timestamp this API stores is written."""
+    return (now or datetime.datetime.now(datetime.timezone.utc)).strftime(STAMP_FORMAT)
+
+
+def parse_stamp(value):
+    """A stored timestamp as an aware UTC datetime, or None when it is missing or unreadable."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
+
+
+def add_months(moment, months):
+    """The same day `months` calendar months on, pulled back when that day does not exist.
+
+    Counting in whole months is what "once a month" means: a change made on the 31st comes
+    due on the 28th of a short month rather than sliding by a fixed thirty days.
+    """
+    index = moment.month - 1 + months
+    year = moment.year + index // 12
+    month = index % 12 + 1
+    if month == 12:
+        last_day = 31
+    else:
+        last_day = (datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)).day
+    return moment.replace(year=year, month=month, day=min(moment.day, last_day))
+
+
+def business_name_change_state(last_changed, now=None):
+    """Whether the business name may change now, and when it may next, as `(allowed, at)`.
+
+    A profile that has never been renamed carries no timestamp, so its first change is
+    free and `at` is None. After that the name is held for `BUSINESS_NAME_MONTHS`, and `at`
+    is the moment it comes free — which is what the page counts down to.
+    """
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    last = parse_stamp(last_changed)
+    if last is None:
+        return True, None
+    next_at = add_months(last, BUSINESS_NAME_MONTHS)
+    if now >= next_at:
+        return True, None
+    return False, next_at
+
 
 def query_number(query, name, default, minimum, maximum):
     """Read a bounded numeric query parameter; None when it is not a number at all.

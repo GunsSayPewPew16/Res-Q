@@ -40,8 +40,8 @@
     </script>
     <style>
         /* THE DASHBOARDS' SHAPE LANGUAGE: one canvas, derived radii, one hover gesture.
-           This screen is a placeholder — the rail and the frame are real, the working
-           area is deliberately empty until the profile form is built. */
+           The sidebar is the same language read sideways — one rule between it and the
+           working area, and the section being read lit in mint like a rail tab. */
 
         :root {
             --canvas-r: clamp(1.5rem, 3.5vw, 2.75rem);
@@ -62,6 +62,12 @@
             border: 1px solid #235347;
             border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
         }
+        /* A block that sits one rung above the canvas rather than a panel on it. */
+        .panel-raised {
+            background-color: #163832;
+            border: 1px solid #235347;
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+        }
 
         .spark {
             display: inline-block;
@@ -71,6 +77,101 @@
             clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
         }
 
+        /* The sidebar's own tabs, in the rail's register: the one being read is lit, the
+           rest are their label and nothing else. */
+        .side-item {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            width: 100%;
+            text-align: left;
+            padding: 0.7rem 1rem;
+            font-size: 0.875rem;
+            color: #8EB69B;
+            border-radius: 9999px;
+            transition: color 0.3s ease, background-color 0.3s ease;
+            cursor: pointer;
+        }
+        .side-item:hover { color: #DAF1DE; }
+        .side-item.is-on {
+            background-color: #DAF1DE;
+            color: #051F20;
+        }
+        .side-item.is-on .side-dot { background-color: #051F20; }
+        .side-dot {
+            width: 0.4rem;
+            height: 0.4rem;
+            border-radius: 9999px;
+            background-color: #235347;
+            flex: none;
+            transition: background-color 0.3s ease;
+        }
+
+        /* Inputs: ink wells with mint focus, in the register the dashboards set. */
+        .field {
+            background-color: #051F20;
+            border: 1px solid #235347;
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+            padding: 1rem 1.25rem;
+            font-size: 0.875rem;
+            color: #DAF1DE;
+            transition: border-color 0.25s ease;
+            width: 100%;
+        }
+        .field::placeholder { color: #8EB69B; opacity: 0.8; }
+        .field:focus { outline: none; border-color: #8EB69B; }
+        .field:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Firm classification cards: a raised panel at rest, mint-filled ink text on
+           selection — the dashboards' claim-button treatment, never a colour inversion. */
+        .firm-card {
+            background-color: #163832;
+            border: 1px solid #235347;
+            border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
+            transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+        }
+        .firm-option:hover .firm-card {
+            border-color: #8EB69B;
+            transform: translateY(-2px);
+        }
+        .firm-option input:focus-visible + .firm-card {
+            box-shadow: 0 0 0 2px #8EB69B;
+        }
+        /* Placed after the hover rule so a picked card keeps its fill under the cursor. */
+        .firm-option input:checked + .firm-card {
+            background-color: #DAF1DE;
+            border-color: #DAF1DE;
+        }
+        .firm-option input:checked + .firm-card .firm-name { color: #051F20; }
+        .firm-option input:checked + .firm-card .firm-desc { color: rgba(5, 31, 32, 0.7); }
+        .firm-option input:checked + .firm-card .firm-icon { background-color: rgba(5, 31, 32, 0.08); }
+        .firm-option input:checked + .firm-card .firm-dot {
+            border-color: #051F20;
+            background-color: #051F20;
+        }
+        .firm-option input:checked + .firm-card .firm-dot-inner { opacity: 1; }
+
+        /* A picked row in the item selector: the choice is marked, not highlighted away. */
+        .resq-row[data-picked="true"] {
+            background-color: #163832;
+            box-shadow: inset 0 0 0 1px #8EB69B;
+        }
+        .resq-row[data-picked="true"]::after {
+            content: '✓';
+            margin-left: auto;
+            font-weight: 600;
+            color: #DAF1DE;
+        }
+
+        .resq-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #235347 #051F20;
+        }
+        .resq-scroll::-webkit-scrollbar { width: 6px; }
+        .resq-scroll::-webkit-scrollbar-track { background: #051F20; }
+        .resq-scroll::-webkit-scrollbar-thumb { background: #235347; border-radius: 3px; }
+        .resq-scroll::-webkit-scrollbar-thumb:hover { background: #8EB69B; }
+
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #051F20; }
         ::-webkit-scrollbar-thumb { background: #235347; border-radius: 3px; }
@@ -79,9 +180,12 @@
 </head>
 <body class="bg-[#051F20] text-[#DAF1DE] font-sans antialiased selection:bg-[#DAF1DE] selection:text-[#051F20] min-h-screen p-3 md:p-5">
 
-    <!-- EDIT PERSONAL INFO: opened from the account menu on either dashboard. The frame
-         and the rail match the dashboards; the working area is intentionally empty for
-         now, ready for the profile form that will fill it. -->
+    <!-- EDIT PERSONAL INFO: opened from the account menu on either dashboard. A sidebar
+         carries the sections and the working area holds the one being read. What the
+         profile section asks depends on the role: a donor restates their establishment and
+         surplus categories, a recipient their delivery days, the goods they need and how
+         many people their shelter takes in. The business name is its own section because it
+         is the one field with a limit on it — a month between changes. -->
     <div class="organic-canvas bg-[#0B2B26] border border-[#235347] min-h-[calc(100vh-1.5rem)] md:min-h-[calc(100vh-2.5rem)] flex flex-col">
 
         <!-- TOP RAIL: the brand on the left, the way back to the dashboard on the right. -->
@@ -100,51 +204,605 @@
             </div>
         </header>
 
-        <main class="flex-1 w-full max-w-[1500px] mx-auto px-4 md:px-8 py-6 md:py-8">
+        <!-- SIDEBAR + WORKING AREA. The sidebar is a column beside the work at md and up, and
+             a row of tabs above it on a phone, so the sections stay reachable either way. -->
+        <div class="flex-1 flex flex-col md:flex-row">
 
-            <!-- Title row -->
-            <div class="space-y-2 mb-6 md:mb-8">
-                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Account settings</span>
-                <h1 class="font-display text-4xl md:text-5xl leading-none">Edit Personal Info</h1>
-            </div>
+            <aside class="md:w-64 shrink-0 border-b md:border-b-0 md:border-r border-[#235347] p-4 md:p-5">
+                <span class="hidden md:block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] px-4 pb-3">Account settings</span>
 
-            <!-- The working area: kept empty on purpose until the form is built. -->
-            <section class="panel p-8 md:p-12 min-h-[40vh] flex items-center justify-center">
-                <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]/70">Nothing here yet</span>
-            </section>
+                <nav aria-label="Account sections" class="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible">
+                    <button type="button" data-section="profile" onclick="openSection('profile')" class="side-item is-on">
+                        <span class="side-dot" aria-hidden="true"></span>
+                        <span id="sideProfileLabel">Profile</span>
+                    </button>
+                    <button type="button" data-section="business" onclick="openSection('business')" class="side-item">
+                        <span class="side-dot" aria-hidden="true"></span>
+                        <span>Business name</span>
+                    </button>
+                </nav>
 
-        </main>
+                <!-- Who this screen belongs to, so the sidebar says whose settings are being
+                     edited rather than leaving it to be guessed from the dashboard behind it. -->
+                <div class="hidden md:block mt-6 px-4 py-4 panel-raised">
+                    <span class="block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]/70 mb-2">Signed in</span>
+                    <span id="sideAccountName" class="block text-sm text-[#DAF1DE] truncate">—</span>
+                    <span id="sideAccountRole" class="inline-flex mt-3 px-3 py-1 organic-chip bg-[#235347] text-[10px] uppercase tracking-[0.15em] text-[#DAF1DE]">—</span>
+                </div>
+            </aside>
+
+            <main class="flex-1 w-full px-4 md:px-8 py-6 md:py-8">
+
+                <div class="space-y-2 mb-6 md:mb-8">
+                    <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Account settings</span>
+                    <h1 class="font-display text-4xl md:text-5xl leading-none">Edit Personal Info</h1>
+                </div>
+
+                <!-- ============================================ SECTION: PROFILE -->
+                <section id="sectionProfile" class="panel p-6 md:p-8">
+
+                    <div class="mb-6">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Profile</span>
+                        <h2 id="profileHeading" class="font-display text-2xl md:text-3xl leading-none mt-2">Goods profile</h2>
+                        <p id="profileIntro" class="text-sm text-[#8EB69B] mt-2 max-w-xl"></p>
+                    </div>
+
+                    <div class="space-y-6 max-w-2xl">
+
+                        <!-- Donor: the establishment the surplus comes from -->
+                        <div id="firmStep" class="hidden">
+                            <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B] mb-4">01 · Firm classification</span>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label class="firm-option relative cursor-pointer group block">
+                                    <input type="radio" name="firmType" value="retail" class="peer sr-only" onchange="updateSurplusOptions('retail')">
+                                    <div class="firm-card p-5 flex items-center justify-between">
+                                        <div class="flex items-center gap-4 min-w-0">
+                                            <div class="firm-icon w-12 h-12 shrink-0 rounded-xl bg-[#051F20] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🏬</div>
+                                            <div class="min-w-0">
+                                                <span class="firm-name block text-base font-medium text-[#DAF1DE]">Retail Store</span>
+                                                <span class="firm-desc block text-xs text-[#8EB69B]">Supermarket, grocery, or convenience store</span>
+                                            </div>
+                                        </div>
+                                        <div class="firm-dot w-6 h-6 shrink-0 rounded-full border border-[#8EB69B] flex items-center justify-center transition-all">
+                                            <div class="firm-dot-inner w-2 h-2 rounded-full bg-[#DAF1DE] opacity-0 transition-opacity"></div>
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label class="firm-option relative cursor-pointer group block">
+                                    <input type="radio" name="firmType" value="eatery" class="peer sr-only" onchange="updateSurplusOptions('eatery')">
+                                    <div class="firm-card p-5 flex items-center justify-between">
+                                        <div class="flex items-center gap-4 min-w-0">
+                                            <div class="firm-icon w-12 h-12 shrink-0 rounded-xl bg-[#051F20] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🍲</div>
+                                            <div class="min-w-0">
+                                                <span class="firm-name block text-base font-medium text-[#DAF1DE]">Eatery / Restaurant</span>
+                                                <span class="firm-desc block text-xs text-[#8EB69B]">Kitchen, bakery, cafe, or dining hall</span>
+                                            </div>
+                                        </div>
+                                        <div class="firm-dot w-6 h-6 shrink-0 rounded-full border border-[#8EB69B] flex items-center justify-center transition-all">
+                                            <div class="firm-dot-inner w-2 h-2 rounded-full bg-[#DAF1DE] opacity-0 transition-opacity"></div>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Recipient: the days deliveries are wanted on -->
+                        <div id="dayStep" class="hidden">
+                            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">01 · Preferred delivery days</span>
+                                <span class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]/70">pick a maximum of 2 days</span>
+                            </div>
+                            <div class="grid grid-cols-4 sm:grid-cols-7 gap-2" id="dayChips"></div>
+                        </div>
+
+                        <!-- Both: the categories on the profile, from the onboarding's own dropdown -->
+                        <div>
+                            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+                                <span id="categoryStepLabel" class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">02 · Usual surplus categories</span>
+                                <span class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]/70">pick a maximum of 2</span>
+                            </div>
+
+                            <div class="relative">
+                                <div id="categoryTrigger" onclick="toggleDropdown()" role="button" tabindex="0" aria-haspopup="listbox"
+                                    class="field cursor-pointer flex items-center justify-between gap-3">
+                                    <div id="categoryDisplay" class="flex items-center gap-3 text-[#8EB69B] min-w-0"></div>
+                                    <span id="categoryArrow" class="text-[#8EB69B] text-xs transform transition-transform duration-200">▼</span>
+                                </div>
+
+                                <div id="categoryMenu" class="hidden absolute top-full left-0 right-0 mt-2 bg-[#051F20] border border-[#235347] organic-inner shadow-2xl shadow-black/60 z-50 overflow-hidden">
+                                    <div id="categoryList" role="listbox" aria-multiselectable="true" class="resq-scroll p-2 space-y-1 max-h-[212px] overflow-y-auto text-sm"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipient: how many people the shelter takes in -->
+                        <div id="occupancyRow" class="hidden">
+                            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+                                <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">03 · Shelter occupancy</span>
+                                <span class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]/70">how many people you take in</span>
+                            </div>
+                            <input id="occupancyInput" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="e.g. 120" class="field">
+                        </div>
+
+                        <p id="profileMessage" role="status" class="hidden text-xs rounded-xl px-5 py-4 leading-relaxed border"></p>
+
+                        <button type="button" id="saveProfile" onclick="saveProfile()"
+                            class="organic-chip inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all cursor-pointer">
+                            Save profile <span aria-hidden="true">&rarr;</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- ====================================== SECTION: BUSINESS NAME -->
+                <section id="sectionBusiness" class="panel p-6 md:p-8 hidden">
+
+                    <div class="mb-6">
+                        <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Business name</span>
+                        <h2 class="font-display text-2xl md:text-3xl leading-none mt-2">What we call you</h2>
+                        <p class="text-sm text-[#8EB69B] mt-2 max-w-xl">This is the name every match and delivery is listed under. It can be changed once a month, and each change starts the wait again.</p>
+                    </div>
+
+                    <div class="space-y-6 max-w-2xl">
+                        <input id="businessNameInput" type="text" autocomplete="organization" maxlength="120" placeholder="Business name" class="field">
+
+                        <!-- Last-changed line: when it moved, and when it comes free again. -->
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-4 panel-raised" id="nameRuleBox">
+                            <span class="side-dot" aria-hidden="true"></span>
+                            <span id="nameRuleText" class="text-xs text-[#8EB69B]">Loading…</span>
+                        </div>
+
+                        <p id="businessMessage" role="status" class="hidden text-xs rounded-xl px-5 py-4 leading-relaxed border"></p>
+
+                        <button type="button" id="saveBusiness" onclick="saveBusinessName()"
+                            class="organic-chip inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all cursor-pointer">
+                            Update name <span aria-hidden="true">&rarr;</span>
+                        </button>
+                    </div>
+                </section>
+
+            </main>
+        </div>
     </div>
 
     <script>
-        // The role travels in the query so the way back lands on the dashboard the visitor
-        // came from; the stored session settles it when no role is given.
-        (function resolveBack() {
-            var TOKEN_KEY = 'resqToken';
-            var ROLE_KEY = 'resqRole';
-            var DASHBOARDS = {
-                donor: 'res_q_dashboard_donor.html',
-                recipient: 'res_q_dashboard_recipient.html'
-            };
+        // ---------------------------------------------------------------- vocabulary
+        // The same dropdown the onboarding's third step builds, described once here so the
+        // rows, the trigger and the firm narrowing all read from one list.
+        var CATEGORIES = [
+            { value: 'prepared_meals', label: 'Prepared Meals', icon: '🍲', desc: 'Cooked dishes, catered trays, hot meals' },
+            { value: 'fresh_produce', label: 'Fresh Produce', icon: '🥦', desc: 'Fruits, vegetables, leafy greens' },
+            { value: 'bakery_items', label: 'Bakery Items', icon: '🥐', desc: 'Breads, pastries, cakes, daily bake', donorOnly: true },
+            { value: 'packaged_goods', label: 'Packaged Goods', icon: '📦', desc: 'Canned food, dry goods, snacks' },
+            { value: 'dairy_beverages', label: 'Dairy & Beverages', icon: '🥛', desc: 'Milk, yogurt, juices, bottled drinks' },
+            { value: 'household_essentials', label: 'Household & Essentials', icon: '🧴', desc: 'Hygiene kits, soap, blankets, paper goods' }
+        ];
 
-            function readStore(key) {
-                try { return window.localStorage.getItem(key) || ''; } catch (err) { return ''; }
+        // Which establishment may hand over which category — the rule the onboarding applies
+        // to its list, so the same two words cannot pick the same category here.
+        var FIRM_SURPLUS = {
+            prepared_meals: ['retail', 'eatery'],
+            fresh_produce: ['retail'],
+            bakery_items: ['retail', 'eatery'],
+            packaged_goods: ['retail'],
+            dairy_beverages: ['retail', 'eatery'],
+            household_essentials: ['retail']
+        };
+
+        var DAYS = [
+            { value: 'sat', label: 'SAT' }, { value: 'sun', label: 'SUN' },
+            { value: 'mon', label: 'MON' }, { value: 'tue', label: 'TUE' },
+            { value: 'wed', label: 'WED' }, { value: 'thu', label: 'THU' },
+            { value: 'fri', label: 'FRI' }
+        ];
+
+        var MAX_PICKS = 2;
+
+        // ---------------------------------------------------------------- session
+        var TOKEN_KEY = 'resqToken';
+        var ROLE_KEY = 'resqRole';
+        var DASHBOARDS = {
+            donor: 'res_q_dashboard_donor.html',
+            recipient: 'res_q_dashboard_recipient.html'
+        };
+        var OFFLINE = 'Could not reach the Res-Q service, so nothing was saved. Try again in a moment.';
+
+        function readStore(key) {
+            try { return window.localStorage.getItem(key) || ''; } catch (err) { return ''; }
+        }
+
+        var state = {
+            token: readStore(TOKEN_KEY),
+            user: null,
+            role: '',
+            picked: [],
+            firmType: ''
+        };
+
+        function api(path, options) {
+            var opts = options || {};
+            var headers = { 'Content-Type': 'application/json' };
+            if (state.token) { headers.Authorization = 'Bearer ' + state.token; }
+            return fetch(window.apiUrl(path), {
+                method: opts.method || 'POST',
+                headers: headers,
+                body: opts.body ? JSON.stringify(opts.body) : undefined
+            }).then(function (response) {
+                return response.json().catch(function () { return {}; }).then(function (data) {
+                    return { status: response.status, data: data };
+                });
+            });
+        }
+
+        function showMessage(el, text, tone) {
+            el.textContent = text;
+            el.className = 'text-xs rounded-xl px-5 py-4 leading-relaxed border ' +
+                (tone === 'ok'
+                    ? 'text-[#DAF1DE] border-[#DAF1DE]/40 bg-[#DAF1DE]/5'
+                    : 'text-[#DAF1DE] border-[#8EB69B]/50 bg-[#8EB69B]/5');
+        }
+        function hideMessage(el) {
+            el.textContent = '';
+            el.className = 'hidden';
+        }
+
+        // ------------------------------------------------------------- sidebar
+        function openSection(name) {
+            Array.prototype.forEach.call(document.querySelectorAll('[data-section]'), function (button) {
+                button.classList.toggle('is-on', button.getAttribute('data-section') === name);
+            });
+            document.getElementById('sectionProfile').classList.toggle('hidden', name !== 'profile');
+            document.getElementById('sectionBusiness').classList.toggle('hidden', name !== 'business');
+            window.scrollTo(0, 0);
+        }
+
+        // ------------------------------------------------------------- the picks
+        function optionsForRole() {
+            return CATEGORIES.filter(function (item) {
+                return state.role !== 'recipient' || !item.donorOnly;
+            });
+        }
+
+        function renderDayChips() {
+            document.getElementById('dayChips').innerHTML = DAYS.map(function (day) {
+                return '<label class="cursor-pointer">' +
+                    '<input type="checkbox" name="deliveryDay" value="' + day.value + '" class="peer sr-only">' +
+                    '<span class="block text-center py-3 rounded-xl bg-[#051F20] border border-[#235347] text-[11px] font-medium tracking-widest text-[#8EB69B] peer-checked:bg-[#DAF1DE] peer-checked:border-[#DAF1DE] peer-checked:text-[#051F20] peer-focus-visible:ring-2 peer-focus-visible:ring-[#8EB69B] transition-colors">' + day.label + '</span>' +
+                    '</label>';
+            }).join('');
+
+            Array.prototype.forEach.call(document.querySelectorAll('input[name="deliveryDay"]'), function (box) {
+                box.addEventListener('change', function () {
+                    if (selectedDays().length > MAX_PICKS) { box.checked = false; }
+                });
+            });
+        }
+
+        function renderCategoryList() {
+            var options = optionsForRole();
+            document.getElementById('categoryList').innerHTML = options.map(function (item) {
+                return '<div role="option" aria-selected="false" data-value="' + item.value + '" ' +
+                    'onclick="selectOption(\'' + item.value + '\')" ' +
+                    'class="resq-row flex items-center gap-3 p-3 rounded-lg hover:bg-[#163832] cursor-pointer transition-colors">' +
+                    '<span class="text-xl">' + item.icon + '</span>' +
+                    '<div class="min-w-0">' +
+                    '<span class="block text-sm font-medium text-[#DAF1DE]">' + item.label + '</span>' +
+                    '<span class="block text-xs text-[#8EB69B]">' + item.desc + '</span>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function pickedIndex(value) {
+            for (var i = 0; i < state.picked.length; i++) {
+                if (state.picked[i] === value) { return i; }
+            }
+            return -1;
+        }
+
+        function renderPicked() {
+            var display = document.getElementById('categoryDisplay');
+            if (!state.picked.length) {
+                display.innerHTML = '<span class="text-xl">📦</span>' +
+                    '<span class="text-sm truncate">Select a category...</span>';
+            } else {
+                display.innerHTML = state.picked.map(function (value) {
+                    var item = CATEGORIES.filter(function (entry) { return entry.value === value; })[0];
+                    return '<span class="text-xl">' + item.icon + '</span>' +
+                        '<span class="text-sm font-medium text-[#DAF1DE] truncate">' + item.label + '</span>';
+                }).join('<span class="text-xs text-[#8EB69B]/60 px-2">+</span>');
             }
 
-            var match = window.location.search.match(/[?&]role=([^&]+)/);
-            var role = match ? decodeURIComponent(match[1]) : readStore(ROLE_KEY);
-            var target = DASHBOARDS[role] || 'index.html';
+            Array.prototype.forEach.call(document.querySelectorAll('#categoryList .resq-row'), function (row) {
+                var on = pickedIndex(row.getAttribute('data-value')) !== -1;
+                row.setAttribute('data-picked', on ? 'true' : 'false');
+                row.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+        }
 
+        function selectOption(value) {
+            var at = pickedIndex(value);
+            if (at !== -1) {
+                state.picked.splice(at, 1);
+            } else if (state.picked.length < MAX_PICKS) {
+                state.picked.push(value);
+            } else {
+                return;
+            }
+            renderPicked();
+        }
+
+        function toggleDropdown() {
+            var menu = document.getElementById('categoryMenu');
+            var arrow = document.getElementById('categoryArrow');
+            var trigger = document.getElementById('categoryTrigger');
+            menu.classList.toggle('hidden');
+            arrow.classList.toggle('rotate-180');
+            trigger.classList.toggle('border-[#8EB69B]');
+        }
+
+        function closeDropdown() {
+            document.getElementById('categoryMenu').classList.add('hidden');
+            document.getElementById('categoryArrow').classList.remove('rotate-180');
+            document.getElementById('categoryTrigger').classList.remove('border-[#8EB69B]');
+        }
+
+        window.addEventListener('click', function (e) {
+            var trigger = document.getElementById('categoryTrigger');
+            var menu = document.getElementById('categoryMenu');
+            if (!trigger.contains(e.target) && !menu.contains(e.target)) { closeDropdown(); }
+        });
+
+        document.getElementById('categoryTrigger').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDropdown(); }
+            if (e.key === 'Escape') { closeDropdown(); }
+        });
+
+        // Narrow the categories to what the chosen establishment can hand over, dropping any
+        // pick it can no longer offer — the onboarding's own rule, applied to the same list.
+        function updateSurplusOptions(type) {
+            state.firmType = type;
+            var allowed = function (value) {
+                return (FIRM_SURPLUS[value] || ['retail', 'eatery']).indexOf(type) !== -1;
+            };
+            Array.prototype.forEach.call(document.querySelectorAll('#categoryList .resq-row'), function (row) {
+                row.classList.toggle('hidden', !allowed(row.getAttribute('data-value')));
+            });
+            state.picked = state.picked.filter(allowed);
+            renderPicked();
+        }
+
+        function selectedDays() {
+            return Array.prototype.filter.call(
+                document.querySelectorAll('input[name="deliveryDay"]'),
+                function (box) { return box.checked; }
+            ).map(function (box) { return box.value; });
+        }
+
+        // ------------------------------------------------------------- role copy
+        function applyRole() {
+            var isRecipient = state.role === 'recipient';
+            document.getElementById('firmStep').classList.toggle('hidden', isRecipient);
+            document.getElementById('dayStep').classList.toggle('hidden', !isRecipient);
+            document.getElementById('occupancyRow').classList.toggle('hidden', !isRecipient);
+
+            document.getElementById('sideProfileLabel').textContent = isRecipient ? 'Needs profile' : 'Surplus profile';
+            document.getElementById('profileHeading').textContent = isRecipient ? 'Needs profile' : 'Goods profile';
+            document.getElementById('profileIntro').textContent = isRecipient
+                ? 'Tell us when you would like deliveries, what you need most, and how many people your shelter takes in.'
+                : 'Tell us what your establishment is and the goods you handle most.';
+            document.getElementById('categoryStepLabel').textContent = isRecipient
+                ? '02 · Primary needs'
+                : '02 · Usual surplus categories';
+        }
+
+        // ------------------------------------------------------------- business rule
+        // The same arithmetic the API runs, so the page can say "comes free in 6 days"
+        // without asking: a change made on the 31st comes due on the 28th of a short month.
+        function addOneMonth(moment) {
+            var index = moment.getMonth() + 1;
+            var year = moment.getFullYear() + Math.floor(index / 12);
+            var month = index % 12;
+            var lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+            var next = new Date(moment.getTime());
+            next.setUTCFullYear(year, month, Math.min(moment.getUTCDate(), lastDay));
+            return next;
+        }
+
+        function refreshNameRule() {
+            var input = document.getElementById('businessNameInput');
+            var button = document.getElementById('saveBusiness');
+            var text = document.getElementById('nameRuleText');
+            var changedAt = state.user && state.user.business_name_changed_at;
+            var lockedUntil = changedAt ? addOneMonth(new Date(changedAt)) : null;
+            var locked = lockedUntil && lockedUntil.getTime() > Date.now();
+
+            input.disabled = !!locked;
+            button.disabled = !!locked;
+            button.classList.toggle('opacity-60', !!locked);
+
+            if (!changedAt) {
+                text.textContent = 'Not changed yet — your first change is free, and it starts a month-long wait.';
+                return;
+            }
+            var changed = new Date(changedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+            if (!locked) {
+                text.textContent = 'Last changed on ' + changed + ' — you can change it again now.';
+                return;
+            }
+            var days = Math.ceil((lockedUntil.getTime() - Date.now()) / 86400000);
+            var free = lockedUntil.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+            text.textContent = 'Last changed on ' + changed + ' — next change available on ' + free + ' (' + days + ' day' + (days === 1 ? '' : 's') + ').';
+        }
+
+        // ------------------------------------------------------------- prefill
+        function prefill() {
+            var user = state.user || {};
+            document.getElementById('businessNameInput').value = user.business_name || '';
+            document.getElementById('sideAccountName').textContent = user.business_name || '—';
+            document.getElementById('sideAccountRole').textContent = state.role === 'recipient' ? 'Recipient' : 'Donor';
+
+            if (state.role === 'donor') {
+                state.firmType = user.firm_type || '';
+                var radio = document.querySelector('input[name="firmType"][value="' + state.firmType + '"]');
+                if (radio) { radio.checked = true; }
+            }
+
+            state.picked = (user.surplus_types || []).slice();
+            renderCategoryList();
+            if (state.firmType) { updateSurplusOptions(state.firmType); }
+            renderPicked();
+
+            if (state.role === 'recipient') {
+                (user.delivery_days || []).forEach(function (day) {
+                    var box = document.querySelector('input[name="deliveryDay"][value="' + day + '"]');
+                    if (box) { box.checked = true; }
+                });
+                document.getElementById('occupancyInput').value = user.occupancy == null ? '' : user.occupancy;
+            }
+
+            refreshNameRule();
+        }
+
+        // ------------------------------------------------------------- saving
+        function saveProfile() {
+            var el = document.getElementById('profileMessage');
+            var button = document.getElementById('saveProfile');
+            hideMessage(el);
+
+            var payload = {};
+            if (state.role === 'recipient') {
+                var days = selectedDays();
+                if (!days.length) {
+                    return showMessage(el, 'Pick one or two days you would prefer deliveries.');
+                }
+                payload.deliveryDays = days;
+            } else {
+                var firmType = document.querySelector('input[name="firmType"]:checked');
+                if (!firmType) {
+                    return showMessage(el, 'Select whether you are a retail store or an eatery.');
+                }
+                payload.firmType = firmType.value;
+            }
+
+            if (!state.picked.length) {
+                return showMessage(el, state.role === 'recipient'
+                    ? 'Pick the goods you need — up to 2.'
+                    : 'Pick your usual surplus categories — up to 2.');
+            }
+            payload.surplusTypes = state.picked.slice();
+
+            if (state.role === 'recipient') {
+                var occupancy = document.getElementById('occupancyInput').value.trim();
+                if (!/^[0-9]+$/.test(occupancy) || Number(occupancy) < 1) {
+                    return showMessage(el, 'Enter how many people your shelter takes in — a whole number of 1 or more.');
+                }
+                payload.occupancy = Number(occupancy);
+            }
+
+            button.disabled = true;
+            button.classList.add('opacity-60');
+            api('/api/profile', { body: payload })
+                .then(function (res) {
+                    if (res.status === 200) {
+                        state.user = res.data.user;
+                        showMessage(el, 'Profile saved.', 'ok');
+                        return;
+                    }
+                    showMessage(el, (res.data && res.data.error) || 'We could not save your profile. Please try again.');
+                })
+                .catch(function () { showMessage(el, OFFLINE); })
+                .then(function () {
+                    button.disabled = false;
+                    button.classList.remove('opacity-60');
+                });
+        }
+
+        function saveBusinessName() {
+            var el = document.getElementById('businessMessage');
+            var button = document.getElementById('saveBusiness');
+            var name = document.getElementById('businessNameInput').value.trim();
+            hideMessage(el);
+
+            if (!name) {
+                return showMessage(el, 'Enter the name your business goes by.');
+            }
+            if (name === (state.user.business_name || '').trim()) {
+                return showMessage(el, 'That is already your business name.', 'ok');
+            }
+
+            button.disabled = true;
+            button.classList.add('opacity-60');
+            api('/api/business-name', { body: { businessName: name } })
+                .then(function (res) {
+                    if (res.status === 200) {
+                        state.user = res.data.user;
+                        document.getElementById('sideAccountName').textContent = state.user.business_name || '—';
+                        refreshNameRule();
+                        showMessage(el, res.data.unchanged ? 'That is already your business name.' : 'Business name updated.', 'ok');
+                        return;
+                    }
+                    if (res.status === 409) {
+                        // The wait is the API's to decide, so the page shows its answer and
+                        // re-reads the rule rather than second-guessing the arithmetic.
+                        refreshNameRule();
+                        showMessage(el, (res.data && res.data.error) || 'The business name was changed too recently.');
+                        return;
+                    }
+                    showMessage(el, (res.data && res.data.error) || 'We could not save that name. Please try again.');
+                })
+                .catch(function () { showMessage(el, OFFLINE); })
+                .then(function () {
+                    refreshNameRule();
+                });
+        }
+
+        document.getElementById('businessNameInput').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); saveBusinessName(); }
+        });
+
+        // The occupancy is a count of people, so the box keeps digits and drops the rest.
+        document.getElementById('occupancyInput').addEventListener('input', function () {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // ------------------------------------------------------------- boot
+        (function boot() {
+            // The role travels in the query so the way back lands on the dashboard the visitor
+            // came from; the stored session settles it when no role is given.
+            var match = window.location.search.match(/[?&]role=([^&]+)/);
+            state.role = (match ? decodeURIComponent(match[1]) : readStore(ROLE_KEY)) === 'recipient'
+                ? 'recipient' : 'donor';
+
+            var target = DASHBOARDS[state.role] || 'index.html';
             document.getElementById('backLink').setAttribute('href', target);
             Array.prototype.forEach.call(document.querySelectorAll('.brand-home'), function (link) {
-                link.setAttribute('href', DASHBOARDS[role] || 'index.html');
+                link.setAttribute('href', target);
             });
 
-            // If there is no session at all, this screen has nothing to edit — send the
-            // visitor to sign in rather than leave a dead end.
-            if (!readStore(TOKEN_KEY)) {
+            if (!state.token) {
                 window.location.replace('res_q_homepage.html');
+                return;
             }
+
+            renderDayChips();
+            applyRole();
+
+            api('/api/me', { method: 'GET' })
+                .then(function (res) {
+                    if (res.status !== 200) {
+                        window.location.replace('res_q_homepage.html');
+                        return;
+                    }
+                    state.user = res.data.user;
+                    // The account's own role is the authority; the query only decides which
+                    // dashboard to hand back to.
+                    state.role = state.user.role === 'recipient' ? 'recipient' : 'donor';
+                    applyRole();
+                    prefill();
+                })
+                .catch(function () {
+                    document.getElementById('nameRuleText').textContent = OFFLINE;
+                });
         })();
     </script>
 </body>
