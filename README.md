@@ -602,6 +602,7 @@ owns the topic, and `config.py` owns every constant, limit, vocabulary and demo 
 | `backend/surplus.py` | The surplus calculator: the regression pipeline, fitted to the store's logged days once and cached, forecasting per request |
 | `backend/history.py` | The logged days — one row per kitchen per day — the features the model reads out of them, and the whole store's log it is fitted to |
 | `backend/seed.py` | The six test donors, the one recipient and the agreed delivery between them, with the demo account's year of logs, six weeks for each of the others, and the weather taken from Open-Meteo's archive for every day of them |
+| `backend/measure_read_window.py` | Not part of the API: the measurement behind the window a forecast reads a log through, scoring the held-out days at six weeks, a year and the whole log |
 | `backend/weather.py` | The live conditions at a point — now, day by day for the week ahead, and the days behind it — and the one table that turns a WMO code into the model's Sunny/Cloudy/Rainy |
 | `backend/wsgi.py` | The same handler as a WSGI application, which is how a host runs it; see [Deployment](#deployment) |
 
@@ -646,6 +647,18 @@ them, whose sky is not one of the three words the model knows, or that does not 
 kitchen it came from is left out of the fit rather than imputed as if someone had measured
 it. Lags never cross kitchens: each kitchen's rows are turned into features on their own,
 which is what makes a sample's "yesterday" its own kitchen's yesterday.
+
+Serving a request reads that log back through a window of its own — the most recent
+**year** of it — and the window is wide on purpose. Three of the four numeric features are
+answered by a fortnight of it, but the fourth is not: the expected customer count is the
+mean of that weekday's history, and the model was fitted on that mean taken over *every*
+prior day. Six weeks averaged six occurrences of the weekday where the kitchen had run it
+fifty times, so the served request was scoring worse than the error the answer reports.
+Measured on the seeded store's held-out days (`python backend/measure_read_window.py`),
+widening the window from six weeks to a year takes the error on the days the model did not
+see from **5.35 kg to 5.22 kg** — the forest's own MAE, and the figure the analyser shows. A year is
+also bounded, so a kitchen that logs for five years is read for its most recent one; on this
+store the year reaches every usable day, which is why it and the whole log score alike.
 
 The row it forecasts is **today's**: the day the kitchen is cooking on, and the surplus
 it is holding now. The module exposes two calls:
@@ -848,10 +861,10 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
 | `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201` |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
-| `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the six-week window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
+| `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the year-long window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
 | `GET` | `/api/weather` | The real conditions at a point, in the analyser's own vocabulary. Requires `lat`/`lng`, and answers `400` for a missing, non-numeric or off-globe pair. Reads Open-Meteo — keyless — and returns the model's label for today, the WMO code and summary behind it, the day's high/low and rainfall, the current temperature and wind, the address's timezone and the source. Answers `502` `weather_unavailable` when the service cannot be reached, rather than a default sky |
 | `GET` | `/api/surplus-outlook` | The week's surplus at a point, which is what the analyser's chart is drawn from: one forecast per day, today first. Requires `lat`/`lng` (`400` as above) and takes an optional `days` — a whole number, defaulting to 7 and pulled to the 16-day ceiling the weather service answers at, `400` when it is not a number. Each day carries its own date, day name, Open-Meteo conditions and the model's prediction, with the model and its MAE once for the whole week. Answers `502` `weather_unavailable` when the outlook cannot be read, and `503` `model_dependencies_missing` without pandas or scikit-learn, `503` `no_history` with no logged days in the store for the model to be fitted to |
-| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather`, `on_date` (the ISO day being forecast, which the log is read for) and up to four numeric features, in the query string or a JSON body. With a bearer token, any numeric feature the caller leaves out is **filled from that account's own logged days**, and the answer carries the log it read — `logged_days`, everything the account has logged, beside `read_days`, the six-week window of it the features were actually read from, which differ on a kitchen with more than six weeks behind it — and which features came from it; an explicit value always wins. The dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy, a number sitting below zero or an unreadable `on_date`, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed, `503` `no_history` when the store has no logged days to fit the model to. The answer also carries `trained_on`: the days and kitchens the fitted forest learned from |
+| `GET`/`POST` | `/api/surplus-forecast` | Today's surplus forecast from `surplus.py`. Optional `day_of_week`, `weather`, `on_date` (the ISO day being forecast, which the log is read for) and up to four numeric features, in the query string or a JSON body. With a bearer token, any numeric feature the caller leaves out is **filled from that account's own logged days**, and the answer carries the log it read — `logged_days`, everything the account has logged, beside `read_days`, the year-long window of it the features were actually read from, which differ on a kitchen with more than a year behind it — and which features came from it; an explicit value always wins. The dashboard reads the live sky first, through `/api/weather`, and passes its label as `weather`. Answers `400` for a label that is not a day name or one of Sunny/Cloudy/Rainy, a number sitting below zero or an unreadable `on_date`, and `503` `model_dependencies_missing` when pandas or scikit-learn is not installed, `503` `no_history` when the store has no logged days to fit the model to. The answer also carries `trained_on`: the days and kitchens the fitted forest learned from |
 
 ### Matching and delivery orders
 

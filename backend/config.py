@@ -237,9 +237,22 @@ HISTORY_FIELDS = (
     "customers_served", "expected_customers", "surplus_kg",
 )
 
-# How far back a reading looks. Six weeks is enough for the fourteen-day window, the
-# week-old lag and the day-old lag to all be real numbers at once.
-HISTORY_READ_DAYS = 42
+# How far back a reading looks. The fourteen-day window, the week-old lag and the day-old
+# lag are all satisfied by a fortnight, but the fourth feature is not: the customer count
+# a forecast leans on is the mean of that weekday's history, so a short window averages a
+# handful of days where the kitchen has run hundreds, and `training_frame` builds that same
+# feature from **every** prior day — the window is the one thing that made a served request
+# worse than the error the answer reports. A year is a whole seasonal cycle, so every
+# weekday has run often enough to mean something, and it is bounded: a kitchen that logs for
+# five years is read for its most recent year rather than for all of it.
+#
+# Measured on the seeded store's held-out days (`python backend/measure_read_window.py`):
+# the error
+# on the days the model did not see falls from 5.35 kg at six weeks to 5.22 kg at a year,
+# which is the same 5.22 kg the forest's own MAE is reported at. On this store the year
+# reaches every usable day, so a year and the whole log score identically (5.22 kg) and the
+# difference is all on the kitchens that have more than six weeks to read.
+HISTORY_READ_DAYS = 365
 
 # The test donors the calculator is exercised against: five kitchens with six weeks of
 # logs each. In demo mode the server seeds them on startup, since nothing is written to
