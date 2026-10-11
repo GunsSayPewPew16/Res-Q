@@ -464,15 +464,16 @@
                             <span id="userName" class="text-xs text-[#8EB69B] hidden md:inline max-w-[12rem] truncate">SIGNED IN</span>
                         </button>
 
-                        <!-- The account pill opens the account menu: the one action an account
-                             really has, signing out, plus a temporary switch to the other
-                             dashboard so both roles can be previewed from one sign-in. -->
+                        <!-- The account pill opens the account menu: the account's own actions —
+                             editing the profile and signing out — plus a temporary switch to the
+                             other dashboard so both roles can be previewed from one sign-in. -->
                         <div id="accountPanel" data-header-panel role="dialog" aria-label="Account" class="hidden absolute right-0 top-full mt-4 w-72 max-w-[calc(100vw-2rem)] overflow-hidden organic-inner border border-[#235347] bg-[#051F20] shadow-2xl shadow-black/60">
                             <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-[#235347]">
                                 <span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">Account</span>
-                                <span class="text-[10px] text-[#8EB69B]">02</span>
+                                <span class="text-[10px] text-[#8EB69B]">03</span>
                             </div>
                             <div class="p-4 space-y-3">
+                                <button type="button" onclick="editPersonalInfo()" class="w-full px-4 py-3 organic-chip border border-[#235347] text-[#DAF1DE] text-sm hover:border-[#8EB69B] hover:bg-[#163832] transition-all">Edit Personal Info</button>
                                 <button type="button" onclick="logOut()" class="w-full px-4 py-3 organic-chip bg-[#DAF1DE] text-[#051F20] text-sm font-medium hover:bg-[#8EB69B] transition-all">Log out</button>
                                 <!-- TEMPORARY: a preview convenience, not part of the product.
                                      Demo mode only, and the backend says so if asked otherwise. -->
@@ -1358,6 +1359,13 @@
                     Authorization: 'Bearer ' + token
                 }
             }).then(leave).catch(leave);
+        }
+
+        // "Edit Personal Info" opens its own screen. The screen is a placeholder for now, so
+        // this only hands over to it; the role rides along so it can point back afterwards.
+        function editPersonalInfo() {
+            var role = readStore(ROLE_KEY) || 'recipient';
+            window.location.href = 'res_q_edit_profile.html?role=' + encodeURIComponent(role);
         }
 
         function switchDashboard() {
