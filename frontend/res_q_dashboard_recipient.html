@@ -655,18 +655,22 @@
                                 <span aria-hidden="true" class="text-base leading-none">+</span> Add order
                             </div>
 
-                            <!-- The donor's own figures for the same order: what this shelter
+                            <!-- The donor's own figures for the same order, in the three boxes
+                                 the donor's own dashboard keeps for it: what this shelter
                                  collects, the share of the post it came out of, and the drive
                                  to the kitchen it is collected from — which is what the map
                                  beside this is drawn from, and what a shelter checks before
-                                 setting out. -->
+                                 setting out. Under the boxes, the two lines that name the
+                                 kitchen and say when it closed the item. -->
                             <div class="mt-5 organic-inner bg-[#051F20] text-[#DAF1DE] p-5 md:p-6 border border-[#235347] flex flex-col gap-4">
                                 <div class="flex items-center justify-between gap-3">
                                     <span class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Order details</span>
                                     <span id="pendingStatus" class="organic-chip px-3 py-1 text-[10px] border border-[#235347] text-[#8EB69B]">none</span>
                                 </div>
 
-                                <div id="pendingFoot" class="space-y-3">
+                                <div id="pendingFigures" class="grid grid-cols-3 gap-3"></div>
+
+                                <div id="pendingFoot" class="mt-auto pt-4 border-t border-[#235347] space-y-3">
                                     <span class="block text-[11px] text-[#8EB69B]">No item waiting. The moment a kitchen closes one of the items you claimed it appears here.</span>
                                 </div>
                             </div>
@@ -3089,32 +3093,58 @@
                 + '</div>';
         }
 
-        // The drive, in the words the details box uses: the road the router answered for this
-        // order once it has drawn it, and the distance the pass measured between the two pins
-        // until then — or when the router is the one that could not be read.
-        function pendingDistanceLine(row) {
+        // One figure to a box: the label, the number, and the line under it saying what the
+        // number is out of. The same raised box the donor's own dashboard keeps its three
+        // figures in, so an order reads the same way round from either end of it.
+        function pendingFigure(label, value, note) {
+            return '<div class="panel-raised p-3 min-w-0">'
+                + '<span class="block text-[10px] uppercase tracking-[0.2em] text-[#8EB69B]">'
+                    + pendingText(label) + '</span>'
+                + '<span class="block font-display text-xl leading-tight mt-2 truncate">'
+                    + pendingText(value) + '</span>'
+                + (note
+                    ? '<span class="block text-[10px] leading-snug mt-1 text-[#8EB69B]/75">'
+                        + pendingText(note) + '</span>'
+                    : '')
+                + '</div>';
+        }
+
+        // The drive, split the way a figure box shows it: the distance is the number, and
+        // the road the router answered for this order is the line under it — or, until the
+        // router has answered, the note that this is the pass's own measure between the two
+        // pins rather than a road.
+        function pendingDistanceReading(row) {
             if (row && orderRouteReading.id === row.post_id && orderRouteReading.km !== null) {
-                return orderRouteReading.km.toFixed(1) + ' km \u00b7 about '
-                    + orderRouteReading.minutes + ' min by road';
+                return { km: orderRouteReading.km.toFixed(1) + ' km',
+                    note: 'about ' + orderRouteReading.minutes + ' min by road' };
             }
             var km = (row && row.distance_km !== null && row.distance_km !== undefined)
                 ? Number(row.distance_km) : null;
             if (km !== null && isFinite(km)) {
-                return km.toFixed(1) + ' km between the two pins';
+                return { km: km.toFixed(1) + ' km', note: 'between the two pins' };
             }
-            return '\u2014';
+            return { km: '\u2014', note: '' };
         }
 
-        // The dark inset: the donor's own figures for the order the carousel is on — what is
-        // coming, what share of the post it is, and how far the drive is — which is what the
-        // map beside this surface is drawn from and what a shelter checks before setting out.
+        // The dark inset: the donor's own figures for the order the carousel is on, one to a
+        // box — what is coming, what share of the post it is, and how far the drive is — and
+        // under them the two lines that name the kitchen it comes from and the close that
+        // put the order here. The boxes are what the map beside this surface is drawn from;
+        // the two lines are what a shelter reads before setting out. Kept as three boxes and
+        // two lines rather than five rows so the panel stays as short as the map beside it.
         function renderPendingFoot() {
             var foot = pendingEl('pendingFoot');
+            var figures = pendingEl('pendingFigures');
             var status = pendingEl('pendingStatus');
             if (!foot) { return; }
             var row = pendingRow();
             if (!row) {
                 if (status) { status.textContent = pendingProblem ? 'unread' : 'none'; }
+                if (figures) {
+                    figures.innerHTML = pendingFigure('Ration', '\u2014')
+                        + pendingFigure('Share', '\u2014')
+                        + pendingFigure('Distance', '\u2014');
+                }
                 foot.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
                     + pendingText(pendingProblem
                         ? 'The rations could not be read \u2014 ' + pendingProblem + '.'
@@ -3128,16 +3158,21 @@
             var db = resqDb();
             var claimants = Number(row.claimants) || 1;
             var others = Math.max(0, claimants - 1);
+            var distance = pendingDistanceReading(row);
+            if (figures) {
+                figures.innerHTML =
+                    pendingFigure('Ration', rationValue(row.ration_kg) + ' kg',
+                        'of ' + rationValue(row.total_kg) + ' kg closed')
+                    + pendingFigure('Share', rationValue(row.share_percent) + '%',
+                        others
+                            ? (others === 1
+                                ? '1 other shelter on it'
+                                : others + ' other shelters on it')
+                            : 'the only shelter on it')
+                    + pendingFigure('Distance', distance.km, distance.note);
+            }
             foot.innerHTML =
-                pendingLine('Ration', rationValue(row.ration_kg) + ' kg of '
-                    + rationValue(row.total_kg) + ' kg')
-                + pendingLine('Share', rationValue(row.share_percent) + '%'
-                    + (others
-                        ? ' \u00b7 shared with ' + others
-                            + (others === 1 ? ' other shelter' : ' other shelters')
-                        : ' \u00b7 the only shelter on it'))
-                + pendingLine('Distance', pendingDistanceLine(row))
-                + pendingLine('From', pendingPickupLine(row))
+                pendingLine('From', pendingPickupLine(row))
                 + pendingLine('Closed', db ? db.formatWhen(row.closed_at) : '');
         }
 
