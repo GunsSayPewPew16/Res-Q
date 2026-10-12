@@ -43,7 +43,10 @@ guessed at.
 **Privacy.** A recipient is answered with its own ration and its own share, never another
 shelter's name or amount: the queue the answer carries names every other claimant by count
 alone, which is what lets a dashboard show "43% of the post, shared with 3 shelters"
-without handing one shelter another's business.
+without handing one shelter another's business. The one thing a ration is answered with
+beside its own figures is where it is collected from — the distance to the donor, and the
+donor's own pin — because that is the shelter's own delivery rather than a fact about
+whoever else is on the item.
 
 The one reader who does see the whole split is the donor of the post. The item is theirs,
 the shelters are asking *them* for it, and where it went is the donor's own business rather
@@ -769,6 +772,20 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None, closures=None)
                 entry["share_percent"] = round(share * 100.0, RATION_PERCENT_DECIMALS)
                 if pair["reason"]:
                     entry["reason"] = pair["reason"]
+                # Where the ration comes from, for the shelter that is going to collect
+                # it: the distance to its donor, and the donor's own pin to draw a drive
+                # from. Both belong to the donor rather than to another claimant — the
+                # pickup address is on the board already, under the name that logged the
+                # item — so a shelter learns where its own delivery starts and nothing
+                # about anybody else's. A donor whose account carries no pin leaves the
+                # distance unread rather than guessed at, and the page says so.
+                claim = pair.get("claim") or {}
+                entry["distance_km"] = pair["distance_km"]
+                entry["pickup"] = {
+                    "address": post.get("location"),
+                    "lat": claim.get("donor_lat"),
+                    "lng": claim.get("donor_lng"),
+                }
                 # Only once the donor has closed the item: until then the shares are still
                 # moving as more shelters claim it, and a share that can change is not a
                 # ration to be notified about. It counts as waiting instead.

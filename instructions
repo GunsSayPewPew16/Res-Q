@@ -94,6 +94,19 @@ Debugging the dashboard in a browser
   (`loadOrderRouteMap()` → `loadMaplibre()` → `mountOrderRouteMap()`), and its fallback
   drawing is the `#orderRouteRest` SVG laid over it. `paintOrderRoute()` is the one function
   that decides what the panel shows.
+* `frontend/res_q_dashboard_recipient.html` carries its own copy of that panel beside its
+  *Pending orders* box, under the same ids: the same teardrop at the pickup, the same ring at
+  the drop-off, the same OSRM answer. Its two pins come from the other end — the donor's
+  `pickup` from the pass's answer is the pickup, and this account's own confirmed location is
+  the drop-off — so a shelter that has confirmed no location is the one the panel reports
+  ("… confirm one to see the route") rather than a missing claimant pin.
+* The recipient's box reads `GET /api/rations` and nothing else: its `allocations` only ever
+  hold claims on posts their donor has closed, which is what makes the list "confirmed orders
+  its kitchen has closed" without a second filter. The read is shared with the bell —
+  `loadNotifications()` hands the same answer to `renderPendingOrders()` — so opening the
+  dashboard, the claims stream, the bell's backstop and the tab returning to the front are
+  all what move that list. Closing an item is a donor's action in another session: nothing
+  pushes it here, and the box catching up on the next read is the design, not a bug.
 * **A browser that produces no animation frames cannot render that map at all.** In this
   app's Preview tab, `requestAnimationFrame` callbacks do not fire until a recording is
   started, and IntersectionObserver callbacks never fire — so the map looks permanently
@@ -165,9 +178,13 @@ The consequences worth keeping in mind when touching any of this:
   and must never reach a screen as one.
 * **The board's `closed_at` is a copy**, written so both dashboards can see the state on the
   row they already read. `supabase/migrations/20261013000000_add_closed_at_to_surplus_posts.sql`
-  adds it and has **not been applied to the live project** (the allocation migration above it
-  has not either). Closing still works on the deployment without it — the note on the donor's
-  screen says the board was not marked and names the file.
+  adds it, and it **was applied to the live project by hand on 2026-10-12** — before that, a
+  close reported "the board was not marked" and named the file. The allocation migration
+  above it is still unapplied, and `POST /api/rations` is the call that says so.
+* **A close is what puts an order on the recipient's *Pending orders* box.** The allocation
+  appears in `GET /api/rations` the moment the close answers, and the shelter's screen picks
+  it up on its next read — no push, so a demo walked from two sessions needs the shelter's
+  page reloaded (or its long backstop waited out) before the new order shows.
 * **The closed set is read twice, on purpose:** `GET /api/posts/closed` (no session needed) is
   what a page uses so a claim action stops being offered on the day an item closes, and the
   board's own column is used where the project has it. Both are read; neither alone is enough
@@ -233,6 +250,11 @@ the password `ResqDemo1!`:
     tomas@resq.test   Little Havana Food Pantry
     rosa@resq.test    dana@resq.test            noor@resq.test   (other fixture accounts)
 
+The two shelters whose *Pending orders* box has something to show are `harbour@resq.test`
+(Harbour Lights Shelter) and `riverside@resq.test` (Riverside Community Pantry): they hold
+claims on dana's, mei's and priya's items (posts `…0005`–`…0008`), so closing one of those as
+`dana@resq.test` puts an order on their dashboard.
+
 `RESQ_PERSIST=off` (the default, and what the deployment runs) keeps accounts, sessions and
 orders in the worker's memory — so **every Render deploy signs everybody out**, and a page
 that suddenly redirects to the sign-in screen after a deploy is not a session bug.
@@ -259,6 +281,9 @@ Outstanding work
   dashboard shows and it has no route to draw. Either that claim needs a pin on the board, or
   the panel should fall back to a map of the donor's own pin with the note kept.
 * Ortega Deli's rationing still reads nearly even on the three-way split (39.7/31.2/29.1).
+* The live board has the `closed_at` column now (applied by hand, 2026-10-12), so a close
+  from the deployment marks its row; the first close after that is what proves it — the
+  answer's `board.written` is `true` rather than a note.
 * **`supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql` has never been
   applied to the live project.** Every `POST /api/rations` therefore fails to publish and says
   so per post: "Could not find the 'allocated_at' column … apply … first". The ration is still

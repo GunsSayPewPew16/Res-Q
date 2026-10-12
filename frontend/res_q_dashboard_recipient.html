@@ -128,6 +128,57 @@
             border-radius: max(1rem, calc(var(--canvas-r) - var(--gutter)));
         }
 
+        /* The pending-orders carousel: the small green inset the order summaries scroll
+           through. It is a shade deeper than the surface it sits on, which is what makes it
+           read as a box of its own without a second colour being introduced. */
+        .pending-rail {
+            background-color: rgba(142, 182, 155, 0.34);
+            border: 1px solid rgba(5, 31, 32, 0.14);
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+            padding: 0.625rem;
+        }
+        /* The strip scrolls sideways rather than wrapping: every order stays one glance
+           away, and the row keeps the same height whether there is one of them or nine. */
+        .pending-track {
+            display: flex;
+            gap: 0.625rem;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            padding-bottom: 0.125rem;
+        }
+        /* One order, at a glance. The card being read is the lit shape — ink, with the
+           surface's own mint for its text — which is the same treatment the rail's tab and
+           the board's feed tabs wear. */
+        .pending-card {
+            flex: 0 0 auto;
+            width: 12.5rem;
+            scroll-snap-align: start;
+            text-align: left;
+            cursor: pointer;
+            padding: 0.75rem 0.875rem;
+            background-color: #DAF1DE;
+            color: #051F20;
+            border: 1px solid rgba(5, 31, 32, 0.16);
+            border-radius: max(0.6rem, calc(var(--canvas-r) - var(--gutter) - var(--step) - 0.25rem));
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+        .pending-card:hover { border-color: #051F20; }
+        .pending-card:focus-visible { outline: 2px solid #051F20; outline-offset: 2px; }
+        .pending-card.is-on {
+            background-color: #051F20;
+            color: #DAF1DE;
+            border-color: #051F20;
+        }
+
+        /* The white box: the order the carousel has selected, read in full rather than at a
+           glance. White rather than the surface's mint, because it is the one block here
+           carrying paragraphs rather than a chip and a figure. */
+        .pending-detail {
+            background-color: #FFFFFF;
+            border: 1px solid rgba(5, 31, 32, 0.12);
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+        }
+
         /* The rail's tabs. The item being read is the one lit shape in the rail; every
            other one is its label and nothing else, which is what keeps a five-row rail
            from reading as five buttons. */
@@ -276,7 +327,8 @@
            the stretch and collapse the map to nothing — an id rule keeps it winning. The
            route card's map is pinned to its card the same way, for the same reason. */
         #deliverMap,
-        #routeMap {
+        #routeMap,
+        #orderRouteMap {
             position: absolute;
             inset: 0;
         }
@@ -555,10 +607,13 @@
 
                 </div>
 
-                <!-- The filter row, then the one light surface on the screen. The three labels are
-                     the box's own filters — labels only for now, with no field behind them — and
-                     the box under them is the working board: what is still on its way, with the
-                     selected order's details sitting inside it as a dark inset. -->
+                <!-- The filter row, then the two boxes that work together, half the row each.
+                     The three labels are the filters — labels only for now, with no field
+                     behind them — and under them the light surface holds the orders this
+                     shelter is collecting: the carousel of them, the one being read expanded
+                     beneath it, and the donor's own figures as the dark inset at its foot. The
+                     map beside it is the drive that order runs, which is why the two share a
+                     row: an order and the road it comes down are one reading. -->
                 <div class="space-y-3">
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="inline-flex items-center gap-2 text-sm text-[#8EB69B] mr-1">Active filters
@@ -569,67 +624,112 @@
                         <span class="organic-chip px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">Next 7 days</span>
                     </div>
 
-                    <div class="surface-light p-5 md:p-7">
-                        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6 items-stretch">
 
-                            <div class="xl:col-span-7 flex flex-col">
-                                <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#051F20]/15">
-                                    <h2 class="font-display text-2xl leading-none">Pending orders <span class="text-[#051F20]/45 text-lg">(0)</span></h2>
-                                    <span id="pendingState" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-[#051F20]/8 border border-[#051F20]/15 text-[#051F20]/70">idle</span>
-                                </div>
+                        <div class="surface-light p-5 md:p-7 flex flex-col min-w-0">
+                            <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#051F20]/15">
+                                <h2 class="font-display text-2xl leading-none">Pending orders <span id="pendingCount" class="text-[#051F20]/45 text-lg">(0)</span></h2>
+                                <span id="pendingState" class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.2em] bg-[#051F20]/8 border border-[#051F20]/15 text-[#051F20]/70">idle</span>
+                            </div>
 
-                                <!-- The board itself: one row per order still on its way, and nothing
-                                     at all until the first claim is made. -->
-                                <div id="pendingOrdersList" class="flex-1 pt-5 space-y-3">
-                                    <span class="block text-sm text-[#051F20]/55">No orders waiting.</span>
-                                </div>
-
-                                <div class="mt-5 organic-inner border border-dashed border-[#051F20]/30 flex items-center justify-center gap-2 py-5 text-sm text-[#051F20]/70">
-                                    <span aria-hidden="true" class="text-base leading-none">+</span> Add order
+                            <!-- The carousel: one small card per order of this shelter's that a
+                                 kitchen has closed, scrolled sideways in the surface's own
+                                 green inset. A card is the whole summary — what the item is,
+                                 the share of it that is coming, and which kitchen it is coming
+                                 from — and the one being read wears the lit shape. -->
+                            <div class="pending-rail mt-5">
+                                <div id="pendingCarousel" class="pending-track" role="list" aria-label="Orders waiting on a pick-up">
+                                    <span class="block text-xs text-[#051F20]/55 px-1 py-4">No orders waiting.</span>
                                 </div>
                             </div>
 
-                            <div class="xl:col-span-5 organic-inner bg-[#051F20] text-[#DAF1DE] p-5 md:p-6 border border-[#235347] flex flex-col gap-4">
+                            <!-- The white box: the order the carousel is on, read in full rather
+                                 than at a glance — what it is, how much of it is coming, where
+                                 it is collected from, when its kitchen closed it, and what the
+                                 ration was worked out of. -->
+                            <div id="pendingDetail" class="pending-detail mt-4 p-5">
+                                <span class="block text-sm text-[#051F20]/55">An order appears here once the kitchen that logged the item closes it.</span>
+                            </div>
+
+                            <div class="mt-5 organic-inner border border-dashed border-[#051F20]/30 flex items-center justify-center gap-2 py-5 text-sm text-[#051F20]/70">
+                                <span aria-hidden="true" class="text-base leading-none">+</span> Add order
+                            </div>
+
+                            <!-- The donor's own figures for the same order: what this shelter
+                                 collects, the share of the post it came out of, and the drive
+                                 to the kitchen it is collected from — which is what the map
+                                 beside this is drawn from, and what a shelter checks before
+                                 setting out. -->
+                            <div class="mt-5 organic-inner bg-[#051F20] text-[#DAF1DE] p-5 md:p-6 border border-[#235347] flex flex-col gap-4">
                                 <div class="flex items-center justify-between gap-3">
                                     <span class="text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Order details</span>
-                                    <span class="organic-chip px-3 py-1 text-[10px] border border-[#235347] text-[#8EB69B]">none</span>
+                                    <span id="pendingStatus" class="organic-chip px-3 py-1 text-[10px] border border-[#235347] text-[#8EB69B]">none</span>
                                 </div>
 
-                                <div class="grid grid-cols-3 gap-3">
-                                    <span class="panel-raised h-20"></span>
-                                    <span class="panel-raised h-20"></span>
-                                    <span class="panel-raised h-20"></span>
-                                </div>
-
-                                <div class="mt-auto pt-4 border-t border-[#235347] space-y-3">
-                                    <div class="flex items-center gap-2">
-                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
-                                        <span class="h-1.5 flex-1 organic-chip bg-[#235347]"></span>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-3">
-                                        <span class="h-1.5 w-24 organic-chip bg-[#235347]"></span>
-                                        <span class="h-3.5 w-24 organic-chip bg-[#163832] border border-[#235347]"></span>
-                                    </div>
+                                <div id="pendingFoot" class="space-y-3">
+                                    <span class="block text-[11px] text-[#8EB69B]">No item waiting. The moment a kitchen closes one of the items you claimed it appears here.</span>
                                 </div>
                             </div>
-
                         </div>
+
+                        <!-- The other half of the pair, taken to the row's full height: the drive
+                             the selected order runs — the kitchen's own pin at the pickup, this
+                             shelter's confirmed pin at the drop-off, and the road OSRM answers
+                             between them. The same panel the donor's dashboard draws under its
+                             own board, read from the other end of it. -->
+                        <div class="panel p-5 md:p-6 min-w-0 flex flex-col">
+                            <div id="orderRoutePanel" class="relative w-full flex-1 min-h-[22rem] organic-inner border border-[#235347] bg-[#0B2B26] overflow-hidden">
+                                <!-- The resting shape, laid over the empty map so the panel is
+                                     never a blank green box while the library and the tiles
+                                     are on their way — and put back whenever the route cannot
+                                     be drawn. -->
+                                <svg id="orderRouteRest" class="absolute inset-0 w-full h-full z-10" viewBox="0 0 640 320" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                    <g stroke="#235347" stroke-opacity="0.5" fill="none">
+                                        <path d="M0 62 H640" /><path d="M0 140 H640" /><path d="M0 224 H640" /><path d="M0 292 H640" />
+                                        <path d="M86 0 V320" /><path d="M225 0 V320" /><path d="M400 0 V320" /><path d="M540 0 V320" />
+                                    </g>
+                                    <path d="M120 250 C 200 232 215 160 305 146 C 400 130 430 84 520 66" stroke="#235347" stroke-width="10" fill="none" stroke-linejoin="round" opacity="0.4" />
+                                    <path d="M120 250 C 200 232 215 160 305 146 C 400 130 430 84 520 66" stroke="#DAF1DE" stroke-width="2.5" fill="none" stroke-linejoin="round" />
+                                    <circle cx="520" cy="66" r="11" fill="#DAF1DE" fill-opacity="0.18" />
+                                    <circle cx="520" cy="66" r="7" fill="none" stroke="#DAF1DE" stroke-width="3" />
+                                    <circle cx="120" cy="250" r="7" fill="#0B2B26" stroke="#DAF1DE" stroke-width="2.5" />
+                                </svg>
+
+                                <!-- The live map mounts here, and only once its library has
+                                     arrived. -->
+                                <div id="orderRouteMap" class="absolute inset-0 hidden"></div>
+
+                                <!-- What the map is showing, in the corner the panel keeps for
+                                     its one chip: the order's state, and the drive once the
+                                     router has answered. -->
+                                <div class="absolute top-3 right-3 z-20 organic-chip inline-flex items-center gap-2 px-3 py-2 bg-[#051F20]/90 border border-[#235347]">
+                                    <span id="orderRouteDot" class="w-1.5 h-1.5 rounded-full bg-[#235347]"></span>
+                                    <span id="orderRouteChip" class="text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">no route yet</span>
+                                </div>
+
+                                <!-- Both ends of the route, named, with the line under them saying
+                                     where the route itself came from. Inside the panel rather
+                                     than on the map: a pale line over pale tiles is a line
+                                     nobody can read. -->
+                                <div id="orderRouteLegend" class="absolute bottom-4 left-4 right-4 z-20 hidden">
+                                    <div class="organic-inner bg-[#051F20]/90 border border-[#235347] px-3 py-2 space-y-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE] shrink-0"></span>
+                                            <span id="orderRouteFrom" class="text-[11px] leading-snug text-[#DAF1DE] truncate"></span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-1.5 h-1.5 rounded-full border border-[#8EB69B] shrink-0"></span>
+                                            <span id="orderRouteTo" class="text-[11px] leading-snug text-[#8EB69B] truncate"></span>
+                                        </div>
+                                        <p id="orderRouteNote" class="text-[10px] text-[#8EB69B]/80 leading-relaxed pt-2 border-t border-[#235347]"></p>
+                                    </div>
+                                </div>
+
+                                <p id="orderRouteRestNote" class="absolute bottom-4 left-4 right-4 z-10 text-[11px] text-[#8EB69B] leading-relaxed">No order selected yet. Pick one beside this and the drive from its kitchen to you appears here.</p>
+                            </div>
+                        </div>
+
                     </div>
-                </div>
-
-                <!-- Where the deliveries are going: the routing map, with the queue rail beside it. -->
-                <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6">
-
-                    <div class="xl:col-span-8 panel p-5 md:p-6">
-                        <div class="w-full h-72 organic-inner border border-[#235347] bg-[#0B2B26]"></div>
-                    </div>
-
-                    <div class="xl:col-span-4 panel p-5 md:p-6 space-y-3">
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
-                        <div class="organic-inner bg-[#0B2B26] border border-[#235347] h-[68px]"></div>
-                    </div>
-
                 </div>
 
                 <!-- What has already arrived: one card per finished order, oldest first. Empty
@@ -1181,6 +1281,10 @@
                     resqProfile = user;
                     profileAddress = joinProfileAddress(user);
                     savedLocation = deliveryLocationFrom(user);
+                    // The pending orders read from the account's own pins: this is the first
+                    // moment both are known, so the surface is opened here rather than at
+                    // parse time, when an order with a route would have nowhere to go.
+                    openDashboardOrders();
                     if (role && role !== THIS_PAGE) {
                         window.location.replace(dashboardFor(role));
                     }
@@ -1233,6 +1337,10 @@
                 if (view) { view.classList.toggle('hidden', id !== wanted); }
             });
             if (wanted === 'viewFeed') { openFeed(); } else { closeFeed(); }
+            // The dashboard's own orders are read as its screen opens, so a close that
+            // landed while another section was up is on the board the moment it is looked
+            // at, rather than waiting on the next backstop.
+            if (wanted === 'viewDashboard') { openDashboardOrders(); }
             // The route map is read when its own screen opens rather than at load: the
             // card is not on screen until then, and a map built off screen has no size.
             if (wanted === 'viewDeliveryStatus') { openDeliveryStatus(); }
@@ -1526,15 +1634,22 @@
                 .then(function (res) {
                     notifyReading = false;
                     if (res.status !== 200 || !res.data || !res.data.ok) {
+                        // One failure, said twice on purpose: the bell and the dashboard's own
+                        // surface read this one answer, so neither is left on its placeholder
+                        // while the other explains itself.
+                        var why = (res.data && res.data.error) || 'the board could not be read';
                         notifyUnreadable((res.data && res.data.error) || 'The board could not be read.');
+                        pendingUnreadable(why);
                         return;
                     }
                     paintNotifications(recipientNotifications(res.data), res.data.note);
+                    renderPendingOrders(res.data, '');
                     if (markRead) { notifyMarkAllRead(); }
                 })
                 .catch(function () {
                     notifyReading = false;
                     notifyUnreadable('The board could not be read. Is the backend server running?');
+                    pendingUnreadable('the board could not be read');
                 });
         }
 
@@ -2765,6 +2880,720 @@
                     findDeliveryAddress();
                 }
             });
+        }
+
+        // ---------------------------------------------------------------------------
+        // Pending orders: this shelter's own confirmed orders, once a kitchen has closed one.
+        //
+        // A confirmed order starts as a claim on the board; what makes it an order to
+        // collect is the kitchen's own close, because that is the moment the shares stop
+        // moving and become a ration. So this reads the pass's own answer
+        // (`GET /api/rations`), which hands a shelter exactly that set — every allocation in
+        // it is a claim whose post its donor has closed — with the ration and the share the
+        // split gave it, the donor's own pickup pin, and the distance between the two. The
+        // pass never names another shelter's ration, so the box reads this account's own
+        // numbers and nothing else's.
+        //
+        // It is the donor's own surface read from the other end, and it reads at the same
+        // three sizes: one card per order in the carousel, the order the carousel is on
+        // expanded in the white box under it, and the donor's own figures — what is coming,
+        // what share of the post that is, how far the drive is — in the dark inset at its
+        // foot. Beside the surface the same order is a drive: the road from the kitchen's
+        // pin to this shelter's own confirmed pin.
+        // ---------------------------------------------------------------------------
+        var pendingRows = [];      // this shelter's allocations, newest close first
+        var pendingOrderId = '';   // the order the white box is expanded on
+        var pendingRead = false;   // whether the pass has answered at least once
+        var pendingProblem = '';   // why it could not be read, when it could not
+
+        function pendingEl(id) { return document.getElementById(id); }
+
+        // Everything the pass or the board hands over goes into markup through here.
+        function pendingText(value) { return notifyText(value); }
+
+        function pendingRow() {
+            for (var i = 0; i < pendingRows.length; i += 1) {
+                if (pendingRows[i].post_id === pendingOrderId) { return pendingRows[i]; }
+            }
+            return null;
+        }
+
+        // The place, short enough for a line: the first two parts of an address are what name
+        // a spot — street and town — and the rest is postcode.
+        function pendingPlace(address) {
+            var parts = String(address || '').split(',')
+                .map(function (part) { return part.trim(); })
+                .filter(function (part) { return !!part; });
+            return parts.length ? parts.slice(0, 2).join(', ') : '';
+        }
+
+        // The kitchen's own line: the name the item is filed under, with the place it is
+        // collected from beside it when the board carries an address for it.
+        function pendingPickupLine(row) {
+            var where = pendingPlace((row.pickup || {}).address);
+            return (row.donor || 'the kitchen') + (where ? ' \u00b7 ' + where : '');
+        }
+
+        // The pass's answer, painted. The rows are its allocations, read newest close first,
+        // because a list read left to right should open on the most recent order rather than
+        // on the highest score; and a selection that is still in the list is kept, so a
+        // re-read does not move the box under the reader's hands.
+        function renderPendingOrders(doc, problem) {
+            var count = pendingEl('pendingCount');
+            if (doc) {
+                pendingRead = true;
+                pendingProblem = '';
+                pendingRows = (doc.allocations || []).filter(function (row) {
+                    return row && row.post_id;
+                }).sort(function (a, b) {
+                    return String(b.closed_at || '').localeCompare(String(a.closed_at || ''));
+                });
+            } else if (problem) {
+                pendingProblem = problem;
+            }
+            if (count) { count.textContent = '(' + pendingRows.length + ')'; }
+            // The chip over the count is the state of the read rather than of the orders: a
+            // list nobody has been handed yet is not the same thing as an empty one, and a read
+            // that failed is not the same as either.
+            if (pendingProblem) {
+                setChip('pendingState', 'unread', CHIP_BUSY);
+            } else if (!pendingRead) {
+                setChip('pendingState', 'reading\u2026', CHIP_BUSY);
+            } else if (pendingRows.length) {
+                setChip('pendingState', pendingRows.length === 1 ? '1 order' : pendingRows.length + ' orders',
+                    CHIP_DONE);
+            } else {
+                setChip('pendingState', 'none', CHIP_IDLE);
+            }
+            if (!pendingRow()) {
+                pendingOrderId = pendingRows.length ? pendingRows[0].post_id : '';
+            }
+            renderPendingCarousel();
+            renderPendingDetail();
+            renderPendingFoot();
+            watchOrderRoute();
+            paintOrderRoute();
+        }
+
+        // The pass could not be read at all — a connection that is down, or a session that
+        // has gone. The surface says so rather than showing an empty box that reads like
+        // quiet, which is the one difference between "nothing is coming" and "nobody knows".
+        function pendingUnreadable(message) {
+            pendingProblem = message || 'the board could not be read';
+            renderPendingOrders(null, pendingProblem);
+        }
+
+        // The carousel: one card per order, with the one being read wearing the lit shape.
+        // Each card carries the whole summary — that the kitchen has closed it, what share of
+        // the post is coming, what the item is, and which kitchen it is coming from.
+        function renderPendingCarousel() {
+            var track = pendingEl('pendingCarousel');
+            if (!track) { return; }
+            if (!pendingRows.length) {
+                track.innerHTML = '<span class="block text-xs text-[#051F20]/55 px-1 py-4">'
+                    + pendingText(pendingProblem
+                        ? 'Your orders could not be read \u2014 ' + pendingProblem + '.'
+                        : (pendingRead
+                            ? 'No orders waiting. An item you claim appears here the moment its'
+                                + ' kitchen closes it.'
+                            : 'Reading your orders\u2026'))
+                    + '</span>';
+                return;
+            }
+            track.innerHTML = pendingRows.map(function (row) {
+                var on = row.post_id === pendingOrderId;
+                return '<button type="button" role="listitem" class="pending-card'
+                        + (on ? ' is-on' : '') + '" aria-pressed="' + (on ? 'true' : 'false') + '"'
+                        + ' onclick="selectPendingOrder(\'' + pendingText(row.post_id) + '\')">'
+                    + '<span class="flex items-center justify-between gap-2 text-[10px] uppercase'
+                        + ' tracking-[0.2em] ' + (on ? 'text-[#8EB69B]' : 'text-[#051F20]/50') + '">'
+                        + '<span>closed \u00b7 ' + pendingText(rationValue(row.share_percent))
+                            + '%</span>'
+                        + '<span aria-hidden="true">' + (on ? '&#9679;' : '&#8594;') + '</span>'
+                    + '</span>'
+                    + '<span class="block font-display text-base leading-snug mt-2">'
+                        + pendingText(row.item_name) + '</span>'
+                    + '<span class="block text-[11px] mt-2 truncate '
+                        + (on ? 'text-[#8EB69B]' : 'text-[#051F20]/55') + '">'
+                        + pendingText(row.donor || 'the kitchen') + '</span>'
+                    + '</button>';
+            }).join('');
+        }
+
+        function pendingFact(label, value) {
+            return '<div class="min-w-0">'
+                + '<span class="block text-[10px] uppercase tracking-[0.2em] text-[#051F20]/45">'
+                    + pendingText(label) + '</span>'
+                + '<span class="block text-sm leading-snug mt-1">'
+                    + pendingText(value || '\u2014') + '</span>'
+                + '</div>';
+        }
+
+        // What the close did, in one sentence: the share this shelter was given and what it
+        // was a share of. The arithmetic is the pass's own, read back rather than repeated.
+        function pendingNote(row) {
+            var claimants = Number(row.claimants) || 1;
+            var others = Math.max(0, claimants - 1);
+            return 'Rationed by ' + (row.donor || 'the kitchen that logged it') + ' when it closed'
+                + ' the item: ' + rationValue(row.share_percent) + '% of the post, '
+                + (others
+                    ? 'shared with ' + others + (others === 1 ? ' other shelter' : ' other shelters')
+                    : 'the only shelter on it')
+                + ' \u00b7 ' + rationValue(row.ration_kg) + ' kg of the '
+                + rationValue(row.total_kg) + ' kg it was split out of. The drive to it is drawn'
+                + ' beside this box.';
+        }
+
+        // The white box: the order the carousel is on, read in full rather than at a glance.
+        function renderPendingDetail() {
+            var box = pendingEl('pendingDetail');
+            if (!box) { return; }
+            var row = pendingRow();
+            if (!row) {
+                box.innerHTML = '<span class="block text-sm text-[#051F20]/55">'
+                    + 'An order appears here once the kitchen that logged the item closes it:'
+                    + ' that is the moment your share of it stops moving and becomes a ration'
+                    + ' to collect.</span>';
+                return;
+            }
+
+            var db = resqDb();
+            var tag = db ? db.goodsType(row.goods_type) : null;
+            box.innerHTML =
+                '<div class="flex flex-wrap items-start justify-between gap-3">'
+                + '<div class="min-w-0">'
+                    + '<span class="block text-[10px] uppercase tracking-[0.2em] text-[#051F20]/45">'
+                        + 'Order waiting</span>'
+                    + '<span class="block font-display text-2xl leading-tight mt-1">'
+                        + pendingText(row.item_name) + '</span>'
+                + '</div>'
+                + '<span class="organic-chip px-3 py-1 text-[10px] uppercase tracking-[0.2em]'
+                    + ' bg-[#051F20] text-[#DAF1DE]">closed \u00b7 '
+                    + pendingText(rationValue(row.ration_kg) + ' kg') + '</span>'
+                + '</div>'
+                + '<div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">'
+                    + pendingFact('Quantity', row.quantity)
+                    + pendingFact('Collected from', pendingPickupLine(row))
+                    + pendingFact('Closed', db ? db.formatWhen(row.closed_at) : '')
+                    + pendingFact('Category', tag ? tag.emoji + ' ' + tag.label : 'no category')
+                + '</div>'
+                + '<p class="mt-4 pt-3 border-t border-[#051F20]/12 text-[11px] leading-relaxed'
+                    + ' text-[#051F20]/60">' + pendingText(pendingNote(row)) + '</p>';
+        }
+
+        function pendingLine(label, value) {
+            return '<div class="flex items-start gap-3">'
+                + '<span class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] shrink-0'
+                    + ' pt-0.5 w-24">' + pendingText(label) + '</span>'
+                + '<span class="text-sm leading-snug min-w-0">' + pendingText(value) + '</span>'
+                + '</div>';
+        }
+
+        // The drive, in the words the details box uses: the road the router answered for this
+        // order once it has drawn it, and the distance the pass measured between the two pins
+        // until then — or when the router is the one that could not be read.
+        function pendingDistanceLine(row) {
+            if (row && orderRouteReading.id === row.post_id && orderRouteReading.km !== null) {
+                return orderRouteReading.km.toFixed(1) + ' km \u00b7 about '
+                    + orderRouteReading.minutes + ' min by road';
+            }
+            var km = (row && row.distance_km !== null && row.distance_km !== undefined)
+                ? Number(row.distance_km) : null;
+            if (km !== null && isFinite(km)) {
+                return km.toFixed(1) + ' km between the two pins';
+            }
+            return '\u2014';
+        }
+
+        // The dark inset: the donor's own figures for the order the carousel is on — what is
+        // coming, what share of the post it is, and how far the drive is — which is what the
+        // map beside this surface is drawn from and what a shelter checks before setting out.
+        function renderPendingFoot() {
+            var foot = pendingEl('pendingFoot');
+            var status = pendingEl('pendingStatus');
+            if (!foot) { return; }
+            var row = pendingRow();
+            if (!row) {
+                if (status) { status.textContent = pendingProblem ? 'unread' : 'none'; }
+                foot.innerHTML = '<span class="block text-[11px] text-[#8EB69B]">'
+                    + pendingText(pendingProblem
+                        ? 'The rations could not be read \u2014 ' + pendingProblem + '.'
+                        : 'No item waiting. The moment a kitchen closes one of the items you'
+                            + ' claimed it appears here.')
+                    + '</span>';
+                return;
+            }
+
+            if (status) { status.textContent = 'closed'; }
+            var db = resqDb();
+            var claimants = Number(row.claimants) || 1;
+            var others = Math.max(0, claimants - 1);
+            foot.innerHTML =
+                pendingLine('Ration', rationValue(row.ration_kg) + ' kg of '
+                    + rationValue(row.total_kg) + ' kg')
+                + pendingLine('Share', rationValue(row.share_percent) + '%'
+                    + (others
+                        ? ' \u00b7 shared with ' + others
+                            + (others === 1 ? ' other shelter' : ' other shelters')
+                        : ' \u00b7 the only shelter on it'))
+                + pendingLine('Distance', pendingDistanceLine(row))
+                + pendingLine('From', pendingPickupLine(row))
+                + pendingLine('Closed', db ? db.formatWhen(row.closed_at) : '');
+        }
+
+        // Picking another order from the carousel redraws the map to it: the route belongs to
+        // the order, not to the one that happened to be read last.
+        function selectPendingOrder(id) {
+            pendingOrderId = String(id || '');
+            orderRouteShown = '';
+            orderRouteReading = { id: '', km: null, minutes: null };
+            renderPendingCarousel();
+            renderPendingDetail();
+            renderPendingFoot();
+            paintOrderRoute();
+        }
+
+        // ---------------------------------------------------------------------------
+        // The drive the selected order runs: the kitchen's own pin at the pickup, this
+        // shelter's own confirmed pin at the drop-off, and the road OSRM answers between them.
+        // It is the console's own map — the same painted OpenFreeMap tiles, the ink teardrop at
+        // the pickup and the open mint ring where the food is going — mounted into the panel
+        // beside the board, and asked for when the board is read or the panel approached, so a
+        // shelter who never scrolls this far fetches none of the library, the tiles or the
+        // router, and one who never scrolls *at all* still gets the map the board beside them
+        // already knows how to draw.
+        // ---------------------------------------------------------------------------
+        var orderRouteMap = null;
+        var orderRoutePickup = null;
+        var orderRouteDropoff = null;
+        var orderRouteWatched = false;
+        var orderRouteAsked = false;     // whether its library has been asked for at all
+        var orderRouteShown = '';        // the order the map is showing, so one isn't redrawn
+        var orderRouteReading = { id: '', km: null, minutes: null };
+        var pickupPoints = {};           // one address lookup per pickup address
+        var dropPoints = {};             // one address lookup per drop-off address
+        var roadRoutes = {};             // one OSRM answer per pair of pins
+
+        // The two marks stand off the coordinate they name — the teardrop's tip is the point
+        // and its body rises above it, the ring is centred on its own — so a fit has to clear
+        // the panel's own furniture *and* the mark standing between.
+        var ORDER_PIN_HEIGHT = 36;
+        var ORDER_RING_REACH = 13;
+
+        // Whether the panel is in front of the reader already, measured the way the observer
+        // measures it: the viewport, with the same 200px of room around it.
+        function orderRouteInView(panel) {
+            var box = panel.getBoundingClientRect();
+            return box.top < window.innerHeight + 200 && box.bottom > -200;
+        }
+
+        function watchOrderRoute() {
+            if (orderRouteWatched) { return; }
+            var panel = pendingEl('orderRoutePanel');
+            if (!panel) { return; }
+            orderRouteWatched = true;
+            if (!window.IntersectionObserver) { loadOrderRouteMap(); return; }
+            // The same question asked the other three ways, so the route cannot be left
+            // waiting on one mechanism: the observer answers as the panel comes into view,
+            // the scroll listener answers when the page moves and the panel is on screen,
+            // and the check under it answers when the panel is already there.
+            var onScroll = function () {
+                if (!orderRouteInView(panel)) { return; }
+                window.removeEventListener('scroll', onScroll);
+                approach.disconnect();
+                loadOrderRouteMap();
+            };
+            var approach = new window.IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) { return; }
+                    window.removeEventListener('scroll', onScroll);
+                    approach.disconnect();
+                    loadOrderRouteMap();
+                });
+            }, { rootMargin: '200px 0px' });
+            approach.observe(panel);
+            window.addEventListener('scroll', onScroll, { passive: true });
+            if (orderRouteInView(panel)) {
+                window.removeEventListener('scroll', onScroll);
+                approach.disconnect();
+                loadOrderRouteMap();
+            }
+        }
+
+        function loadOrderRouteMap() {
+            if (orderRouteMap || !pendingEl('orderRouteMap')) { return; }
+            orderRouteAsked = true;
+            withMaplibre(mountOrderRouteMap, function () {
+                keepOrderRouteDrawn('The map library could not be loaded, so this is the drawn'
+                    + ' shape of the drive.');
+            });
+        }
+
+        function mountOrderRouteMap() {
+            var container = pendingEl('orderRouteMap');
+            if (orderRouteMap || !container || !window.maplibregl) { return; }
+            try {
+                // Shown before it is built: MapLibre sizes itself from its container's box,
+                // and a hidden container measures nothing. Its own stylesheet also declares
+                // every map container `position: relative`, which beats the panel's
+                // `absolute inset-0` — the box the map sizes from would be a zero-height
+                // strip — so both are set inline, where they win over both stylesheets.
+                container.classList.remove('hidden');
+                container.style.position = 'absolute';
+                container.style.inset = '0';
+                orderRouteMap = new window.maplibregl.Map({
+                    container: container,
+                    style: MAP_STYLE,
+                    center: [START_VIEW[1], START_VIEW[0]],
+                    zoom: 12,
+                    // A route is read rather than driven: no pan, no zoom, so a scroll over
+                    // the panel keeps scrolling the page.
+                    interactive: false,
+                    attributionControl: false,
+                    fadeDuration: 0
+                });
+            } catch (err) {
+                orderRouteMap = null;
+                container.classList.add('hidden');
+                keepOrderRouteDrawn('The map could not start in this page'
+                    + (err && err.message ? ' (' + err.message + ')' : '')
+                    + ', so this is the drawn shape of the drive.');
+                return;
+            }
+            // A source can only be added once the style has arrived — adding one before that
+            // throws, and on a cold load the router's answer easily beats the tiles. So the
+            // drawn shape stays up over the empty map until the route can really be put on
+            // it, and the panel only becomes a reading from then on.
+            orderRouteMap.once('load', function () { paintOrderRoute(); });
+            orderRouteMap.on('error', orderRouteTrouble);
+            orderRouteMap.resize();
+        }
+
+        // A style that never arrives leaves a map with nothing to draw on, and an empty box is
+        // worse than the drawn route it replaced. Caught after the fact rather than before it,
+        // because the same `error` event carries a single tile that failed to download, which
+        // is not worth taking the panel away for.
+        function orderRouteTrouble() {
+            if (!orderRouteMap || orderRouteMap.isStyleLoaded()) { return; }
+            keepOrderRouteDrawn('The map tiles could not be loaded, so this is the drawn shape of'
+                + ' the drive.');
+        }
+
+        // The drawn shape comes back and the map stands down, so a drive that cannot be drawn
+        // leaves a panel that still reads rather than an empty green box.
+        //
+        // `keepMapUp` is for the one case where the map is not ready *yet*: the shape is laid
+        // over the map rather than put in its place, so the container keeps the box MapLibre
+        // sizes itself from. A map mounted into a hidden container starts with nothing to draw
+        // on and never reaches its first frame.
+        function keepOrderRouteDrawn(why, keepMapUp) {
+            var container = pendingEl('orderRouteMap');
+            var rest = pendingEl('orderRouteRest');
+            var note = pendingEl('orderRouteRestNote');
+            var legend = pendingEl('orderRouteLegend');
+            if (container) {
+                if (keepMapUp) { container.classList.remove('hidden'); }
+                else { container.classList.add('hidden'); }
+            }
+            if (rest) { rest.classList.remove('hidden'); }
+            if (note) {
+                note.textContent = why;
+                note.classList.remove('hidden');
+            }
+            if (legend) { legend.classList.add('hidden'); }
+            orderRouteShown = '';
+        }
+
+        // The way back: the map is the reading again, and the drawn shape goes.
+        function showOrderRouteSurface() {
+            var container = pendingEl('orderRouteMap');
+            var rest = pendingEl('orderRouteRest');
+            var note = pendingEl('orderRouteRestNote');
+            if (container) { container.classList.remove('hidden'); }
+            if (rest) { rest.classList.add('hidden'); }
+            if (note) { note.classList.add('hidden'); }
+        }
+
+        function setOrderRouteChip(text, live) {
+            var label = pendingEl('orderRouteChip');
+            var dot = pendingEl('orderRouteDot');
+            if (label) { label.textContent = text; }
+            if (dot) {
+                dot.className = 'w-1.5 h-1.5 rounded-full '
+                    + (live ? 'bg-[#DAF1DE]' : 'bg-[#235347]');
+            }
+        }
+
+        // Both ends of the route and where the line came from, inside the panel rather than on
+        // the map: a pale line over pale tiles is a line nobody can read.
+        function setOrderRouteLegend(from, to, note) {
+            var box = pendingEl('orderRouteLegend');
+            var fromEl = pendingEl('orderRouteFrom');
+            var toEl = pendingEl('orderRouteTo');
+            var noteEl = pendingEl('orderRouteNote');
+            if (fromEl) { fromEl.textContent = from; }
+            if (toEl) { toEl.textContent = to; }
+            if (noteEl) { noteEl.textContent = note; }
+            if (box) { box.classList.remove('hidden'); }
+        }
+
+        // The pickup end: the kitchen's own confirmed pin, which the pass hands over with the
+        // ration, and — for a kitchen that never confirmed one — the address the item was
+        // logged at, turned into coordinates with the same lookup the delivery card's search
+        // uses. Nothing is invented: a kitchen with neither has no route to draw.
+        function orderPickupPoint(row) {
+            var pin = (row && row.pickup) || {};
+            var lat = Number(pin.lat);
+            var lng = Number(pin.lng);
+            if (pin.lat !== null && pin.lat !== undefined
+                && pin.lng !== null && pin.lng !== undefined
+                && isFinite(lat) && isFinite(lng)) {
+                return Promise.resolve({ lat: lat, lng: lng, address: pin.address || '' });
+            }
+            return orderPlaceLookup(pickupPoints, pin.address);
+        }
+
+        // The drop-off end, which is this account's own: the location it confirmed on the
+        // delivery card, or — for an account that has not confirmed one yet — the address it
+        // onboarded with, looked up the same way. A shelter with neither has no route to draw,
+        // and the panel says so rather than drawing one to nowhere.
+        function orderDropPoint() {
+            if (savedLocation) {
+                return Promise.resolve({ lat: savedLocation.lat, lng: savedLocation.lng,
+                                         address: savedLocation.address || '' });
+            }
+            return orderPlaceLookup(dropPoints, profileAddress);
+        }
+
+        // One written address, as coordinates, with one lookup per address kept for as long as
+        // the page is open.
+        function orderPlaceLookup(cache, address) {
+            var wanted = String(address || '').trim();
+            if (!wanted) { return Promise.resolve(null); }
+            if (!cache[wanted]) {
+                cache[wanted] = fetch(LOOKUP_URL + encodeURIComponent(wanted),
+                    { headers: { Accept: 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (results) {
+                        if (!results || !results.length) { return null; }
+                        var lat = Number(results[0].lat);
+                        var lng = Number(results[0].lon);
+                        if (!isFinite(lat) || !isFinite(lng)) { return null; }
+                        return { lat: lat, lng: lng, address: wanted };
+                    })
+                    .catch(function () { return null; });
+            }
+            return cache[wanted];
+        }
+
+        // The road, from OSRM's keyless demo router — the one free service that answers with a
+        // real drive rather than a straight line. One request per pair of pins, kept for as
+        // long as the page is open: the board beside this re-reads itself every so often, and a
+        // route that has not changed does not need asking for again. An answer that failed is
+        // not kept, so a later render tries the router again.
+        function roadRoute(pickup, dropoff) {
+            var key = [pickup.lng, pickup.lat, dropoff.lng, dropoff.lat].join(',');
+            if (!roadRoutes[key]) {
+                var asked = fetch(ROUTE_URL + pickup.lng + ',' + pickup.lat + ';'
+                    + dropoff.lng + ',' + dropoff.lat + '?overview=full&geometries=geojson',
+                    { headers: { Accept: 'application/json' } })
+                    .then(function (response) {
+                        return response.json().catch(function () { return null; });
+                    })
+                    .then(function (data) {
+                        var route = data && data.routes && data.routes[0];
+                        if (!route || !route.geometry || !route.geometry.coordinates) {
+                            return null;
+                        }
+                        return {
+                            coordinates: route.geometry.coordinates,
+                            metres: route.distance,
+                            seconds: route.duration
+                        };
+                    })
+                    .catch(function () { return null; });
+                asked.then(function (route) {
+                    if (!route) { delete roadRoutes[key]; }
+                });
+                roadRoutes[key] = asked;
+            }
+            return roadRoutes[key];
+        }
+
+        // The whole of what the panel is showing, decided in one place: no selection, an
+        // account with no drop-off pin, a kitchen with no pickup pin, and the route itself.
+        // Every one of those states is said in the panel rather than left as an empty box.
+        function paintOrderRoute() {
+            var row = pendingRow();
+            if (!row) {
+                keepOrderRouteDrawn('No order selected yet. Pick one beside this and the drive'
+                    + ' from its kitchen to you appears here.');
+                setOrderRouteChip('no route yet', false);
+                return;
+            }
+            Promise.all([orderDropPoint(), orderPickupPoint(row)]).then(function (points) {
+                var dropoff = points[0];
+                var pickup = points[1];
+                var who = row.donor || 'the kitchen';
+                if (!dropoff) {
+                    keepOrderRouteDrawn('The drive starts at ' + who + ', but this account has no'
+                        + ' confirmed delivery location to route to it \u2014 confirm one to see'
+                        + ' the route.');
+                    setOrderRouteChip('no drop-off pin', false);
+                    return;
+                }
+                if (!pickup) {
+                    keepOrderRouteDrawn('No pickup pin to route from: ' + who + ' has confirmed no'
+                        + ' location of its own, and the address the item was logged at could not'
+                        + ' be read.');
+                    setOrderRouteChip('no pickup pin', false);
+                    return;
+                }
+                if (!orderRouteMap || !orderRouteMap.isStyleLoaded()) {
+                    // The library, the style or the tiles are still on their way — and this
+                    // render is itself a reason to go and fetch them. The panel was asked for
+                    // from the viewport alone, which is the one thing a reader of the cards
+                    // beside it never moves: the route was known, the map that should draw it
+                    // was never requested, and the panel sat on its drawn placeholder with the
+                    // library still on nobody's to-do list. `loadOrderRouteMap` is a no-op once
+                    // it has been asked for.
+                    if (!orderRouteAsked) { loadOrderRouteMap(); }
+                    keepOrderRouteDrawn('Reading the road from '
+                        + (pickup.address || 'the kitchen') + ' to you\u2026', true);
+                    setOrderRouteChip('reading the road\u2026', false);
+                    return;
+                }
+                if (row.post_id === orderRouteShown) { return; }
+                orderRouteShown = row.post_id;
+                drawOrderRoute(row, pickup, dropoff);
+            });
+        }
+
+        function drawOrderRoute(row, pickup, dropoff) {
+            roadRoute(pickup, dropoff).then(function (route) {
+                if (!orderRouteMap || !orderRouteMap.isStyleLoaded()) { return; }
+                orderRouteMarks(pickup, dropoff);
+                putOrderRoute(route ? route.coordinates
+                    : [[pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]]);
+                showOrderRouteSurface();
+                var km = route ? route.metres / 1000 : null;
+                var minutes = route ? Math.max(1, Math.round(route.seconds / 60)) : null;
+                // The details box reads the same reading: one drive, said twice.
+                orderRouteReading = { id: row ? row.post_id : '', km: km, minutes: minutes };
+                setOrderRouteLegend(
+                    'Collected from ' + (row.donor || 'the kitchen')
+                        + (pickup.address ? ' \u00b7 ' + pendingPlace(pickup.address) : ''),
+                    'Delivered to ' + (dropoff.address ? pendingPlace(dropoff.address) : 'you'),
+                    route ? roadRouteNote(route) : ('Shown as the direct line between the two'
+                        + ' pins \u2014 the road router could not be read. ' + MAP_CREDIT_TEXT));
+                setOrderRouteChip(route
+                    ? 'closed \u00b7 ' + km.toFixed(1) + ' km \u00b7 ' + minutes + ' min'
+                    : 'closed \u00b7 direct line', !!route);
+                fitOrderRoute(pickup, dropoff);
+                renderPendingFoot();
+                // The chip and the legend are measured to take the fit, and a webfont that
+                // lands after it changes both by a pixel or two, so the fit is taken once more
+                // when the fonts are in.
+                if (document.fonts && document.fonts.ready) {
+                    document.fonts.ready.then(function () {
+                        if (orderRouteMap) { fitOrderRoute(pickup, dropoff); }
+                    });
+                }
+            });
+        }
+
+        function roadRouteNote(route) {
+            var km = route.metres / 1000;
+            var minutes = Math.max(1, Math.round(route.seconds / 60));
+            return 'Road route \u00b7 ' + km.toFixed(1) + ' km by road \u00b7 about ' + minutes
+                + ' min \u00b7 OSRM \u00b7 ' + MAP_CREDIT_TEXT;
+        }
+
+        // The two ends of the delivery: the teardrop is the kitchen's own pin, the ring is this
+        // shelter's, so the two ends of one drive are told apart at a glance.
+        function orderRouteMarks(pickup, dropoff) {
+            if (!orderRoutePickup) {
+                orderRoutePickup = new window.maplibregl.Marker(
+                    { element: deliveryPinElement(), anchor: 'bottom' });
+            }
+            orderRoutePickup.setLngLat([pickup.lng, pickup.lat]).addTo(orderRouteMap);
+            if (!orderRouteDropoff) {
+                orderRouteDropoff = new window.maplibregl.Marker(
+                    { element: dropoffRingElement(), anchor: 'center' });
+            }
+            orderRouteDropoff.setLngLat([dropoff.lng, dropoff.lat]).addTo(orderRouteMap);
+        }
+
+        // The line itself: a wide casing with the route drawn over it, which is how the rest of
+        // the site tells a road from the ground behind it, in the same two colour steps.
+        function putOrderRoute(coordinates) {
+            var shape = {
+                type: 'Feature',
+                properties: {},
+                geometry: { type: 'LineString', coordinates: coordinates }
+            };
+            if (orderRouteMap.getSource('order-route')) {
+                orderRouteMap.getSource('order-route').setData(shape);
+                return;
+            }
+            orderRouteMap.addSource('order-route', { type: 'geojson', data: shape });
+            orderRouteMap.addLayer({
+                id: 'order-route-case',
+                type: 'line',
+                source: 'order-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#235347', 'line-width': 9, 'line-opacity': 0.5 }
+            });
+            orderRouteMap.addLayer({
+                id: 'order-route',
+                type: 'line',
+                source: 'order-route',
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#DAF1DE', 'line-width': 3 }
+            });
+        }
+
+        // How much of the panel the map may not draw under, read off the panel's own furniture
+        // rather than guessed at: the chip runs along the top, the legend along the bottom, and
+        // the two marks stand off the points they name, so both have to be cleared by the fit.
+        function orderRoutePadding() {
+            var panel = pendingEl('orderRoutePanel');
+            var chip = pendingEl('orderRouteChip');
+            var legend = pendingEl('orderRouteLegend');
+            var padding = { top: 72, bottom: 132, left: 44, right: 44 };
+            if (!panel) { return padding; }
+            var box = panel.getBoundingClientRect();
+            if (chip) {
+                padding.top = Math.round(chip.getBoundingClientRect().bottom - box.top)
+                    + 20 + ORDER_PIN_HEIGHT;
+            }
+            if (legend && !legend.classList.contains('hidden')) {
+                padding.bottom = Math.round(box.bottom - legend.getBoundingClientRect().top)
+                    + 14 + ORDER_RING_REACH;
+            }
+            return padding;
+        }
+
+        function fitOrderRoute(pickup, dropoff) {
+            var bounds = new window.maplibregl.LngLatBounds(
+                [pickup.lng, pickup.lat], [pickup.lng, pickup.lat]);
+            bounds.extend([dropoff.lng, dropoff.lat]);
+            // Snapping rather than animating: a route wants no animation, and the padding is
+            // taken again on every fit because the legend only exists once the route does.
+            orderRouteMap.fitBounds(bounds, { padding: orderRoutePadding(), duration: 0 });
+        }
+
+        // The dashboard's own reader. The pass is the same answer the bell shows, so one read
+        // serves both: opening this screen asks for it, and the close that moves the list arrives
+        // with the next read — the claims stream, the bell's own backstop, or the tab coming back
+        // to the front, which is what keeps a kitchen's close from needing a reload here.
+        function openDashboardOrders() {
+            watchOrderRoute();
+            // Painted before the answer lands, so the surface reads "reading your orders" rather
+            // than the frame's own idle state while the one read it shares with the bell is on
+            // its way. A board already read keeps what it is showing.
+            renderPendingOrders(null);
+            loadNotifications(false);
         }
 
         // ---------------------------------------------------------------------------

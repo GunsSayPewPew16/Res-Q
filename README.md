@@ -116,11 +116,18 @@ role chosen at the start.
    three counters, which hold placeholder bars because nothing reads them yet. The
    board under the filters is the **one light surface on the page**: three small
    filter labels over a mint box headed *Pending orders*, which holds the orders
-   still waiting and, inset into its right-hand side, the selected order's details.
-   Below it sit the routing map and a panel still waiting for content of its own, and
-   under those the *Latest completed orders* cards — the donor's own finished orders,
-   read back from `GET /api/orders` and dated by the moment each one finished, newest
-   first, and empty until an order finishes. The bell in the header
+   still waiting — the carousel of them, with the one being read expanded in a white
+   box under it and that order's own figures as a dark inset at its foot. What *still
+   waiting* means is each side's own question: a donor's are the items of theirs a
+   shelter has claimed, and a recipient's are the orders its kitchen has closed, so
+   its *Order details* inset carries the donor's side of the ration — what is coming,
+   what share of the post that is, and the drive to the kitchen in kilometres and
+   minutes. On the recipient's screen the routing map is the second half of that same
+   row, drawn at the box's own size beside it; the donor's keeps the map under the
+   surface with the claimant rail beside it. Under one or the other sit the *Latest
+   completed orders* cards — the donor's own finished orders, read back from
+   `GET /api/orders` and dated by the moment each one finished, newest first, and
+   empty until an order finishes. The bell in the header
    opens a small notifications panel under it rather than a browser alert, and the
    account pill beside it opens the same kind of panel; nothing feeds either list
    yet, so both are left empty on purpose.
@@ -342,7 +349,10 @@ line, and the board's chip says *claims migration pending*: a half-migrated proj
 the count, not the ability to claim. Until the `closed_at` one is applied, closing an item
 still works end to end — the closure is the API's own record, and it is what decides the
 ration — and the one thing missing is the marker on the row the other dashboard reads, so
-the donor's screen says the board was not marked and names the file.
+the donor's screen says the board was not marked and names the file. That one has since
+been applied to the live project by hand (2026-10-12), so a close now marks the row as
+well; the allocation migration above it is the one still unapplied, and `POST /api/rations`
+is the call that names it.
 
 Emptying the board is a separate, deliberate act rather than a migration:
 `supabase/clear_surplus_posts.sql` deletes every row and is run by hand the same way.
@@ -1039,7 +1049,7 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from. A delivery that has finished carries `completed` in `status` and the moment it finished in `completed_at`, which is what the donor dashboard's *Latest completed orders* cards read and date themselves by |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
-| `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed **whose donor has closed it**, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing, and an empty list with `waiting` and the other note for one whose claims are on items still open — a share waits on the close, and `waiting` is how many of the caller's own are. Only the caller's own ration and share are named — other claimants are a count. The caller's own business name travels with the request, so a donor also gets `owned`: one entry per post of theirs a claim is on, each carrying `closed` and `closed_at`, with every claimant named beside its ration and share |
+| `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed **whose donor has closed it**, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing, and an empty list with `waiting` and the other note for one whose claims are on items still open — a share waits on the close, and `waiting` is how many of the caller's own are. Only the caller's own ration and share are named — other claimants are a count. Where the ration is collected from travels with the caller's own entries too: `distance_km` between the two pins, measured rather than read, and `pickup` naming the donor's own address and pin, because the item is collected there and the address is on the board already. The caller's own business name travels with the request, so a donor also gets `owned`: one entry per post of theirs a claim is on, each carrying `closed` and `closed_at`, with every claimant named beside its ration and share |
 | `POST` | `/api/surplus-categories` | The last month of the caller's own surplus log, summarised by goods category: kilograms, entry count, share of the total and how each bar was read — `text`, `assumed`, `logged` or `mixed`. The caller's board rows arrive in the body as `posts` (`400` `no_posts` without the key) and are **filed into the log first**, each row once, under its own post id; the window (`days`, default 30, clamped to 1–365) is applied when the log is read rather than when the board is. Only rows carrying the caller's own business name are filed — the rest are reported as `skipped` — and the answer carries `filed` and `stored` beside the summary. A month of logged days is seeded into the log for the fixture kitchens, so the mix stands on a board that has been cleared |
 | `POST` | `/api/rations` | Run the same pass and publish the caller's own shares back to the board, writing `allocated_kg`, `allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at` onto each row it claimed — and nothing else about the row. Answers `503` `board_unconfigured` when `RESQ_SUPABASE_URL`/`RESQ_SUPABASE_KEY` are not set, and `200` with a per-post result otherwise — including when a row refuses the write, which the result says per post rather than failing the request |
 | `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
@@ -1105,6 +1115,21 @@ location is listed as a card that says so rather than a route drawn to nowhere, 
 claimed row with no claim on record — which is what an older row looks like on a
 deployment that has just started keeping claims — says that too instead of reading as
 zero claimants.
+
+**The recipient's side of the same board** is the other reading of a close, and it is its
+*Pending orders* surface. A confirmed order starts as a claim; the kitchen's own close is
+what turns its share into a ration, so this box reads the pass's answer
+(`GET /api/rations`) and takes its `allocations` — every one of them is a claim of this
+account's whose post its donor has closed, which is exactly "the orders its kitchen has
+finished with". They are read newest close first, in the same carousel, with the selected
+order expanded in the white box and its *Order details* inset carrying the donor's side:
+the ration in kilos out of the post's own weight, the share of the post it is and how many
+shelters that share was split with, the donor it comes from, and the drive — the road
+distance and time, read off the same OSRM answer the map beside it draws, or the measured
+distance between the pins until the router has answered. The map is the same panel the
+donor's dashboard draws, read from the other end: the kitchen's own `pickup` pin is the
+teardrop and this shelter's own confirmed pin is the ring, so the two halves of the row are
+one order and the road it comes down.
 
 ### The rationing pass
 
