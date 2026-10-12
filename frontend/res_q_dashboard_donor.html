@@ -4861,13 +4861,16 @@
         // the rail is on at the drop-off, and the drive OSRM answers between them. It is the
         // console's own map — the same painted OpenFreeMap tiles, the ink teardrop at the
         // pickup and the open mint ring where the food is going — mounted into the panel
-        // under the board, and asked for only when that panel is approached, so a donor who
-        // never scrolls this far fetches none of the library, the tiles or the router.
+        // under the board, and asked for when the board is read or the panel approached — so
+        // a donor who never scrolls this far fetches none of the library, the tiles or the
+        // router, and one who never scrolls *at all* still gets the map the board above them
+        // already knows how to draw.
         // ---------------------------------------------------------------------------
         var orderRouteMap = null;
         var orderRoutePickup = null;
         var orderRouteDropoff = null;
         var orderRouteWatched = false;
+        var orderRouteAsked = false;   // whether its library has been asked for at all
         var orderRouteShown = '';      // what the map is showing, so the same route is not redrawn
         var pickupPoints = {};         // one address lookup per pickup address
         var roadRoutes = {};           // one OSRM answer per pair of pins
@@ -4922,6 +4925,7 @@
 
         function loadOrderRouteMap() {
             if (orderRouteMap || !pendingEl('orderRouteMap')) { return; }
+            orderRouteAsked = true;
             loadMaplibre(mountOrderRouteMap);
         }
 
@@ -5131,7 +5135,15 @@
                     return;
                 }
                 if (!orderRouteMap || !orderRouteMap.isStyleLoaded()) {
-                    // The library, the style or the tiles are still on their way.
+                    // The library, the style or the tiles are still on their way — and this
+                    // render is itself a reason to go and fetch them. The panel was asked
+                    // for from the viewport alone, which is the one thing a donor reading
+                    // the cards above it never moves: the route was known, the map that
+                    // should draw it was never requested, and the panel sat on its drawn
+                    // placeholder with the library still on nobody's to-do list. Asking here
+                    // makes the board's own read a reason the map comes onto the page, and
+                    // `loadOrderRouteMap` is a no-op once it has been asked for.
+                    if (!orderRouteAsked) { loadOrderRouteMap(); }
                     keepOrderRouteDrawn('Reading the road from ' + (pickup.address || 'your pin')
                         + ' to ' + (claimant.name || 'the shelter') + '\u2026');
                     setOrderRouteChip('reading the road\u2026', false);
