@@ -223,11 +223,22 @@ def table_url(table, query=""):
 
 
 def row_url(table, filters, select="id"):
-    """A table's endpoint narrowed to one row, written the way PostgREST reads a filter."""
+    """A table's endpoint narrowed to one row, written the way PostgREST reads a filter.
+
+    Every filter is separated by `&`, which is the only thing that tells PostgREST where one
+    ends and the next begins. Joining them with `?` instead put the rest of the query inside
+    the first filter's value: a claim looked up by post and name was asked for as
+    `post_id=eq.<uuid>?recipient_name=eq.Ana Cruz`, the board read the whole of that as one
+    uuid and refused it with `invalid input syntax for type uuid`. The lookup failed, the
+    insert was never reached, and a *claim* was the only row this could happen to — a post is
+    looked up by its id alone, which is one filter and one separator either way. That is why
+    the demo board held every fixture post and not one fixture claim, and why the feed had no
+    "and N more claimed" line to draw on the posts the fixture says were claimed twice over.
+    """
     pairs = [(name, value) for name, value in sorted(filters.items()) if value is not None]
-    query = "?".join([""] + ["%s=eq.%s" % (name, urllib.parse.quote(str(value), safe=""))
-                             for name, value in pairs])
-    return table_url(table, query + "&select=" + select + "&limit=1")
+    query = "&".join("%s=eq.%s" % (name, urllib.parse.quote(str(value), safe=""))
+                     for name, value in pairs)
+    return table_url(table, ("?" + query if query else "?") + "&select=" + select + "&limit=1")
 
 
 def holds_row(table, filters):

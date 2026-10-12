@@ -714,8 +714,13 @@
                                 goodsType(row.goods_type).emoji + '</span>' +
                                 escapeHtml(goodsType(row.goods_type).label) + '</span>'
                             : '') +
-                        '<span class="' + statusChip(row.status) + '">' +
-                            statusLabel(row.status) + '</span>' +
+                        // No status chip. `claimed` used to mean "taken — nothing left here",
+                        // which is what a chip is for saying; now a post can be claimed by
+                        // several recipients and stays open to more, so the chip would be
+                        // telling a reader to move on from a post they can still take. The
+                        // line above the footer names the claimants, which is the fact the
+                        // chip was standing in for, and the action beside it is what the
+                        // reader does about it.
                         // The one action, wearing the site's hero-card treatment: dark with
                         // cream text at rest, filled with the accent and turned black while
                         // hovered or keyboard-focused — see .claim-btn in the dashboards.

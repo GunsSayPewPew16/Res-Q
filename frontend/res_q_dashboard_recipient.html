@@ -695,17 +695,22 @@
             <div id="viewFeed" class="hidden">
                 <div class="panel p-5 md:p-7">
                     <!-- The board's tab bar: the view being read in mint under its rule, the
-                         others sage. All three views are real filters over the rows already read
-                         — the whole board, the posts nobody has claimed yet, or the posts tagged
-                         with the goods this account asked for in its goods profile, which is what
-                         *For You* means — so switching is instant and the chip at the right keeps
-                         counting the whole board either way. The board's name moves to a
-                         screen-reader heading under the tabs. -->
+                         others sage. Both views are real filters over the rows already read —
+                         the whole board, or the posts tagged with the goods this account asked
+                         for in its goods profile, which is what *For You* means — so switching
+                         is instant and the chip at the right keeps counting the whole board
+                         either way. The board's name moves to a screen-reader heading under the
+                         tabs.
+
+                         There used to be a third, *Open*, holding back the posts somebody had
+                         already claimed. It is gone: a post can be claimed by several shelters
+                         now, so "already claimed" stopped being a reason not to look at one,
+                         and a view whose whole purpose was hiding those posts was hiding the
+                         ones worth reading. -->
                     <div class="flex flex-wrap items-end justify-between gap-4 pb-4 mb-6 border-b border-[#235347]">
                         <div class="flex items-center gap-6" role="tablist" aria-label="Board views">
                             <span class="sr-only">Live surplus feed</span>
                             <button type="button" id="feedTabAll" role="tab" aria-selected="true" onclick="setFeedTab('all')" class="feed-tab is-active">All posts</button>
-                            <button type="button" id="feedTabOpen" role="tab" aria-selected="false" onclick="setFeedTab('open')" class="feed-tab">Open</button>
                             <button type="button" id="feedTabForYou" role="tab" aria-selected="false" onclick="setFeedTab('foryou')" class="feed-tab">For You</button>
                         </div>
                         <span id="feedState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] bg-[#051F20] organic-chip px-2.5 py-1">idle</span>
@@ -2816,7 +2821,9 @@
         // instant and the chip above still counts the whole board.
         var feedRows = [];
         var feedTab = 'all';
-        var FEED_TABS = { all: 'feedTabAll', open: 'feedTabOpen', foryou: 'feedTabForYou' };
+        // The tabs that exist. `open` was one of them until a post could be claimed by
+        // several shelters; it is not a view any more, and no id is left for one.
+        var FEED_TABS = { all: 'feedTabAll', foryou: 'feedTabForYou' };
 
         function setFeedTab(name) {
             feedTab = FEED_TABS[name] ? name : 'all';
@@ -2847,9 +2854,6 @@
 
         // What each view says when it has nothing to draw.
         function feedEmpty() {
-            if (feedTab === 'open') {
-                return 'Nothing untouched right now \u2014 every post on the board already has a claimant.';
-            }
             if (feedTab === 'foryou') {
                 return profileGoods().length
                     ? 'Nothing on the board is tagged with the goods you need right now.'
@@ -2910,20 +2914,19 @@
             paintFeed();
         }
 
-        // Draw the view the tab bar is on out of the rows last read: the whole board,
-        // or only what is still there to take. The cards themselves come from the
-        // shared renderer, with the one action a recipient has on an open post.
+        // Draw the view the tab bar is on out of the rows last read: the whole board, or
+        // the posts tagged with what this account handles. The cards themselves come from
+        // the shared renderer, with the one action a recipient has on a post — claiming it,
+        // which is an action a post somebody has already claimed still has.
         function paintFeed() {
             var list = document.getElementById('feedList');
             var db = resqDb();
             if (!list || !db) { return; }
             var goods = profileGoods();
-            var rows = feedTab === 'open'
-                ? feedRows.filter(function (row) { return row.status !== 'claimed'; })
-                : (feedTab === 'foryou'
-                    // An untagged post belongs to no category, so it never reaches this view.
-                    ? feedRows.filter(function (row) { return goods.indexOf(row.goods_type) !== -1; })
-                    : feedRows);
+            var rows = feedTab === 'foryou'
+                // An untagged post belongs to no category, so it never reaches this view.
+                ? feedRows.filter(function (row) { return goods.indexOf(row.goods_type) !== -1; })
+                : feedRows;
             if (!rows.length) {
                 list.innerHTML = '<span class="block text-[11px] text-neutral-500">'
                     + feedEmpty()
