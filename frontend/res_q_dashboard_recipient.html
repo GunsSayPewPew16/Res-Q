@@ -430,6 +430,35 @@
             box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
         }
 
+        /* The mark that walks the route: a mint dot with a halo that breathes, so a road
+           the panel has drawn and a delivery on that road are told apart at a glance.
+           Looping motion is decoration, so a reader who has asked their system for less of
+           it gets the dot without the pulse. */
+        .resq-tracker-icon {
+            background: transparent;
+            border: 0;
+            width: 22px;
+            height: 22px;
+        }
+        .resq-tracker {
+            width: 14px;
+            height: 14px;
+            margin: 4px;
+            border-radius: 9999px;
+            background-color: #DAF1DE;
+            border: 2px solid #051F20;
+            box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45);
+            animation: resq-tracker-pulse 2.6s ease-out infinite;
+        }
+        @keyframes resq-tracker-pulse {
+            0% { box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45), 0 0 0 0 rgba(218, 241, 222, 0.55); }
+            70% { box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45), 0 0 0 11px rgba(218, 241, 222, 0); }
+            100% { box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45), 0 0 0 0 rgba(218, 241, 222, 0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .resq-tracker { animation: none; }
+        }
+
         /* Custom scrollbar for the long rails */
         ::-webkit-scrollbar {
             width: 5px;
@@ -561,24 +590,26 @@
                     </button>
                 </div>
 
-                <!-- The recipient's own figures: what has been claimed, what is on its way and
-                     what has arrived. Nothing reads them yet, so the values are held open as
-                     placeholder bars rather than invented numbers. -->
+                <!-- The recipient's own figures: what it has reached for, what is on its way
+                     and what has arrived. The three values are read from the two answers the
+                     rest of this screen already reads — the rationing pass for the claims, the
+                     books for the deliveries — and each holds an em dash until its own read has
+                     landed, because a zero nobody read and an empty shelf are not one thing. -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-stretch">
 
                     <div class="lg:col-span-8 panel p-6 md:p-7 flex flex-col justify-between gap-6">
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                            <div class="space-y-3">
+                            <div class="space-y-2">
                                 <span class="block text-xs text-[#8EB69B]">Orders claimed</span>
-                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                                <span id="metricClaims" class="block font-display font-bold tabular-nums text-3xl md:text-4xl leading-none">&#8212;</span>
                             </div>
-                            <div class="space-y-3">
+                            <div class="space-y-2">
                                 <span class="block text-xs text-[#8EB69B]">Deliveries in progress</span>
-                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                                <span id="metricInProgress" class="block font-display font-bold tabular-nums text-3xl md:text-4xl leading-none">&#8212;</span>
                             </div>
-                            <div class="space-y-3">
+                            <div class="space-y-2">
                                 <span class="block text-xs text-[#8EB69B]">Deliveries completed</span>
-                                <span class="block h-9 w-24 organic-inner bg-[#163832]"></span>
+                                <span id="metricCompleted" class="block font-display font-bold tabular-nums text-3xl md:text-4xl leading-none">&#8212;</span>
                             </div>
                         </div>
 
@@ -736,53 +767,24 @@
                     </div>
                 </div>
 
-                <!-- What has already arrived: one card per finished order, oldest first. Empty
-                     until a delivery lands, so the cards hold their shape and nothing else. -->
+                <!-- What has already arrived: one card per finished delivery, read from the
+                     books' own orders and narrowed to this side of them, newest finish first.
+                     Empty until a delivery lands, so the frame opens on a line saying so
+                     rather than on invented cards. -->
                 <section class="space-y-4">
                     <div class="flex flex-wrap items-end justify-between gap-4">
-                        <h2 class="font-display text-2xl md:text-3xl leading-none">Latest completed orders</h2>
+                        <h2 class="font-display text-2xl md:text-3xl leading-none">Recent Deliveries</h2>
                         <div class="flex items-center gap-3">
+                            <span id="completedState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] bg-[#051F20] organic-chip px-2.5 py-1">idle</span>
                             <span class="text-xs text-[#8EB69B]">Sort by</span>
                             <span class="organic-chip inline-flex items-center gap-2 px-3.5 py-1.5 text-xs text-[#8EB69B] bg-[#051F20] border border-[#235347]">Newest <span aria-hidden="true" class="text-[8px]">&#9660;</span></span>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                        <article class="panel panel-lift p-5 flex flex-col gap-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <span class="h-3 w-28 organic-chip bg-[#235347]"></span>
-                                <span class="w-8 h-8 organic-chip panel-raised"></span>
-                            </div>
-                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
-                            <div class="pt-3 border-t border-[#235347] space-y-2">
-                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
-                                <span class="block h-2 w-2/3 organic-chip bg-[#163832]"></span>
-                            </div>
-                        </article>
-
-                        <article class="panel panel-lift p-5 flex flex-col gap-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <span class="h-3 w-32 organic-chip bg-[#235347]"></span>
-                                <span class="w-8 h-8 organic-chip panel-raised"></span>
-                            </div>
-                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
-                            <div class="pt-3 border-t border-[#235347] space-y-2">
-                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
-                                <span class="block h-2 w-1/2 organic-chip bg-[#163832]"></span>
-                            </div>
-                        </article>
-
-                        <article class="panel panel-lift p-5 flex flex-col gap-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <span class="h-3 w-24 organic-chip bg-[#235347]"></span>
-                                <span class="w-8 h-8 organic-chip panel-raised"></span>
-                            </div>
-                            <span class="flex items-center gap-2 text-xs text-[#8EB69B]"><span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed</span>
-                            <div class="pt-3 border-t border-[#235347] space-y-2">
-                                <span class="block h-2 w-full organic-chip bg-[#163832]"></span>
-                                <span class="block h-2 w-3/4 organic-chip bg-[#163832]"></span>
-                            </div>
-                        </article>
+                    <!-- Filled by renderRecentDeliveries: one card per finished order, the
+                         kitchen it came from and the drive it ran. -->
+                    <div id="completedOrdersList" class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                        <span class="col-span-full block text-sm text-[#8EB69B]">Reading the deliveries&#8230;</span>
                     </div>
                 </section>
 
@@ -2956,6 +2958,15 @@
                 pendingProblem = problem;
             }
             if (count) { count.textContent = '(' + pendingRows.length + ')'; }
+            // The claims figure in the header is the same answer one more way: the rations
+            // the pass has already worked out (its own `count`, the closed ones) plus the
+            // items this shelter has claimed whose kitchens have not closed them yet (its
+            // `waiting`) — a claim is a claim whether or not a share has been settled on
+            // it. An answer that never arrived is an em dash, not a zero; an answer still
+            // on its way leaves the figure as it stands rather than blanking it.
+            setMetric('metricClaims', doc
+                ? (Number(doc.waiting || 0) + Number(doc.count || 0))
+                : (problem ? null : undefined));
             // The chip over the count is the state of the read rather than of the orders: a
             // list nobody has been handed yet is not the same thing as an empty one, and a read
             // that failed is not the same as either.
@@ -3322,6 +3333,9 @@
         // sizes itself from. A map mounted into a hidden container starts with nothing to draw
         // on and never reaches its first frame.
         function keepOrderRouteDrawn(why, keepMapUp) {
+            // A panel with no route on it has no mark walking one: the tracker belongs to
+            // the line, and it goes when the line does.
+            stopRouteTracker();
             var container = pendingEl('orderRouteMap');
             var rest = pendingEl('orderRouteRest');
             var note = pendingEl('orderRouteRestNote');
@@ -3508,8 +3522,12 @@
             roadRoute(pickup, dropoff).then(function (route) {
                 if (!orderRouteMap || !orderRouteMap.isStyleLoaded()) { return; }
                 orderRouteMarks(pickup, dropoff);
-                putOrderRoute(route ? route.coordinates
-                    : [[pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]]);
+                var line = route ? route.coordinates
+                    : [[pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]];
+                putOrderRoute(line);
+                // The mark that walks the line is set going in the same breath, so drawing
+                // the road and knowing its pace are one act.
+                startRouteTracker(line, route ? route.seconds : null);
                 showOrderRouteSurface();
                 var km = route ? route.metres / 1000 : null;
                 var minutes = route ? Math.max(1, Math.round(route.seconds / 60)) : null;
@@ -3588,6 +3606,115 @@
             });
         }
 
+        // ---------------------------------------------------------------------------
+        // The mark that walks the route: a small dot that travels the drawn line at the
+        // pace the router's own estimate gives it — one traverse per expected drive — and
+        // then starts again at the kitchen. It is what tells a drawing of a road from a
+        // delivery on one: the line says where the food goes, the dot says it is going.
+        // It rides the route's own geometry rather than a timer of its own, so a slower
+        // drive is a slower dot; where the router never answered there is no expected time
+        // to honour, and a direct line is walked at the fixed pace below rather than being
+        // given a speed nobody measured.
+        // ---------------------------------------------------------------------------
+        var ROUTE_TRACK_FALLBACK_SECONDS = 45;
+        var routeTracker = null;     // the mark itself, once there is a line to walk
+        var routeTrackFrame = 0;     // the animation frame it is walking on
+        var routeTrack = null;       // { points, cumulative, total, seconds }
+
+        // How far apart two points are, for pacing only: degrees with the longitude step
+        // squeezed by the latitude, which is close enough to make the legs of one route
+        // comparable and costs nothing per frame.
+        function trackDistance(from, to) {
+            var mid = ((from[1] + to[1]) / 2) * Math.PI / 180;
+            var dx = (to[0] - from[0]) * Math.cos(mid);
+            var dy = to[1] - from[1];
+            return Math.sqrt((dx * dx) + (dy * dy));
+        }
+
+        // Where the mark is, at a fraction of the way along the line — read off the same
+        // cumulative distances the pace is measured in, so the dot and the drive agree.
+        function trackPointAt(fraction) {
+            var track = routeTrack;
+            var wanted = track.total * Math.min(Math.max(fraction, 0), 1);
+            for (var i = 1; i < track.points.length; i += 1) {
+                if (track.cumulative[i] < wanted) { continue; }
+                var leg = track.cumulative[i] - track.cumulative[i - 1];
+                var along = leg > 0 ? (wanted - track.cumulative[i - 1]) / leg : 0;
+                var from = track.points[i - 1];
+                var to = track.points[i];
+                return [from[0] + ((to[0] - from[0]) * along),
+                        from[1] + ((to[1] - from[1]) * along)];
+            }
+            return track.points[track.points.length - 1];
+        }
+
+        function trackerElement() {
+            var mark = document.createElement('div');
+            mark.className = 'resq-tracker-icon';
+            mark.innerHTML = '<div class="resq-tracker"></div>';
+            return mark;
+        }
+
+        function stopRouteTracker() {
+            if (routeTrackFrame) {
+                window.cancelAnimationFrame(routeTrackFrame);
+                routeTrackFrame = 0;
+            }
+            routeTrack = null;
+            if (routeTracker) {
+                routeTracker.remove();
+                routeTracker = null;
+            }
+        }
+
+        function startRouteTracker(coordinates, seconds) {
+            stopRouteTracker();
+            if (!window.maplibregl || !orderRouteMap || !coordinates || coordinates.length < 2) {
+                return;
+            }
+            var points = coordinates.map(function (point) {
+                return [Number(point[0]), Number(point[1])];
+            });
+            var cumulative = [0];
+            for (var i = 1; i < points.length; i += 1) {
+                cumulative.push(cumulative[i - 1] + trackDistance(points[i - 1], points[i]));
+            }
+            var total = cumulative[cumulative.length - 1];
+            if (!isFinite(total) || total <= 0) { return; }
+            routeTrack = {
+                points: points,
+                cumulative: cumulative,
+                total: total,
+                seconds: (seconds && isFinite(seconds) && seconds > 0)
+                    ? seconds : ROUTE_TRACK_FALLBACK_SECONDS
+            };
+            routeTracker = new window.maplibregl.Marker(
+                { element: trackerElement(), anchor: 'center' });
+            // A reader who has asked their system for less motion gets the mark where the
+            // drive is halfway rather than a dot walking under their eyes: the reading is
+            // the dot's position, not the movement.
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                routeTracker.setLngLat(trackPointAt(0.5)).addTo(orderRouteMap);
+                return;
+            }
+            routeTracker.setLngLat(points[0]).addTo(orderRouteMap);
+            var started = 0;
+            function step(now) {
+                if (!routeTrack || !routeTracker) { return; }
+                if (!started) { started = now; }
+                var walked = (now - started) / 1000;
+                if (walked >= routeTrack.seconds) {
+                    // The drive is done, so the mark goes back to the kitchen and runs it
+                    // again: the panel is a reading of a route, not a clock.
+                    started = now;
+                    walked = 0;
+                }
+                routeTracker.setLngLat(trackPointAt(walked / routeTrack.seconds));
+                routeTrackFrame = window.requestAnimationFrame(step);
+            }
+            routeTrackFrame = window.requestAnimationFrame(step);
+        }
+
         // How much of the panel the map may not draw under, read off the panel's own furniture
         // rather than guessed at: the chip runs along the top, the legend along the bottom, and
         // the two marks stand off the points they name, so both have to be cleared by the fit.
@@ -3618,6 +3745,157 @@
             orderRouteMap.fitBounds(bounds, { padding: orderRoutePadding(), duration: 0 });
         }
 
+        // ---------------------------------------------------------------------------
+        // The recipient's own figures, and the deliveries they count. Both are the books'
+        // own rows — `GET /api/orders`, narrowed to this side of them — and the three
+        // figures are that one answer read by state: a delivery still being arranged or
+        // confirmed is in progress, one that has gone out is completed. The claims figure
+        // beside them is not read here: it rides the rationing pass the rail already asks
+        // for, since a claim is what the pass is about.
+        // ---------------------------------------------------------------------------
+        var LIVE_ORDER_STATUSES = ['proposed', 'accepted'];
+        var FINISHED_ORDER_STATUS = 'completed';
+        var COMPLETED_SHOWN = 6;
+        var deliveriesReading = false;
+
+        // One figure in the header panel. A number is written as a number, a null says the
+        // reading failed and is an em dash, and an undefined leaves the figure alone — a read
+        // that has not come back yet is not the same thing as one that says nothing is there.
+        function setMetric(id, value) {
+            var el = document.getElementById(id);
+            if (!el || value === undefined) { return; }
+            el.textContent = (value === null || value === undefined) ? '\u2014' : String(value);
+        }
+
+        function completedList() {
+            return document.getElementById('completedOrdersList');
+        }
+
+        // A finished delivery reads better as a date than as an age, the way the donor's own
+        // cards do: "15 min ago" is right for a board a minute old, and a delivery that
+        // arrived a fortnight ago is a line on a record.
+        function completedWhen(order) {
+            var db = resqDb();
+            var stamp = order.completed_at || order.created_at;
+            var text = db ? db.formatWhen(stamp) : String(stamp || '');
+            var when = new Date(stamp);
+            if (!isNaN(when.getTime())) {
+                text = when.toLocaleDateString('en-US',
+                    { day: 'numeric', month: 'short', year: 'numeric' });
+            }
+            return text;
+        }
+
+        // One finished delivery, read from this end of it: what arrived, which kitchen sent
+        // it, when it landed and how far it came.
+        function completedCard(order) {
+            var db = resqDb();
+            var type = db ? db.goodsType(order.category) : null;
+            var from = order.donor || {};
+            return '<article class="panel panel-lift p-5 flex flex-col gap-4">' +
+                '<div class="flex items-start justify-between gap-3">' +
+                    '<span class="inline-flex items-center gap-1.5 h-6 px-3 organic-chip ' +
+                        'bg-[#051F20] border border-[#235347] text-[10px] uppercase ' +
+                        'tracking-[0.18em] text-[#8EB69B]">' +
+                        (type ? '<span aria-hidden="true">' + type.emoji + '</span>' + type.label
+                              : 'uncategorised') +
+                    '</span>' +
+                    '<span class="w-8 h-8 organic-chip panel-raised flex items-center justify-center ' +
+                        'text-[10px] text-[#DAF1DE]" aria-hidden="true">' +
+                        initialsOf(from.name || '') +
+                    '</span>' +
+                '</div>' +
+                '<span class="flex items-center gap-2 text-xs text-[#8EB69B]">' +
+                    '<span aria-hidden="true" class="w-1.5 h-1.5 rounded-full bg-[#DAF1DE]"></span> Completed' +
+                '</span>' +
+                '<div class="pt-3 border-t border-[#235347] space-y-2">' +
+                    '<span class="block text-sm text-[#DAF1DE]">' +
+                        feedText(from.name || 'a kitchen') + '</span>' +
+                    '<span class="block text-[11px] text-[#8EB69B]">' +
+                        feedText(completedWhen(order)) +
+                        (order.distance_km !== null && order.distance_km !== undefined
+                            ? ' &#183; ' + feedText(order.distance_km) + ' km' : '') +
+                        (from.address ? ' &#183; ' + feedText(pendingPlace(from.address)) : '') +
+                    '</span>' +
+                '</div>' +
+            '</article>';
+        }
+
+        function renderRecentDeliveries(orders, message) {
+            var list = completedList();
+            if (!list) { return; }
+            if (!orders) {
+                list.innerHTML = '<span class="col-span-full block text-sm text-[#8EB69B]">'
+                    + feedText(message) + '</span>';
+                return;
+            }
+            if (!orders.length) {
+                list.innerHTML = '<span class="col-span-full block text-sm text-[#8EB69B]">'
+                    + 'No delivery has arrived yet. One appears here the moment it has.'
+                    + '</span>';
+                return;
+            }
+            list.innerHTML = orders.map(completedCard).join('');
+        }
+
+        // The books, read once for the whole dashboard: the two figures that count the
+        // deliveries by state, and the cards themselves. Newest finish first, which is the
+        // order the heading's own "sort by newest" claims.
+        function loadRecentDeliveries() {
+            var token = readStore(TOKEN_KEY);
+            if (!token || deliveriesReading) { return null; }
+            deliveriesReading = true;
+            setChip('completedState', 'reading\u2026', CHIP_BUSY);
+            return fetch(ORDERS_URL, {
+                headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; }).then(function (data) {
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(function (res) {
+                    deliveriesReading = false;
+                    if (res.status !== 200 || !res.data) {
+                        setChip('completedState', 'unreachable', CHIP_BUSY);
+                        setMetric('metricInProgress', null);
+                        setMetric('metricCompleted', null);
+                        renderRecentDeliveries(null,
+                            'The deliveries could not be read. Open the dashboard again to retry.');
+                        return;
+                    }
+                    var orders = (res.data.orders || []).filter(function (order) {
+                        return order.viewer_side === 'recipient';
+                    });
+                    var live = orders.filter(function (order) {
+                        return LIVE_ORDER_STATUSES.indexOf(order.status) !== -1;
+                    });
+                    var finished = orders.filter(function (order) {
+                        return order.status === FINISHED_ORDER_STATUS;
+                    });
+                    finished.sort(function (left, right) {
+                        var one = String(left.completed_at || left.created_at || '');
+                        var two = String(right.completed_at || right.created_at || '');
+                        if (one === two) { return Number(right.id) - Number(left.id); }
+                        return one < two ? 1 : -1;
+                    });
+                    setMetric('metricInProgress', live.length);
+                    setMetric('metricCompleted', finished.length);
+                    setChip('completedState',
+                        finished.length ? finished.length + ' completed' : 'none yet',
+                        finished.length ? CHIP_DONE : CHIP_IDLE);
+                    renderRecentDeliveries(finished.slice(0, COMPLETED_SHOWN), '');
+                })
+                .catch(function () {
+                    deliveriesReading = false;
+                    setChip('completedState', 'unreachable', CHIP_BUSY);
+                    setMetric('metricInProgress', null);
+                    setMetric('metricCompleted', null);
+                    renderRecentDeliveries(null,
+                        'The deliveries could not be read. Open the dashboard again to retry.');
+                });
+        }
+
         // The dashboard's own reader. The pass is the same answer the bell shows, so one read
         // serves both: opening this screen asks for it, and the close that moves the list arrives
         // with the next read — the claims stream, the bell's own backstop, or the tab coming back
@@ -3629,6 +3907,9 @@
             // its way. A board already read keeps what it is showing.
             renderPendingOrders(null);
             loadNotifications(false);
+            // The books are read on the same opening: the figures in the header and the
+            // cards under the board are one answer, and neither waits for the other.
+            loadRecentDeliveries();
         }
 
         // ---------------------------------------------------------------------------

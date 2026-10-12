@@ -250,6 +250,35 @@
             box-shadow: 0 10px 18px rgba(5, 31, 32, 0.45);
         }
 
+        /* The mark that walks the route: a mint dot with a halo that breathes, so a road
+           the panel has drawn and a delivery on that road are told apart at a glance.
+           Looping motion is decoration, so a reader who has asked their system for less of
+           it gets the dot without the pulse. */
+        .resq-tracker-icon {
+            background: transparent;
+            border: 0;
+            width: 22px;
+            height: 22px;
+        }
+        .resq-tracker {
+            width: 14px;
+            height: 14px;
+            margin: 4px;
+            border-radius: 9999px;
+            background-color: #DAF1DE;
+            border: 2px solid #051F20;
+            box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45);
+            animation: resq-tracker-pulse 2.6s ease-out infinite;
+        }
+        @keyframes resq-tracker-pulse {
+            0% { box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45), 0 0 0 0 rgba(218, 241, 222, 0.55); }
+            70% { box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45), 0 0 0 11px rgba(218, 241, 222, 0); }
+            100% { box-shadow: 0 6px 12px rgba(5, 31, 32, 0.45), 0 0 0 0 rgba(218, 241, 222, 0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .resq-tracker { animation: none; }
+        }
+
         /* The rail's tabs. The item being read is the one lit shape in the rail; every
            other one is its label and nothing else, which is what keeps a five-row rail
            from reading as five buttons. */
@@ -811,7 +840,7 @@
                      opens on a line saying so rather than on invented cards. -->
                 <section class="space-y-4">
                     <div class="flex flex-wrap items-end justify-between gap-4">
-                        <h2 class="font-display text-2xl md:text-3xl leading-none">Latest completed orders</h2>
+                        <h2 class="font-display text-2xl md:text-3xl leading-none">Recent Deliveries</h2>
                         <div class="flex items-center gap-3">
                             <span id="completedState" class="text-[10px] uppercase tracking-[0.2em] text-[#8EB69B] bg-[#051F20] organic-chip px-2.5 py-1">idle</span>
                             <span class="text-xs text-[#8EB69B]">Sort by</span>
@@ -5169,6 +5198,9 @@
         // waiting for. The shape is over the map and the map is behind it until the route
         // is drawn, at which point the surface swaps over on its own.
         function keepOrderRouteDrawn(why, keepMapUp) {
+            // A panel with no route on it has no mark walking one: the tracker belongs to
+            // the line, and it goes when the line does.
+            stopRouteTracker();
             var container = pendingEl('orderRouteMap');
             var rest = pendingEl('orderRouteRest');
             var note = pendingEl('orderRouteRestNote');
@@ -5356,8 +5388,12 @@
             roadRoute(pickup, dropoff).then(function (route) {
                 if (!orderRouteMap || !orderRouteMap.isStyleLoaded()) { return; }
                 orderRouteMarks(pickup, dropoff);
-                putOrderRoute(route ? route.coordinates
-                    : [[pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]]);
+                var line = route ? route.coordinates
+                    : [[pickup.lng, pickup.lat], [dropoff.lng, dropoff.lat]];
+                putOrderRoute(line);
+                // The mark that walks the line is set going in the same breath, so drawing
+                // the road and knowing its pace are one act.
+                startRouteTracker(line, route ? route.seconds : null);
                 showOrderRouteSurface();
                 setOrderRouteLegend(
                     'Picked up at ' + (pickup.address || 'your confirmed location'),
@@ -5442,6 +5478,115 @@
                 layout: { 'line-cap': 'round', 'line-join': 'round' },
                 paint: { 'line-color': '#DAF1DE', 'line-width': 3 }
             });
+        }
+
+        // ---------------------------------------------------------------------------
+        // The mark that walks the route: a small dot that travels the drawn line at the
+        // pace the router's own estimate gives it — one traverse per expected drive — and
+        // then starts again at the pickup. It is what tells a drawing of a road from a
+        // delivery on one: the line says where the food goes, the dot says it is going.
+        // It rides the route's own geometry rather than a timer of its own, so a slower
+        // drive is a slower dot; where the router never answered there is no expected time
+        // to honour, and a direct line is walked at the fixed pace below rather than being
+        // given a speed nobody measured.
+        // ---------------------------------------------------------------------------
+        var ROUTE_TRACK_FALLBACK_SECONDS = 45;
+        var routeTracker = null;     // the mark itself, once there is a line to walk
+        var routeTrackFrame = 0;     // the animation frame it is walking on
+        var routeTrack = null;       // { points, cumulative, total, seconds }
+
+        // How far apart two points are, for pacing only: degrees with the longitude step
+        // squeezed by the latitude, which is close enough to make the legs of one route
+        // comparable and costs nothing per frame.
+        function trackDistance(from, to) {
+            var mid = ((from[1] + to[1]) / 2) * Math.PI / 180;
+            var dx = (to[0] - from[0]) * Math.cos(mid);
+            var dy = to[1] - from[1];
+            return Math.sqrt((dx * dx) + (dy * dy));
+        }
+
+        // Where the mark is, at a fraction of the way along the line — read off the same
+        // cumulative distances the pace is measured in, so the dot and the drive agree.
+        function trackPointAt(fraction) {
+            var track = routeTrack;
+            var wanted = track.total * Math.min(Math.max(fraction, 0), 1);
+            for (var i = 1; i < track.points.length; i += 1) {
+                if (track.cumulative[i] < wanted) { continue; }
+                var leg = track.cumulative[i] - track.cumulative[i - 1];
+                var along = leg > 0 ? (wanted - track.cumulative[i - 1]) / leg : 0;
+                var from = track.points[i - 1];
+                var to = track.points[i];
+                return [from[0] + ((to[0] - from[0]) * along),
+                        from[1] + ((to[1] - from[1]) * along)];
+            }
+            return track.points[track.points.length - 1];
+        }
+
+        function trackerElement() {
+            var mark = document.createElement('div');
+            mark.className = 'resq-tracker-icon';
+            mark.innerHTML = '<div class="resq-tracker"></div>';
+            return mark;
+        }
+
+        function stopRouteTracker() {
+            if (routeTrackFrame) {
+                window.cancelAnimationFrame(routeTrackFrame);
+                routeTrackFrame = 0;
+            }
+            routeTrack = null;
+            if (routeTracker) {
+                routeTracker.remove();
+                routeTracker = null;
+            }
+        }
+
+        function startRouteTracker(coordinates, seconds) {
+            stopRouteTracker();
+            if (!window.maplibregl || !orderRouteMap || !coordinates || coordinates.length < 2) {
+                return;
+            }
+            var points = coordinates.map(function (point) {
+                return [Number(point[0]), Number(point[1])];
+            });
+            var cumulative = [0];
+            for (var i = 1; i < points.length; i += 1) {
+                cumulative.push(cumulative[i - 1] + trackDistance(points[i - 1], points[i]));
+            }
+            var total = cumulative[cumulative.length - 1];
+            if (!isFinite(total) || total <= 0) { return; }
+            routeTrack = {
+                points: points,
+                cumulative: cumulative,
+                total: total,
+                seconds: (seconds && isFinite(seconds) && seconds > 0)
+                    ? seconds : ROUTE_TRACK_FALLBACK_SECONDS
+            };
+            routeTracker = new window.maplibregl.Marker(
+                { element: trackerElement(), anchor: 'center' });
+            // A reader who has asked their system for less motion gets the mark where the
+            // drive is halfway rather than a dot walking under their eyes: the reading is
+            // the dot's position, not the movement.
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                routeTracker.setLngLat(trackPointAt(0.5)).addTo(orderRouteMap);
+                return;
+            }
+            routeTracker.setLngLat(points[0]).addTo(orderRouteMap);
+            var started = 0;
+            function step(now) {
+                if (!routeTrack || !routeTracker) { return; }
+                if (!started) { started = now; }
+                var walked = (now - started) / 1000;
+                if (walked >= routeTrack.seconds) {
+                    // The drive is done, so the mark goes back to the pickup and runs it
+                    // again: the panel is a reading of a route, not a clock.
+                    started = now;
+                    walked = 0;
+                }
+                routeTracker.setLngLat(trackPointAt(walked / routeTrack.seconds));
+                routeTrackFrame = window.requestAnimationFrame(step);
+            }
+            routeTrackFrame = window.requestAnimationFrame(step);
         }
 
         // How much of the panel the map may not draw under, read off the panel's own
