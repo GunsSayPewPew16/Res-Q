@@ -1,4 +1,16 @@
-# Deploy Res-Q to Render on every push to main, then check that it really went live.
+# Keep the deployed API in step with main, and prove that it is.
+#
+# Two hosts serve this repository and they are not the same problem. The pages live on
+# Vercel, which rebuilds itself on every push in about fifteen seconds. The API lives on
+# Render, which is the half that has been left behind before: commits piled up on main while
+# the service kept serving an older build, and a page that asked for a route the old build
+# did not have looked exactly like a broken page. So everything here is about the API, and
+# the questions it asks are "did the API rebuild" and "is the API serving this commit".
+#
+# A push that touches no backend file is skipped: Render deploys on commit, but the service
+# only builds when the half it runs has changed (and may be told to ignore `frontend/`
+# outright with build filters), so asking it to rebuild for a page edit is a wasted build and
+# a revision check that is expected to fail. `workflow_dispatch` always runs.
 #
 # Render can rebuild on its own when it hears about a push — that is the service's
 # Auto-Deploy setting — but it only hears about one when the service is connected to this
@@ -42,8 +54,28 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          # Two commits, because the only question asked of the history is what this push
+          # changed: the whole repository is not needed to read one diff.
+          fetch-depth: 2
+
+      - name: Did this push change the API?
+        id: changed
+        run: |
+          set -uo pipefail
+          touched="$(git diff --name-only HEAD^ HEAD 2>/dev/null | grep -E '^(backend/|render\.yaml)' || true)"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -n "$touched" ]; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+            echo "This push changed the API's own files${touched:+ ($(printf '%s' "$touched" | paste -sd ', ' -))}."
+          else
+            echo "api=false" >> "$GITHUB_OUTPUT"
+            echo "This push touched no backend file, so the service has nothing to rebuild for it — Vercel deploys the pages itself."
+          fi
+
       - name: Ask Render to build this commit
         id: trigger
+        if: steps.changed.outputs.api == 'true'
         env:
           DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
@@ -70,13 +102,14 @@ jobs:
           fi
           echo "::warning::No RENDER_DEPLOY_HOOK_URL (or RENDER_API_KEY + RENDER_SERVICE_ID) secret is set, so nothing was deployed. Add one in this repository's Settings → Secrets and variables → Actions."
 
-      # This runs on every push, secret or not, because the question it answers is the one
-      # this repository has been burned by: is the live site serving what was just pushed?
-      # Render's own Auto-Deploy answers it when the service is set to rebuild on commit,
-      # and a stale revision here is then a real failure and the job goes red. With nothing
-      # wired to deploy at all, it is a warning instead — a red build on every push, on a
-      # repository whose problem is that nobody is deploying, would only be noise.
+      # For a backend push, whether the deploy was asked for here or Render did it by
+      # itself, this is the question this repository has been burned by: is the live API
+      # serving what was just pushed? A revision that never arrives is a failure when the
+      # workflow asked for the build, and a warning when the only thing that could have
+      # built it is the service's own Auto-Deploy — a red build on a repository whose
+      # problem is that nobody is deploying would only be noise.
       - name: Wait for the live site to serve this commit
+        if: steps.changed.outputs.api == 'true'
         env:
           SITE: ${{ vars.RESQ_SITE_URL || 'https://res-q-api.onrender.com' }}
         run: |
@@ -97,7 +130,7 @@ jobs:
             sleep 15
           done
           if [ "${{ steps.trigger.outputs.deployed }}" = "true" ]; then
-            echo "::error::${SITE} never served ${short} — the deploy was asked for but not confirmed. Check the service's Events in the Render dashboard."
+            echo "::error::${SITE} never served ${short} — the deploy this workflow asked for was never confirmed. Check the service's Events in the Render dashboard."
             exit 1
           fi
           echo "::warning::${SITE} is still serving ${live:-nothing}; nothing in this workflow asked it to deploy, so the service's own Auto-Deploy is the only path left — check that it is on (Settings → Build & Deploy → Auto-Deploy: On Commit)."
