@@ -139,6 +139,46 @@ column, and one column is the same string either way. If multi-claim ever goes m
 that is the shape of the bug: check the seeder's own report line at boot, which says
 "N claims recorded, M claim rows written" and names the reason when M is short.
 
+Closing a post (why a ration is not the same as a share)
+-----------------------------------------------------
+
+**A post is claimed by many shelters and rationed by exactly one hand: the donor's.** The
+flow the site is built around, end to end:
+
+1. claims land on the board and in the API's own claim store, and nothing is rationed yet —
+   the shelters on the item are told nothing, because every share of it can still move as
+   more shelters reach for it;
+2. the kitchen opens **Ongoing Deliveries**, whose carousel is one card per claimed item
+   (labels only: what the item is and how many shelters are on it — no closed tag, no state
+   chip, and none is wanted back), picks one, and reads the split the pass would produce;
+3. **Close the post** (`POST /api/posts/close`) writes `closed_at` to the board, records the
+   closure in the API (`closures` beside `claims`), and answers with the ration that came out
+   of it;
+4. from that moment the item takes no more claims and each shelter on it reads its own share
+   — which is when its notification appears.
+
+The consequences worth keeping in mind when touching any of this:
+
+* **The ration is the API's**, not the board's: `rations.closures_by_post` gates the pass, and
+  `allocations`/`queue` only carry closed posts. `rationing_pass` counts a claimant's
+  open-post shares in `waiting` instead. A shelter's share of an open post is not a ration
+  and must never reach a screen as one.
+* **The board's `closed_at` is a copy**, written so both dashboards can see the state on the
+  row they already read. `supabase/migrations/20261013000000_add_closed_at_to_surplus_posts.sql`
+  adds it and has **not been applied to the live project** (the allocation migration above it
+  has not either). Closing still works on the deployment without it — the note on the donor's
+  screen says the board was not marked and names the file.
+* **The closed set is read twice, on purpose:** `GET /api/posts/closed` (no session needed) is
+  what a page uses so a claim action stops being offered on the day an item closes, and the
+  board's own column is used where the project has it. Both are read; neither alone is enough
+  until the migration is applied.
+* **A claim on a closed post is refused in three places:** the card (no action drawn), the API
+  (`409 post_closed`) and the board's own `closed_at` trigger. The first is for the reader, the
+  second is for the record, and the third is for a page that has not reloaded.
+* **Closing is idempotent and ownership is the board's answer.** The row is read back from the
+  board before the write and the `donor_name` on *that* row is what a close is checked
+  against; a page's own row is believed only where there is no board to ask (a local run).
+
 The week-ahead chart's scale
 ----------------------------
 

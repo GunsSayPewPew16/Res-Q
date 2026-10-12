@@ -452,6 +452,44 @@
     // -------------------------------------------------------------------------
     var CLAIMS_URL = apiUrl('/api/claims');
 
+    // The posts the kitchens have closed — which is the set no shelter may claim again, and
+    // the set the rationing pass reads a share out of. The board carries the fact on the row
+    // itself once the project has run
+    // supabase/migrations/20261013000000_add_closed_at_to_surplus_posts.sql, and the two
+    // agree; this is the other source, read so that an item stops taking claims on the day
+    // its donor closes it rather than on the day the board catches up. It is the same
+    // endpoint the API's own close route writes, which is why a page cannot fall behind it
+    // by more than the length of one poll.
+    var CLOSED_URL = apiUrl('/api/posts/closed');
+
+    function listClosed() {
+        return fetch(CLOSED_URL, { headers: { Accept: 'application/json' } })
+            .then(function (response) {
+                return response.json().catch(function () { return {}; })
+                    .then(function (data) { return { ok: !!data.ok, status: response.status, data: data }; });
+            }, function (err) {
+                return { ok: false, error: { message: String(err && err.message || err) } };
+            })
+            .then(function (res) {
+                if (!res.ok) { return res; }
+                var set = {};
+                ((res.data && res.data.closed) || []).forEach(function (row) {
+                    if (row && row.post_id) { set[row.post_id] = row.closed_at || 'closed'; }
+                });
+                res.data = set;
+                return res;
+            });
+    }
+
+    // When a post was closed, from whichever of the two answers carries it: the board's own
+    // column where the project has it, and the API's closed set where it has not. Null is a
+    // post that is still taking claims.
+    function closedAt(row, closedSet) {
+        if (!row) { return null; }
+        if (row.closed_at) { return row.closed_at; }
+        return (closedSet || {})[row.id] || null;
+    }
+
     function recordClaim(post, recipient, token) {
         if (!post || !post.id) {
             return Promise.resolve({ ok: false, error: { message: 'no post to record' } });
@@ -663,7 +701,13 @@
         var viewerClaimed = !!opts.viewerName && claimNames(claimants).some(function (name) {
             return sameName(name, opts.viewerName);
         });
-        var claimable = opts.canClaim && !viewerClaimed
+        // Whether the kitchen that logged this item has closed it. A closed post is the one
+        // case where a card has nothing left to offer: the asking is over, the shares on it
+        // are the ration, and a reader is told that instead of being handed a button that
+        // the API would refuse.
+        var closedAtWhen = closedAt(row, opts.closed);
+        var closed = !!closedAtWhen;
+        var claimable = opts.canClaim && !viewerClaimed && !closed
             && (!!opts.multiClaim || !claimed);
         return '<article class="feed-card' + (claimed ? ' is-claimed' : '') + ' p-4 sm:p-5">' +
             '<div class="flex items-start gap-3">' +
@@ -721,6 +765,19 @@
                         // line above the footer names the claimants, which is the fact the
                         // chip was standing in for, and the action beside it is what the
                         // reader does about it.
+                        // The closed chip. This is not the old status chip under another
+                        // name: that one spoke for a post somebody had claimed, which said
+                        // nothing about whether it was still worth taking; this one speaks
+                        // for a post whose donor has finished with it, so there is nothing
+                        // left to take and the chip is the reason the action beside it is
+                        // gone rather than a label repeating the post's state.
+                        (closed
+                            ? '<span class="ml-auto inline-flex items-center h-6 px-3 ' +
+                                'rounded-full border border-[#235347] bg-[#163832] ' +
+                                'text-[10px] uppercase tracking-[0.18em] ' +
+                                'text-[#8EB69B]" title="the kitchen has closed this item'
+                                + ' and rationed it">closed</span>'
+                            : '') +
                         // The one action, wearing the site's hero-card treatment: dark with
                         // cream text at rest, filled with the accent and turned black while
                         // hovered or keyboard-focused — see .claim-btn in the dashboards.
@@ -736,10 +793,10 @@
                                 'disabled:cursor-not-allowed">Claim</button>'
                             : '') +
                         (opts.canClaim && viewerClaimed
-                            ? '<span class="ml-auto inline-flex items-center h-6 px-3 ' +
-                                'rounded-full border border-[#235347] bg-[#051F20] ' +
-                                'text-[10px] uppercase tracking-[0.18em] ' +
-                                'text-[#8EB69B]">you claimed</span>'
+                            ? '<span class="' + (closed ? '' : 'ml-auto ')
+                                + 'inline-flex items-center h-6 px-3 rounded-full border '
+                                + 'border-[#235347] bg-[#051F20] text-[10px] uppercase '
+                                + 'tracking-[0.18em] text-[#8EB69B]">you claimed</span>'
                             : '') +
                     '</div>' +
                 '</div>' +
@@ -747,20 +804,27 @@
         '</article>';
     }
 
-    // The count that sits over the board: everything published to it, and how much of
-    // that already has somebody asking. There is deliberately no count of "open"
+    // The count that sits over the board: everything published to it, how much of that
+    // already has somebody asking, and how much has been finished with. A closed post is
+    // the donor's own hand — the asking on it is over and its shares are the ration — so
+    // the line says so beside the claimant count rather than leaving a reader to work it
+    // out from the chips. There is deliberately no count of "open"
     // posts. It used to be the rows with nobody on them, back when the first claim
     // closed a post; a post now takes more than one, so one with claimants is not a
     // closed one and calling it anything but posted would read as a board with nothing
     // left. `claimsByPost` is the grouped claims the cards are drawn from, so the count
     // and the claimant lines under it can never disagree.
-    function feedSummary(rows, claimsByPost) {
+    function feedSummary(rows, claimsByPost, closedSet) {
         var claims = claimsByPost || {};
         var taken = rows.filter(function (row) {
             return claimNames(claims[row.id]).length > 0;
         }).length;
+        var closed = rows.filter(function (row) {
+            return !!closedAt(row, closedSet);
+        }).length;
         return rows.length + ' posted'
-            + (taken ? ' \u00b7 ' + taken + ' with claimants' : '');
+            + (taken ? ' \u00b7 ' + taken + ' with claimants' : '')
+            + (closed ? ' \u00b7 ' + closed + ' closed' : '');
     }
 
     global.ResQDB = {
@@ -785,6 +849,8 @@
         groupClaims: groupClaims,
         claimNames: claimNames,
         claimHeadline: claimHeadline,
+        listClosed: listClosed,
+        closedAt: closedAt,
         claimIndicator: claimIndicator,
         claimantName: claimantName,
         claimantOrg: claimantOrg,

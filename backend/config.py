@@ -97,6 +97,14 @@ DEMO_SURPLUS_LOG = {}
 # for a token. With persistence on the same rows are the `claims` table's own.
 DEMO_CLAIMS = []
 
+# The posts a demo run has closed, oldest first: one row per post the donor has finished
+# with, filed beside the claims on it rather than in a table of its own in the page. A
+# closure is the moment "shelters have asked for this" turns into "this is what each of
+# them gets" — the ration the pass works out is published the moment a post closes, and
+# not before — so it belongs with the claims the pass reads. In demo mode it lives for the
+# process; with persistence on the same rows are the `closures` table's own.
+DEMO_CLOSURES = []
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,6 +182,20 @@ CREATE TABLE IF NOT EXISTS claims (
     payload      TEXT NOT NULL,
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (post_id, claimant_key)
+);
+
+CREATE TABLE IF NOT EXISTS closures (
+    -- One row per post a donor has closed. The post id is the key: an item closes once,
+    -- and a second close reads back the moment the first one happened rather than
+    -- rewriting it, the way a second claim reads back the claim already saved. `payload`
+    -- keeps the record whole — what the item was, whose it was, when it closed — because
+    -- the donor's own screens read it beside the claim records, which are kept the same
+    -- way. What the table adds is what a query needs: the post it joins on and the moment.
+    post_id    TEXT PRIMARY KEY,
+    donor_name TEXT,
+    closed_at  TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS surplus_history (

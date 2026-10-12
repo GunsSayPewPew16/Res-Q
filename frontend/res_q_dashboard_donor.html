@@ -171,6 +171,40 @@
             border-color: #051F20;
         }
 
+        /* The claimed-items carousel on Ongoing Deliveries: the dark inset the item names
+           scroll through, which is the same rail as the pending orders wear with the same
+           sideways scroll — every item a shelter has reached for stays one glance away, and
+           the row keeps its height whether there is one of them or nine. The card being
+           read is the lit one, like every other pick on this page. */
+        .post-rail {
+            background-color: #0B2B26;
+            border: 1px solid #235347;
+            border-radius: max(0.75rem, calc(var(--canvas-r) - var(--gutter) - var(--step)));
+            padding: 0.625rem;
+        }
+        .post-track {
+            display: flex;
+            gap: 0.625rem;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            padding-bottom: 0.125rem;
+        }
+        .post-card {
+            flex: 0 0 auto;
+            width: 13rem;
+            scroll-snap-align: start;
+            text-align: left;
+            cursor: pointer;
+            padding: 0.875rem 1rem;
+            background-color: #0F332C;
+            border: 1px solid #235347;
+            border-radius: max(0.6rem, calc(var(--canvas-r) - var(--gutter) - var(--step) - 0.25rem));
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .post-card:hover { background-color: #163832; border-color: #8EB69B; }
+        .post-card:focus-visible { outline: 2px solid #8EB69B; outline-offset: 2px; }
+        .post-card.is-on { background-color: #163832; border-color: #DAF1DE; }
+
         /* The white box: the item the carousel has selected, read in full rather than at a
            glance. White rather than the surface's mint, because it is the one block here
            carrying paragraphs rather than a chip and a figure. */
@@ -1095,14 +1129,31 @@
                 <!-- The split itself: one ring per item, sliced by claimant and labelled with
                      who is getting how much, over the same split written out in kilograms. -->
                 <div class="panel p-6 md:p-8">
-                    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
                         <div class="space-y-2 min-w-0">
                             <span class="block text-[11px] uppercase tracking-[0.2em] text-[#8EB69B]">Who is getting what</span>
                             <span id="rationPostName" class="block font-display text-2xl leading-none">Nothing claimed yet</span>
                             <span id="rationPostLine" class="block text-xs text-[#8EB69B]">a split appears once a shelter claims an item this account logged</span>
                         </div>
-                        <div id="rationPostPicker" class="flex flex-wrap gap-2"></div>
+                        <div class="flex flex-wrap items-center gap-2 shrink-0">
+                            <button type="button" id="rationCloseButton" onclick="closeRationPost()" disabled class="h-10 px-6 organic-chip bg-[#DAF1DE] text-[#051F20] text-xs font-medium uppercase tracking-[0.15em] hover:bg-[#8EB69B] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                Close the post
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- The items of this kitchen's that a shelter has reached for, as a
+                         carousel: one card per item, named by what it is, with the shelters
+                         on it under the name. Picking one reads its split below and offers
+                         the one action the donor has here — closing it, which ends the
+                         asking on the item and turns those shares into the ration each
+                         shelter is told about. -->
+                    <div class="post-rail mt-5">
+                        <div id="rationPostPicker" class="post-track" role="list" aria-label="Your claimed items">
+                            <span class="block text-[11px] text-[#8EB69B] px-1 py-2">Nothing claimed yet.</span>
+                        </div>
+                    </div>
+                    <span id="rationCloseNote" class="block text-xs text-[#8EB69B] mt-4">Closing an item ends the asking on it: no more shelters can claim it, and the shares beside it become the ration each of them is told about.</span>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-center">
                         <div id="rationPie" class="w-full"></div>
@@ -3577,6 +3628,9 @@
         // board.
         var feedRows = [];
         var feedClaims = {};
+        // The posts the kitchens have closed — this kitchen's own among them — so the board
+        // reads the same on both sides: a closed item offers no claim action and says so.
+        var feedClosed = {};
         var feedTab = 'all';
         var FEED_TABS = { all: 'feedTabAll', mine: 'feedTabMine', foryou: 'feedTabForYou' };
 
@@ -3620,7 +3674,7 @@
         // claim falls back to the older first-claim-wins update. That is a note rather
         // than a failure — the board itself still works.
         function feedSummaryChip(db, rows, claims) {
-            var chip = db.feedSummary(rows, feedClaims);
+            var chip = db.feedSummary(rows, feedClaims, feedClosed);
             if (!claims.ok && claims.error && claims.error.missingTable) {
                 return chip + ' \u00b7 claims migration pending';
             }
@@ -3630,10 +3684,16 @@
         function loadFeed() {
             var db = resqDb();
             if (!db) { return Promise.resolve(); }
-            return Promise.all([db.listPosts({}), db.listClaims({})]).then(function (both) {
-                var posts = both[0];
-                var claims = both[1];
+            return Promise.all([db.listPosts({}), db.listClaims({}), db.listClosed()])
+                .then(function (answers) {
+                var posts = answers[0];
+                var claims = answers[1];
+                var closed = answers[2];
                 feedClaims = claims.ok ? db.groupClaims(claims.data) : {};
+                // The closed set is read beside the board rather than instead of it: the
+                // board's own column is the first source, and this is the one that answers
+                // on a project whose board has not been given the column yet.
+                feedClosed = closed.ok ? closed.data : {};
                 if (!posts.ok) {
                     setChip('feedState', posts.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
                     renderFeed(null, surplusFailure(posts.error));
@@ -3699,7 +3759,8 @@
                     canClaim: false,
                     ownName: mine,
                     claimants: feedClaims[row.id] || [],
-                    multiClaim: db.claimsSupported()
+                    multiClaim: db.claimsSupported(),
+                    closed: feedClosed
                 });
             }).join('');
         }
@@ -3761,6 +3822,7 @@
         // ---------------------------------------------------------------------------
         var rationData = null;
         var rationChosenPost = null;
+        var rationClosing = false;
 
         // The ring's own palette: the site's ramp, mint through to the darkest green, so a
         // slice is read against the panel rather than against a brightness nobody chose.
@@ -3870,6 +3932,92 @@
             renderRationing(rationData);
         }
 
+        // The one action that moves the selected item on. An item takes claims until this
+        // kitchen says otherwise, and saying so is what turns the split under the carousel
+        // into a ration: the shelters on it read their share from that moment and the item
+        // takes nobody else. A closed item leaves the button in place and disabled rather
+        // than taking it away, because the button is where a donor starts from and an item
+        // does not close twice.
+        //
+        // Nothing here wears a closed *tag*. A chip saying so was tried and taken back out:
+        // the item's own card says how many shelters are on it, the button says which state
+        // it is already in, and the line under the carousel says what closing did — so a tag
+        // was a fourth way of saying one thing, and the loudest of the four.
+        function setRationPostState(post) {
+            var button = document.getElementById('rationCloseButton');
+            if (!button) { return; }
+            button.disabled = !post || !!post.closed || rationClosing;
+            button.textContent = post && post.closed ? 'Closed' : 'Close the post';
+        }
+
+        function setRationCloseNote(text) {
+            var note = document.getElementById('rationCloseNote');
+            if (note && text) { note.textContent = text; }
+        }
+
+        // Closing the item the carousel is on. The row travels with the id because a demo
+        // run has no board to ask whose item this is; a project with a board reads its own
+        // row and checks against that instead, which is the only name that proves anything
+        // about a post this account may not own.
+        function closeRationPost() {
+            var token = readStore(TOKEN_KEY);
+            var post = rationPost(rationData);
+            if (!post || rationClosing || post.closed) { return; }
+            if (!token) {
+                setRationCloseNote('Closing an item needs the signed-in account, so sign in again to do it.');
+                return;
+            }
+            rationClosing = true;
+            setRationPostState(post);
+            setRationCloseNote('Closing ' + (post.item_name || 'the item') + '\u2026');
+            fetch(apiUrl('/api/posts/close'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify({
+                    post: {
+                        id: post.post_id,
+                        donor_name: donorName(),
+                        item_name: post.item_name,
+                        quantity: post.quantity,
+                        location: post.location
+                    }
+                })
+            })
+                .then(function (response) {
+                    return response.json().catch(function () { return {}; })
+                        .then(function (data) { return { status: response.status, data: data }; });
+                })
+                .then(function (res) {
+                    rationClosing = false;
+                    if (res.status !== 200 || !res.data || !res.data.ok) {
+                        setRationPostState(post);
+                        setRationCloseNote('It could not be closed \u2014 '
+                            + ((res.data && res.data.error) || 'the backend did not answer.'));
+                        return;
+                    }
+                    var shelters = (((res.data.ration || {}).recipients) || []).length;
+                    var board = res.data.board || {};
+                    var line = res.data.note || 'Closed.';
+                    if (shelters) {
+                        line += ' Each of them reads its share under Delivery Status.';
+                    }
+                    // The board's own copy of the close is the marker the other dashboard
+                    // reads. A board that has not been given the column yet is said out
+                    // loud rather than passed over: the ration stands either way, and this
+                    // is the one thing about it that is a file away from working.
+                    if (board.written === false && board.error) {
+                        line += ' \u00b7 the board was not marked: ' + board.error;
+                    }
+                    setRationCloseNote(line);
+                    loadRationing();
+                })
+                .catch(function () {
+                    rationClosing = false;
+                    setRationPostState(post);
+                    setRationCloseNote('It could not be closed. Is the backend server running?');
+                });
+        }
+
         function rationEmpty(message) {
             rationFigure('rationItems', 'rationItemsNote', 'rationItemsChip', '0',
                 'items of yours a shelter has reached for', 'none');
@@ -3885,7 +4033,12 @@
             var picker = document.getElementById('rationPostPicker');
             if (name) { name.textContent = 'Nothing claimed yet'; }
             if (line) { line.textContent = message || 'a split appears once a shelter claims an item this account logged'; }
-            if (picker) { picker.innerHTML = ''; }
+            setRationPostState(null);
+            if (picker) {
+                picker.innerHTML = '<span class="block text-[11px] text-[#8EB69B] px-1 py-2">'
+                    + 'Nothing claimed yet. An item of yours appears here the moment a shelter'
+                    + ' reaches for one.</span>';
+            }
             if (pie) {
                 pie.innerHTML = '<div class="flex items-center justify-center h-[260px] organic-inner bg-[#0B2B26] border border-[#235347]">'
                     + '<span class="text-xs text-[#8EB69B] px-6 text-center">' + rationText(message || 'no split to draw yet') + '</span></div>';
@@ -3938,6 +4091,7 @@
             var post = rationPost(payload);
             var name = document.getElementById('rationPostName');
             var line = document.getElementById('rationPostLine');
+            setRationPostState(post);
             if (name) { name.textContent = post.item_name || 'Untitled item'; }
             if (line) {
                 line.textContent = (post.quantity || 'no quantity written')
@@ -3959,19 +4113,29 @@
             if (formula) { formula.textContent = reader.text; }
         }
 
+        // The carousel itself: one card per item of this kitchen's that a shelter has reached
+        // for, labelled with what the item is, and carrying the two facts a donor picks by —
+        // how many shelters are on it and whether it has been closed. Every item is drawn,
+        // including the one being read: the rail is the list of what is waiting, and a card
+        // that vanished once it was closed would hide the thing the screen is a record of.
         function renderRationPicker(posts) {
             var picker = document.getElementById('rationPostPicker');
             if (!picker) { return; }
-            if (posts.length < 2) { picker.innerHTML = ''; return; }
             var chosen = rationPost(rationData);
             picker.innerHTML = posts.map(function (post) {
                 var on = chosen && post.post_id === chosen.post_id;
-                var label = String(post.item_name || 'Untitled');
-                if (label.length > 22) { label = label.slice(0, 21) + '\u2026'; }
-                return '<button type="button" onclick="chooseRationPost(\'' + rationText(post.post_id) + '\')" '
-                    + 'class="organic-chip px-3.5 py-2 text-[10px] uppercase tracking-[0.15em] border transition-colors cursor-pointer '
-                    + (on ? 'bg-[#DAF1DE] text-[#051F20] border-[#DAF1DE]' : 'bg-[#051F20] text-[#8EB69B] border-[#235347] hover:text-[#DAF1DE]') + '">'
-                    + rationText(label) + ' \u00b7 ' + (post.claimants || 0) + ' shelters</button>';
+                var label = String(post.item_name || 'Untitled item');
+                if (label.length > 30) { label = label.slice(0, 29) + '\u2026'; }
+                var shelters = post.claimants || 0;
+                return '<button type="button" role="listitem" aria-pressed="' + (on ? 'true' : 'false')
+                    + '" onclick="chooseRationPost(\'' + rationText(post.post_id) + '\')" '
+                    + 'class="post-card' + (on ? ' is-on' : '') + '">'
+                    + '<span class="block text-[10px] uppercase tracking-[0.18em] text-[#8EB69B]">'
+                    + rationText(label) + '</span>'
+                    + '<span class="block mt-2.5 font-display text-2xl leading-none text-[#DAF1DE]">'
+                    + shelters + '</span>'
+                    + '<span class="block mt-1 text-[10px] uppercase tracking-[0.15em] text-[#8EB69B]">'
+                    + (shelters === 1 ? 'shelter' : 'shelters') + '</span></button>';
             }).join('');
         }
 

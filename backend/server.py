@@ -154,9 +154,14 @@ from claims import (
     caller_claims,
     claimed_posts,
     claims_on_posts,
+    closure_for,
+    closure_from_post,
+    closures_by_post,
     record_from_post,
     remember,
+    remember_closure,
     stamp,
+    stored_closures,
 )
 from matching import routing_problem, shared_categories
 from orders import (
@@ -175,9 +180,11 @@ from rationing import (
 from seed import seed_test_accounts
 from supabase import (
     allocation_fields,
+    close_post as close_board_post,
     configured as board_configured,
     describe as board_state,
     publish_allocation,
+    read_post,
 )
 from security import hash_password, verify_password
 from surplus import NoTrainingHistory, forecast_surplus
@@ -374,6 +381,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_claims()
         if path == "/api/post-claims":
             return self.api_post_claims()
+        if path == "/api/posts/closed":
+            return self.api_closed_posts()
         if path == "/api/history":
             return self.api_history()
         if path == "/api/weather":
@@ -404,6 +413,8 @@ class ResQHandler(SimpleHTTPRequestHandler):
             return self.api_order_create()
         if path == "/api/claims":
             return self.api_claim_create()
+        if path == "/api/posts/close":
+            return self.api_post_close()
         if path == "/api/rations":
             return self.api_rations_publish()
         if path == "/api/surplus-categories":
@@ -1341,6 +1352,13 @@ class ResQHandler(SimpleHTTPRequestHandler):
         and whatever profile the body carries is ignored, so one shelter cannot file a claim
         in another's name. Claiming the same post twice answers with the claim already saved
         rather than a second copy of it.
+
+        A closed post is refused, and refusing it here is the whole of what closing one
+        means: an item takes claims until its donor closes it, so a claim arriving after
+        that is a share of a ration nobody is still dividing. The closure is the API's own
+        record first — that is what the close route writes and what this reads — with the
+        row's own `closed_at` beside it, for a board that carries the column and a page
+        that sends it.
         """
         data = self.read_json()
         if data is None:
@@ -1361,6 +1379,25 @@ class ResQHandler(SimpleHTTPRequestHandler):
                 },
             )
 
+        post_id = str(post["id"]).strip()
+        closure = closure_for(post_id)
+        if PERSIST:
+            with connect() as conn:
+                closure = closure_for(post_id, conn)
+        if closure is None and str(post.get("closed_at") or "").strip():
+            closure = {"post_id": post_id, "closed_at": str(post["closed_at"]).strip()}
+        if closure is not None:
+            return self.send_json(
+                409,
+                {
+                    "error": "This item was closed by the kitchen that logged it, so no"
+                             " more shelters can claim it.",
+                    "field": "post.id",
+                    "code": "post_closed",
+                    "closed_at": closure.get("closed_at"),
+                },
+            )
+
         record = record_from_post(post, me)
         if PERSIST:
             with connect() as conn:
@@ -1377,6 +1414,195 @@ class ResQHandler(SimpleHTTPRequestHandler):
             payload["demo"] = True
         return self.send_json(200 if duplicate else 201, payload)
 
+    def api_closed_posts(self):
+        """Every post its donor has closed, which is the set no shelter may claim again.
+
+        The board carries the same fact on the row once the migration that adds `closed_at`
+        has been run, and the pages read it there. This is the other half of that write: a
+        project whose board has not been given the column yet can still hold the ration —
+        the closure is recorded the moment the item closes, because that is what makes a
+        share a ration — so the pages ask for the closed set as well, and an item stops
+        taking claims on the day it closes rather than on the day the board catches up.
+
+        It answers without a session on purpose: which posts are closed is not anybody's
+        own business, and the board a page draws is the same board to everyone reading it.
+        """
+        closures = stored_closures()
+        if PERSIST:
+            with connect() as conn:
+                closures = stored_closures(conn)
+        payload = {
+            "ok": True,
+            "count": len(closures),
+            "closed": [
+                {
+                    "post_id": closure.get("post_id"),
+                    "item_name": closure.get("item_name"),
+                    "closed_at": closure.get("closed_at"),
+                }
+                for closure in closures
+            ],
+        }
+        if not PERSIST:
+            payload["demo"] = True
+        return self.send_json(200, payload)
+
+    def api_post_close(self):
+        """Close one of the caller's own board posts, and ration what its claims are worth.
+
+        Closing is the donor's own hand on the exchange. An item takes claims until the
+        kitchen that logged it says otherwise, and the moment it says so is the moment the
+        shares stop moving and become a ration — so this is what the pass is read for, and
+        what the shelters on the item are told about: a ration is read from the pass under
+        a post the donor has closed, and a post nobody has closed has no ration to read.
+
+        Only the caller's own posts can be closed. The board files a post under the name
+        that logged it, so the row is read back from the board where there is a board to
+        ask, and the name on *that* row is what the write is checked against — a page can
+        send whatever name it likes about a post it does not own, and this is the reason it
+        is not believed. A board that cannot be reached, or that has not been given the
+        column the closure is written to, is reported in the answer rather than failing the
+        close: the closure is the API's own record and the board's copy of it is the marker
+        the other dashboard reads, so the ration is still worked out and still stands.
+        """
+        data = self.read_json()
+        if data is None:
+            return self.send_json(400, {"error": "Malformed request body."})
+
+        me, problem = self.session_account()
+        if problem:
+            return self.send_json(401, problem)
+
+        post = data.get("post")
+        if isinstance(post, str):
+            post = {"id": post}
+        if not isinstance(post, dict) or not str(post.get("id") or "").strip():
+            return self.send_json(
+                400,
+                {
+                    "error": "Closing a post has to name the board row: send post.id.",
+                    "field": "post.id",
+                    "code": "no_post",
+                },
+            )
+        post_id = str(post["id"]).strip()
+
+        # Whose post it is. The board's own row is asked first, because the name the caller
+        # sent is a claim about a row rather than the row itself; the row the page sent is
+        # what is read where there is no board to ask — a demo run — and the answer says
+        # which of the two the close was checked against.
+        verified = "board"
+        row = None
+        board_note = None
+        if board_configured():
+            ok, found = read_post(post_id)
+            if ok and isinstance(found, dict):
+                row = found
+            else:
+                board_note = found
+        if row is None:
+            row = post
+            verified = "request"
+
+        # The claims, read before anything is written: every one of them carries the row it
+        # was made on, and that is where the item's own name comes from when neither the
+        # board nor the page could give it. A close named by an id alone still closes a
+        # named item.
+        claims = gather_claims(me)
+        closures = closures_by_post()
+        existing = closure_for(post_id)
+        if PERSIST:
+            with connect() as conn:
+                claims = gather_claims(me, conn)
+                closures = closures_by_post(conn)
+                existing = closure_for(post_id, conn)
+        if not row.get("item_name"):
+            for claim in claims:
+                claimed_row = claim.get("post") or {}
+                if (str(claimed_row.get("id") or "") == post_id
+                        and claimed_row.get("item_name")):
+                    row = dict(row, item_name=claimed_row.get("item_name"))
+                    break
+
+        # Only the kitchen that logged an item closes it, and there are three rows the name
+        # can come from: the board's, the closure already recorded — a repeat names who made
+        # it, which is the answer when the repeat carries nothing else — and the page's own
+        # row, which is all a demo run has. The first two are the API's; the third is
+        # believed only where the API cannot know better, because a page can say anything.
+        owner = row.get("donor_name")
+        if existing is not None and same_business(existing.get("donor_name"), display_name(me)):
+            owner = existing.get("donor_name")
+        if not same_business(owner, display_name(me)):
+            return self.send_json(
+                403,
+                {
+                    "error": "Only the kitchen that logged an item can close it.",
+                    "field": "post.id",
+                    "code": "not_your_post",
+                },
+            )
+
+        closure = closure_from_post(row, display_name(me))
+        if PERSIST:
+            with connect() as conn:
+                stored = remember_closure(closure, conn)
+        else:
+            stored = remember_closure(closure)
+        # Read from the closure that was already there rather than from the moment it
+        # carries: two closes inside the same second would otherwise read as the first one,
+        # and "was this already closed" is a question about the record, not the clock.
+        duplicate = existing is not None
+
+        # The marker the other dashboard reads. A board that is not configured, or that has
+        # not been given the column yet, is told about rather than argued with.
+        board_ok, board_detail = False, "no board configured"
+        if board_configured():
+            board_ok, board_detail = close_board_post(post_id, stored.get("closed_at"))
+
+        payload = rationing_pass(claims, account_key(me), display_name(me), closures=closures)
+        rationed = None
+        for entry in payload["owned"]:
+            if entry.get("post_id") == post_id:
+                rationed = entry
+                break
+
+        answer = {
+            "ok": True,
+            "duplicate": duplicate,
+            "verified": verified,
+            "closed": {
+                "post_id": post_id,
+                "item_name": (rationed or {}).get("item_name") or row.get("item_name"),
+                "closed_at": stored.get("closed_at"),
+            },
+            "board": {
+                "written": bool(board_ok),
+                "note": board_note,
+                "row": board_detail if board_ok else None,
+                "error": None if board_ok else board_detail,
+            },
+            "ration": rationed,
+        }
+        shelters = len((rationed or {}).get("recipients") or [])
+        if duplicate and not rationed:
+            answer["note"] = (
+                "This item was closed already. No shelter has claimed it, so there is no"
+                " ration to work out."
+            )
+        elif shelters:
+            answer["note"] = (
+                "Closed. " + str(shelters)
+                + (" shelter now reads its share of it." if shelters == 1
+                   else " shelters now read their shares of it.")
+            )
+        else:
+            answer["note"] = (
+                "Closed. No shelter had claimed it, so there is no ration to work out."
+            )
+        if not PERSIST:
+            answer["demo"] = True
+        return self.send_json(200, answer)
+
     def api_rations(self):
         """The rationing pass, read for the signed-in account.
 
@@ -1390,32 +1616,53 @@ class ResQHandler(SimpleHTTPRequestHandler):
         The caller's own business name travels with it, because the one reader who is shown
         the whole split is the donor: a post is filed under the name that logged it, so the
         pass can tell which posts are the caller's and answer with their claimants named.
+
+        The pass is read through the donors' own closures. A shelter's share of an item is a
+        ration only once the kitchen that logged it has closed the post — until then more
+        shelters can still claim the item and every share of it can still move — so an open
+        post's shares are counted in `waiting` instead of being handed over, and the note
+        says a close is what they are waiting for rather than saying nothing is claimed.
         """
         me, problem = self.session_account()
         if problem:
             return self.send_json(401, problem)
 
         claims = gather_claims(me)
+        closures = closures_by_post()
         if PERSIST:
             with connect() as conn:
                 claims = gather_claims(me, conn)
+                closures = closures_by_post(conn)
 
-        payload = rationing_pass(claims, account_key(me), display_name(me))
+        payload = rationing_pass(claims, account_key(me), display_name(me), closures=closures)
         payload["ok"] = True
         payload["board"] = board_state()
         if not PERSIST:
             payload["demo"] = True
         if not payload["allocations"] and not payload["owned"]:
-            payload["note"] = self.rationing_note(me)
+            payload["note"] = self.rationing_note(me, payload)
         return self.send_json(200, payload)
 
-    def rationing_note(self, me):
+    def rationing_note(self, me, payload=None):
         """What a pass with nothing to show says, in the words of the side reading it.
 
         A shelter sees a ration when an item it claimed was claimed by somebody else too,
         and a donor sees a split when a shelter reaches for an item of theirs: the same
         empty answer means two different next steps, so it is said differently to each.
+
+        There is a third case, now that a ration waits on a closure: a shelter holding
+        claims on items nobody has closed yet. That is not an empty pass — the claims are on
+        the books and the ration is one close away — so it says what it is waiting for
+        rather than saying nothing has been claimed.
         """
+        waiting = int((payload or {}).get("waiting") or 0)
+        if waiting and (me.get("role") or "") != "donor":
+            return (
+                str(waiting) + (" item" if waiting == 1 else " items")
+                + " you claimed " + ("is" if waiting == 1 else "are")
+                + " still open. The kitchen that logged it closes the post when it is ready"
+                " to ration it, and your share appears here the moment it does."
+            )
         if (me.get("role") or "") == "donor":
             return (
                 "Nothing of yours has been claimed on the board yet. A split appears here"
@@ -1433,9 +1680,10 @@ class ResQHandler(SimpleHTTPRequestHandler):
 
         The rationing pass computes a share; publishing it is what puts the number where both
         ends of the delivery can see it — on the board row the donor logged and the shelter
-        claimed — instead of only inside the console that asked. Only the caller's own rows
+        claimed — instead of only inside the console that asked.        Only the caller's own rows
         are written, and only the allocation columns of them, so this cannot change a post's
-        donor, item, status or identity however it is called.
+        donor, item, status or identity however it is called — and only for posts the donor
+        has closed, because a post that is still open has no ration to publish.
 
         A board that is not configured, or a row that refuses the write, is reported per post
         rather than failing the request: a ration that was worked out and not published is
@@ -1462,11 +1710,13 @@ class ResQHandler(SimpleHTTPRequestHandler):
             )
 
         claims = gather_claims(me)
+        closures = closures_by_post()
         if PERSIST:
             with connect() as conn:
                 claims = gather_claims(me, conn)
+                closures = closures_by_post(conn)
 
-        payload = rationing_pass(claims, account_key(me), display_name(me))
+        payload = rationing_pass(claims, account_key(me), display_name(me), closures=closures)
         written_at = stamp()
         results = []
         for allocation in payload["allocations"]:

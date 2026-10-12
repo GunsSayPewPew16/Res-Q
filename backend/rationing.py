@@ -630,13 +630,22 @@ def claimant_pair(post_entry, claim, now=None):
     }
 
 
-def rationing_pass(claims, caller_key, owner_name=None, now=None):
+def rationing_pass(claims, caller_key, owner_name=None, now=None, closures=None):
     """Score every claim, split every post, and answer with the caller's own ration.
 
     The answer carries the caller's allocations — their own ration and their own share of
     each post they claimed — and the queue those came out of, which names every other
     claimant by count alone. Ranked highest score first, because the order is the point:
     it is the order a delivery round would serve these claimants in.
+
+    `closures` is what has been *decided*, as a mapping from post id to the moment its donor
+    closed it — the claim store's own `closures_by_post`. A post nobody has closed is still
+    taking claims, so its shares are a reading rather than a ration: they are kept out of
+    the caller's allocations and out of the queue, and counted in `waiting` instead, which
+    is the difference between "you have no ration" and "nobody has rationed this yet". A
+    donor still reads their own open posts in full — the split an item would get is what the
+    close button is pressed on the strength of — so `owned` carries every one of them, with
+    `closed` saying which have been through it.
 
     `owner_name` is the caller's own business name, and naming it is what lets a donor read
     the split of the posts that are theirs: those posts land in `owned`, one entry each,
@@ -645,6 +654,7 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
     the only thing a claim carries about who logged it.
     """
     now = now or utcnow()
+    closed_posts = closures or {}
     posts = group_claims(claims)
 
     # The pass's own reading of every post and every pair comes first, so a model that
@@ -666,8 +676,14 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
     allocations = []
     owned_posts = []
     queue = []
+    waiting = 0
     for post_entry in posts:
         post = post_entry["post"]
+        # Whether this item has been rationed yet. Null is the ordinary case: a post is
+        # claimable until its donor says otherwise, and that is the whole of what closing
+        # means.
+        closed_at = closed_posts.get(post.get("id"))
+        closed = closed_at is not None
         refined_post = posts_by_id.get(post.get("id")) or {}
         total_kg, weight_source = post_weight(post, refined_post)
         # Whose post this is: the one reader who may be shown the whole split.
@@ -744,6 +760,8 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
                     "distance_source": pair["distance_source"],
                 },
                 "claimant": "you" if mine else "another shelter",
+                "closed": closed,
+                "closed_at": closed_at,
             }
             if mine:
                 # A claimant sees its own ration and its own share — and nobody else's.
@@ -751,7 +769,13 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
                 entry["share_percent"] = round(share * 100.0, RATION_PERCENT_DECIMALS)
                 if pair["reason"]:
                     entry["reason"] = pair["reason"]
-                allocations.append(entry)
+                # Only once the donor has closed the item: until then the shares are still
+                # moving as more shelters claim it, and a share that can change is not a
+                # ration to be notified about. It counts as waiting instead.
+                if closed:
+                    allocations.append(entry)
+                else:
+                    waiting += 1
             if owned:
                 # The donor of the item reads the whole split: who is getting how much of
                 # it, by name, which is the one view no shelter is ever handed.
@@ -764,7 +788,13 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
                 if pair["reason"]:
                     entry["reason"] = pair["reason"]
                 splits.append(entry)
-            queue.append(entry)
+            # The queue is the round a donor would run, and it is read from both sides: the
+            # donor sees their own items whether or not they have closed them, while a
+            # shelter is shown only the items that have been through a close — the same
+            # rule its own allocations follow, so the screen cannot say "nobody else wanted
+            # this" about a post other shelters are still reaching for.
+            if closed or owned:
+                queue.append(entry)
 
         if owned:
             owned_posts.append({
@@ -777,6 +807,8 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
                 "posted_at": post.get("created_at"),
                 "total_kg": total_kg,
                 "claimants": len(scored),
+                "closed": closed,
+                "closed_at": closed_at,
                 "recipients": splits,
             })
 
@@ -788,6 +820,7 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
         "radius_km": RATION_DISTANCE_RADIUS_KM,
         "normalizer": dict(llm.describe(), answered=answered),
         "count": len(allocations),
+        "waiting": waiting,
         "allocations": allocations,
         "owned": owned_posts,
         "owner": owner_name or None,

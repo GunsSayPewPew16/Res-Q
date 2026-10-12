@@ -32,6 +32,7 @@ from config import (
     CLAIM_RECIPIENT_FIELDS,
     CLAIM_RECORDS_PATH,
     DEMO_CLAIMS,
+    DEMO_CLOSURES,
     METRIC_DECIMALS,
 )
 from geo import haversine_km
@@ -121,6 +122,110 @@ def remember(record, conn=None):
     )
     conn.commit()
     return held_already(record["post"]["id"], claimant_key, conn) or record
+
+
+# ---------------------------------------------------------------------------
+# Closing a post
+# ---------------------------------------------------------------------------
+# A claim says "this shelter wants this item". It deliberately does not say "and here is
+# their share of it": a share is a fraction of what *every* claimant asked for, and it is
+# the donor's own hand that ends the asking. Closing the post is that hand — the moment the
+# claims on an item stop being open to more shelters and start being the ration the pass
+# works out — so the closure is filed here, beside the claims it closes, and the rationing
+# pass reads the two together.
+
+
+def closure_from_post(post, donor, closed_at=None):
+    """One closed post, in the shape every reader of a closure shares.
+
+    The post id is what a closure is joined on; the name is the account that closed it, and
+    it is the donor's own business name rather than anything the caller sent, so a closure
+    cannot be filed as somebody else's.
+    """
+    row = post if isinstance(post, dict) else {}
+    return {
+        "post_id": str(row.get("id") or "").strip(),
+        "item_name": row.get("item_name"),
+        "donor_name": donor,
+        "closed_at": closed_at or format_time(utcnow()),
+    }
+
+
+def closure_for(post_id, conn=None):
+    """The closure on one post, or None while the post is still open."""
+    wanted = str(post_id or "").strip()
+    if not wanted:
+        return None
+    if conn is None:
+        for held in DEMO_CLOSURES:
+            if held.get("post_id") == wanted:
+                return held
+        return None
+    found = conn.execute(
+        "SELECT payload FROM closures WHERE post_id = ?", (wanted,)
+    ).fetchone()
+    return decode_payload(found["payload"]) if found else None
+
+
+def remember_closure(record, conn=None):
+    """File one closure, unless that post is closed already.
+
+    The replay answers with the closure already saved rather than a second one: a post
+    closes once, and a second close would rewrite the moment the ration was worked out —
+    which is the one thing about it a shelter reads back.
+    """
+    existing = closure_for(record.get("post_id"), conn)
+    if existing is not None:
+        return existing
+    if conn is None:
+        DEMO_CLOSURES.append(record)
+        return record
+
+    # `INSERT OR IGNORE` against the table's own key: two closes arriving at once cannot
+    # both win, and the loser reads back the winner's closure.
+    conn.execute(
+        "INSERT OR IGNORE INTO closures (post_id, donor_name, closed_at, payload)"
+        " VALUES (?, ?, ?, ?)",
+        (
+            record["post_id"],
+            record.get("donor_name"),
+            record["closed_at"],
+            json.dumps(record, ensure_ascii=False),
+        ),
+    )
+    conn.commit()
+    return closure_for(record["post_id"], conn) or record
+
+
+def stored_closures(conn=None):
+    """Every closure this run knows about, oldest first, from the store the mode keeps."""
+    if conn is None:
+        return list(DEMO_CLOSURES)
+    rows = conn.execute(
+        "SELECT payload FROM closures ORDER BY closed_at, rowid"
+    ).fetchall()
+    closures = []
+    for row in rows:
+        record = decode_payload(row["payload"])
+        if record is not None:
+            closures.append(record)
+    return closures
+
+
+def closures_by_post(conn=None):
+    """The closures as a mapping from post id to the moment it closed.
+
+    The shape the rationing pass reads: it has the claims, and this is what tells it which
+    of the posts those claims are on have been rationed already.
+    """
+    return {closure["post_id"]: closure.get("closed_at")
+            for closure in stored_closures(conn)
+            if closure.get("post_id")}
+
+
+def is_closed(post_id, conn=None):
+    """Whether this post has been closed by its donor."""
+    return closure_for(post_id, conn) is not None
 
 
 def decode_payload(text):

@@ -49,6 +49,11 @@ def describe():
 # the one failure whose fix is a file rather than a setting should say which file.
 MIGRATION = "supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql"
 
+# The migration that gives the board the column a closed post carries, named for the same
+# reason and kept apart from the one above: closing a post and publishing a share to it are
+# two different writes, and a project can have run either one without the other.
+CLOSED_MIGRATION = "supabase/migrations/20261013000000_add_closed_at_to_surplus_posts.sql"
+
 # How a board that has not been given the columns says so. It says it two ways, and which
 # one it is depends on where the write stopped: Postgres answers `42703` with "column … does
 # not exist" when it is the select or the statement that fails, while the REST layer's own
@@ -87,16 +92,29 @@ def publish_allocation(post_id, fields):
     to refuse and a misread id can only ever change the allocation of the row it named.
 
     The detail is the row as the board returned it on success, and the board's own message on
-    failure. Neither carries the key.
+    failure. Neither carries the key. What a row with no allocation on it means is the one
+    thing this adds to `patch_row`: an allocation is written for a post the board holds, so a
+    write that matched no row is a ration nobody can see rather than a quiet success.
+    """
+    missing = [name for name in fields if fields[name] is None]
+    if missing:
+        return False, "nothing to publish for " + ", ".join(missing)
+    return patch_row(post_id, fields, MIGRATION)
+
+
+def patch_row(post_id, fields, migration):
+    """One PATCH against one board row, naming the migration its own failure is fixed by.
+
+    `publish_allocation` and `close_post` write two different sets of columns and fail for
+    two different reasons — one column set missing means one migration unapplied — so the
+    migration named with the failure is the caller's, not a constant this module would have
+    to guess. Everything else is shared: one row by its own id, the key in one header, and
+    the board's own message back with the key stripped out of it.
     """
     if not configured():
         return False, "no board configured"
     if not post_id:
-        return False, "no post to publish to"
-
-    missing = [name for name in fields if fields[name] is None]
-    if missing:
-        return False, "nothing to publish for " + ", ".join(missing)
+        return False, "no post to write to"
 
     url = "%s/rest/v1/%s?id=eq.%s" % (
         SUPABASE_URL, SUPABASE_TABLE, urllib.parse.quote(str(post_id), safe=""),
@@ -128,19 +146,55 @@ def publish_allocation(post_id, fields):
             detail = ""
         message = redact(parsed_message(detail)) or ("the board answered %s" % error.code)
         if missing_column(message) or error.code == 404:
-            message += " · apply " + MIGRATION + " first"
+            message += " \u00b7 apply " + migration + " first"
         return False, message
     except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
         return False, redact(error)
 
     if isinstance(payload, list):
-        # `Prefer: return=representation` is what makes this answer readable: the board
-        # sends back the row it wrote. An empty list therefore means the update matched no
-        # row at all — there is no post with that id on the board — and that is a failure
-        # however cheerfully it arrived, because the ration was computed for a row nobody
-        # can see. (An id that is not a uuid never reaches the board; this is the case of a
-        # well-formed id whose row is gone, and of a claim that was recorded against a board
-        # row that has since been deleted.)
+        # `Prefer: return=representation` is what makes this answer readable: an empty list
+        # means the update matched no row at all, which is a failure however cheerfully it
+        # arrived — the id named a row nobody can see.
+        if not payload:
+            return False, "no board row with the id " + str(post_id)
+        return True, payload[0]
+    return True, payload
+
+
+def close_post(post_id, closed_at):
+    """Mark one board row closed, so no shelter can claim it again: `(ok, detail)`.
+
+    The one column is written and nothing else — not the status, not the donor, not the
+    item — so the trigger that freezes a post's identity has nothing to refuse, and the row
+    a recipient's page is reading carries the fact without the post becoming a different
+    one. A project that has not run the migration that adds the column says so, and the API
+    reports it per post rather than failing the close: the closure is recorded either way,
+    and what is missing is the marker the other dashboard reads.
+    """
+    if not closed_at:
+        return False, "no moment to close at"
+    return patch_row(post_id, {"closed_at": closed_at}, CLOSED_MIGRATION)
+
+
+def read_post(post_id):
+    """One board row, as the board holds it: `(ok, row_or_message)`.
+
+    The board is the only thing that knows what a post says and whose it is, so this is how
+    a write to it is checked before it happens — a donor may only close an item the board
+    files under their own name, and the name on the row is the board's answer rather than
+    the caller's.
+    """
+    if not configured():
+        return False, "no board configured"
+    if not post_id:
+        return False, "no post to read"
+    url = "%s/rest/v1/%s?id=eq.%s&select=*&limit=1" % (
+        SUPABASE_URL, SUPABASE_TABLE, urllib.parse.quote(str(post_id), safe=""),
+    )
+    ok, payload = request(url)
+    if not ok:
+        return False, payload
+    if isinstance(payload, list):
         if not payload:
             return False, "no board row with the id " + str(post_id)
         return True, payload[0]

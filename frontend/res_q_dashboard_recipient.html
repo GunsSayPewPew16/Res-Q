@@ -2401,9 +2401,15 @@
         function paintRation(data) {
             var rows = (data && data.allocations) || [];
             if (!rows.length) {
-                // Nothing is claimed under this account yet, so there is no post to take a
-                // share of: the figures stay at zero and say why.
-                noRation('no claimed post yet');
+                // Nothing is rationed for this account, so there is no share to print: the
+                // figures stay at zero and say why. There are two reasons for that and the
+                // API counts them apart — nothing claimed at all, or items claimed and
+                // still open, whose shares appear the moment their kitchens close them.
+                var waiting = Number((data && data.waiting) || 0);
+                noRation(waiting
+                    ? waiting + (waiting === 1 ? ' claim' : ' claims')
+                        + ' waiting on the kitchen to close'
+                    : 'no claimed post yet');
                 return;
             }
             var row = rows[0];
@@ -2780,6 +2786,10 @@
         var feedClaimUnwatch = null;
         // The claims the board carries, gathered per post: { post id: [claim, ...] }.
         var feedClaims = {};
+        // The posts whose kitchen has closed them: read from the board's own column where
+        // the project has it, and from the API's closed set where it has not — a closure is
+        // recorded the moment it happens, and a share of an item is a ration from then on.
+        var feedClosed = {};
 
         var CHIP_IDLE = 'text-neutral-500 bg-[#051F20]';
         var CHIP_BUSY = 'text-[#DAF1DE] bg-[#235347]';
@@ -2867,7 +2877,7 @@
         // every claim falls back to the older first-claim-wins update and no card names
         // anybody. That is a note, not a failure — the board still works.
         function feedSummaryChip(db, rows, claims) {
-            var chip = db.feedSummary(rows, feedClaims);
+            var chip = db.feedSummary(rows, feedClaims, feedClosed);
             if (!claims.ok && claims.error && claims.error.missingTable) {
                 return chip + ' \u00b7 claims migration pending';
             }
@@ -2877,12 +2887,19 @@
         function loadFeed() {
             var db = resqDb();
             if (!db) { return Promise.resolve(); }
-            // The board and its claims are two tables read as one screen: the posts say
-            // what is on offer, the claims say who has already asked for it.
-            return Promise.all([db.listPosts({}), db.listClaims({})]).then(function (both) {
-                var posts = both[0];
-                var claims = both[1];
+            // The board, its claims and the kitchens' closures are three answers read as one
+            // screen: the posts say what is on offer, the claims say who has already asked
+            // for it, and the closures say which of the items have been finished with.
+            return Promise.all([db.listPosts({}), db.listClaims({}), db.listClosed()])
+                .then(function (answers) {
+                var posts = answers[0];
+                var claims = answers[1];
+                var closed = answers[2];
                 feedClaims = claims.ok ? db.groupClaims(claims.data) : {};
+                // The closed set is read beside the board rather than instead of it: the
+                // board's own column is the first source, and this is the one that answers
+                // on a project whose board has not been given the column yet.
+                feedClosed = closed.ok ? closed.data : {};
                 if (!posts.ok) {
                     setChip('feedState', posts.error.missingTable ? 'no table' : 'unreachable', CHIP_BUSY);
                     renderFeed(null, feedFailure(posts.error));
@@ -2943,7 +2960,10 @@
                     canClaim: true,
                     claimants: feedClaims[row.id] || [],
                     multiClaim: db.claimsSupported(),
-                    viewerName: viewer
+                    viewerName: viewer,
+                    // Which posts the kitchens have closed, so a card whose item has been
+                    // rationed offers no claim action and says why.
+                    closed: feedClosed
                 });
             }).join('');
         }
@@ -2968,6 +2988,15 @@
             var db = resqDb();
             var id = button ? button.getAttribute('data-claim') : '';
             if (!db || !id || feedClaiming[id]) { return; }
+            // A post the kitchen has closed takes no more claims, and the card in front of
+            // the reader was drawn before that happened — a board open in another tab, a
+            // close that landed since the last poll. The check is here as well as on the
+            // card because this is the click that would write the row.
+            if (db.closedAt(feedRow(id), feedClosed)) {
+                setChip('feedState', 'closed by the kitchen', CHIP_BUSY);
+                loadFeed();
+                return;
+            }
             feedClaiming[id] = true;
             button.disabled = true;
             button.textContent = 'Claiming';

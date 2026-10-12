@@ -303,6 +303,7 @@ the moment it is made.
 | `allocation_score` | `numeric` | The weighted score the share came out of |
 | `allocated_to` | `text` | The shelter it is for, named the way the header names them |
 | `allocated_at` | `timestamptz` | When it was published |
+| `closed_at` | `timestamptz` | When the kitchen that logged the post closed it, or `null` while the item is still taking claims. A closed post takes no more claims and the shares on it are the ration its shelters are told about; added by `supabase/migrations/20261013000000_add_closed_at_to_surplus_posts.sql` |
 
 And the claims themselves, `public.surplus_claims`, one row per recipient per post:
 
@@ -324,12 +325,13 @@ Apply the tables once against the project, in order: paste
 `supabase/migrations/20261008000000_create_surplus_posts.sql` into **SQL Editor →
 New query → Run** in the Supabase dashboard, then
 `supabase/migrations/20261009000000_add_goods_type_to_surplus_posts.sql`,
-`supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql` and
-`supabase/migrations/20261012000000_create_surplus_claims.sql` the same way — or point the
-Supabase CLI at the project and run `supabase db push`. All four files are written to be
-safe to run more than once.
+`supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql`,
+`supabase/migrations/20261012000000_create_surplus_claims.sql` and
+`supabase/migrations/20261013000000_add_closed_at_to_surplus_posts.sql` the same way — or
+point the Supabase CLI at the project and run `supabase db push`. All five files are written
+to be safe to run more than once.
 
-Three of them can be *late* without taking a feature down, and each says so itself. Until
+Four of them can be *late* without taking a feature down, and each says so itself. Until
 the `goods_type` migration is applied, the compose box still logs posts, but it logs them
 untagged and says so on the line under the fields — the project loses the category rather
 than the ability to post. Until the allocation one is applied, the board still works
@@ -337,7 +339,10 @@ exactly as it did, and publishing an allocation is the one call that answers wit
 migration's name instead. Until the claims one is applied, a claim falls back to the older
 behaviour below — one claim per post, written as a status — no card carries a claimant
 line, and the board's chip says *claims migration pending*: a half-migrated project loses
-the count, not the ability to claim.
+the count, not the ability to claim. Until the `closed_at` one is applied, closing an item
+still works end to end — the closure is the API's own record, and it is what decides the
+ration — and the one thing missing is the marker on the row the other dashboard reads, so
+the donor's screen says the board was not marked and names the file.
 
 Emptying the board is a separate, deliberate act rather than a migration:
 `supabase/clear_surplus_posts.sql` deletes every row and is run by hand the same way.
@@ -1034,12 +1039,14 @@ among them — with `ALTER TABLE` rather than asking for a new file.
 | `GET` | `/api/matches` | Rank the counterparts near the signed-in account. Needs a bearer token (`401`), a confirmed delivery location and a saved goods profile (`400` with `no_location` or `no_categories` otherwise). A candidate is an account of the opposite role inside `radius_km` (default 25, ceiling 250) that shares at least one category with the caller; the nearest comes first and the list stops at `limit` (default 10, ceiling 50). Each match carries `distance_km`, `shared_categories` and the recipient's preferred `delivery_days` |
 | `GET` | `/api/orders` | Every delivery order the signed-in account is one side of, newest first, each carrying `viewer_side` — which end of the delivery the caller is on — which is what the recipient's dashboard picks the route to draw from. A delivery that has finished carries `completed` in `status` and the moment it finished in `completed_at`, which is what the donor dashboard's *Latest completed orders* cards read and date themselves by |
 | `POST` | `/api/orders` | Bind the caller and one counterpart into a delivery order, from a `counterpartId` plus a `category` and an optional `scheduledFor`. Answers `404` `no_counterpart` for an id that names nobody, `400` for a same-role counterpart, a counterpart without a confirmed pin (`no_counterpart_location`), a category the two sides do not share (`not_shared`) or a day the recipient did not ask for (`not_preferred`), and `409` `duplicate_order` when that pair already has a live order for the category. The order snapshots both pins — the donor's pickup against the recipient's drop-off |
-| `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing. Only the caller's own ration and share are named — other claimants are a count. The caller's own business name travels with the request, so a donor also gets `owned`: one entry per post of theirs a claim is on, with every claimant named beside its ration and share |
+| `GET` | `/api/rations` | The rationing pass, read for the signed-in account: the shares it holds of every surplus post it claimed **whose donor has closed it**, with the score each share came out of, and the ranked queue those came out of. Needs a bearer token (`401`), answers an empty list with a `note` for an account that has claimed nothing, and an empty list with `waiting` and the other note for one whose claims are on items still open — a share waits on the close, and `waiting` is how many of the caller's own are. Only the caller's own ration and share are named — other claimants are a count. The caller's own business name travels with the request, so a donor also gets `owned`: one entry per post of theirs a claim is on, each carrying `closed` and `closed_at`, with every claimant named beside its ration and share |
 | `POST` | `/api/surplus-categories` | The last month of the caller's own surplus log, summarised by goods category: kilograms, entry count, share of the total and how each bar was read — `text`, `assumed`, `logged` or `mixed`. The caller's board rows arrive in the body as `posts` (`400` `no_posts` without the key) and are **filed into the log first**, each row once, under its own post id; the window (`days`, default 30, clamped to 1–365) is applied when the log is read rather than when the board is. Only rows carrying the caller's own business name are filed — the rest are reported as `skipped` — and the answer carries `filed` and `stored` beside the summary. A month of logged days is seeded into the log for the fixture kitchens, so the mix stands on a board that has been cleared |
 | `POST` | `/api/rations` | Run the same pass and publish the caller's own shares back to the board, writing `allocated_kg`, `allocation_percent`, `allocation_score`, `allocated_to` and `allocated_at` onto each row it claimed — and nothing else about the row. Answers `503` `board_unconfigured` when `RESQ_SUPABASE_URL`/`RESQ_SUPABASE_KEY` are not set, and `200` with a per-post result otherwise — including when a row refuses the write, which the result says per post rather than failing the request |
 | `GET` | `/api/claims` | The signed-in account's own claims, newest first. Needs a bearer token (`401`) |
 | `GET` | `/api/post-claims` | The other side of the row above: the claims other shelters have made on the signed-in account's **own board posts**, gathered post by post, newest post first, each with the claimants on it — their name, address and confirmed pin, when they claimed it, and how far they are from the caller's own pin. Needs a bearer token (`401`); answers an empty list with a `note` for an account with nothing claimed. Only the caller's own posts are ever read, so a shelter that owns no posts is told that rather than shown somebody else's delivery |
-| `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201` |
+| `POST` | `/api/claims` | Record the caller's claim on one board row, from the row itself as `post` (`400` `no_post` without a `post.id`). The record is filed against the token's own account and any profile in the body is ignored, so no claim can be made in another shelter's name; claiming the same post twice answers `200` with `duplicate: true` and the record already saved, where a fresh one answers `201`. A post its donor has closed is refused with `409` `post_closed`, which is the whole of what closing one means |
+| `GET` | `/api/posts/closed` | Every post a donor has closed, as `{post_id, item_name, closed_at}` — the set no shelter may claim again, and the one a page reads beside the board so a card it drew before the close stops offering the action. Needs no session |
+| `POST` | `/api/posts/close` | Close one of the signed-in account's own board posts and ration it: `post.id` (and, where there is no board to ask, the row itself) names the item. The board's own row is read first and the name on *it* is what ownership is checked against, so only the kitchen that logged the item can close it (`403` `not_your_post`). Writes `closed_at` to the board (reported per post rather than failing the close when the column or the board is missing), records the closure the pass reads, and answers with the ration the close produced — `closed`, `board`, `ration` and a `note` — with `duplicate: true` on a repeat, which keeps the moment it first happened |
 | `POST` | `/api/dev/switch-role` | **Temporary, demo mode only.** Hand back a session for the other dashboard, so both roles can be previewed from one sign-in. Answers `404` with persistence on, the way any unknown endpoint does, because it mints a session without a password |
 | `GET` | `/api/history` | The signed-in account's own logged days, newest first, with the year-long window's summary and the features they answer. Needs a bearer token (`401` otherwise). A recipient's answer is an empty log rather than an error: the log belongs to the kitchen that cooked |
 | `GET` | `/api/weather` | The real conditions at a point, in the analyser's own vocabulary. Requires `lat`/`lng`, and answers `400` for a missing, non-numeric or off-globe pair. Reads Open-Meteo — keyless — and returns the model's label for today, the WMO code and summary behind it, the day's high/low and rainfall, the current temperature and wind, the address's timezone and the source. Answers `502` `weather_unavailable` when the service cannot be reached, rather than a default sky |
@@ -1172,10 +1179,45 @@ thing a pass can tell whose post it is reading: the same comparison `accounts.ac
 already makes when it places a claim's pickup end. A caller nobody named — or one whose
 items nobody has reached for — gets an empty `owned` list and the recipient's reading of the
 same pass, which is what keeps a shelter from ever being handed another shelter's numbers.
-The donor's **Ongoing Deliveries** screen is that answer drawn: a ring whose slices are one
-post's claimants, every slice labelled with the shelter and the share it was allotted, over
-the same split written out in kilograms with the distance and score behind each one, and the
-queue under it in the order a round would serve them.
+The donor's **Ongoing Deliveries** screen is that answer drawn: a carousel of the kitchen's claimed
+items, then a ring whose slices are the chosen post's claimants, every slice labelled with the
+shelter and the share it was allotted, over the same split written out in kilograms with the
+distance and score behind each one, and the queue under it in the order a round would serve
+them.
+
+**A share is a ration only once the donor has closed the post.** The pass is read through
+the donors' own closures, which live beside the claims in `backend/claims.py` — the
+deploy's `closures` table with persistence on, the process's own list in demo mode — and
+`POST /api/posts/close` is the one write that makes one. Closing is the kitchen's own hand
+on the exchange: an item takes claims until its donor says otherwise, and saying so is what
+ends the asking and turns the shares into the numbers each shelter is told about. So a
+shelter's own allocations are drawn only from posts that have been closed, an open post's
+claim is counted in `waiting` instead, and the note under an empty console says which of the
+two it is looking at — nothing claimed, or claimed and still open. That is why a shelter
+does not hear about a split the moment somebody else reaches for the same pallet: until the
+item closes, the shares are still moving, and a notification about a number that can change
+under it is not one worth sending.
+
+The donor reads the same pass from their side, `owned`, and it is *not* gated on the close —
+the split an item would get is what the close button is pressed on the strength of — so
+every entry carries `closed` and `closed_at` and the **Ongoing Deliveries** screen draws
+both states. Its carousel is one card per item a shelter has reached for, named by what the
+item is with the shelters on it under the name; picking one reads its split below, and the
+**Close the post** action beside it is the write above. Closing an item twice is a repeat
+rather than an error (the closure keeps the moment it first happened), a post that is not
+the caller's is refused by the name the board files it under, and the answer carries the
+ration that came out of it — who is getting how much — so the screen can say what closing
+was worth. A board that has not been given `closed_at` yet is reported in that answer
+rather than failing the close, because the ration is the API's own record and the column is
+only its copy.
+
+`GET /api/posts/closed` is how the pages read the closed set, and it is read beside the
+board rather than instead of it: a recipient's card that has not reloaded since an item
+closed would otherwise still offer a **Claim** action the API would only refuse. It answers
+without a session — which posts are closed is not anybody's own business — and the claim
+itself is refused in two places, `POST /api/claims` with a `409 post_closed` and the
+`closed_at` trigger the migration adds, which is what stops a stale client from writing the
+row the first two gates would have caught.
 
 The claims come from the API's own store (`backend/claims.py`): a shelter's claim is
 recorded by `POST /api/claims` against its own session, so a deployment keeps its claims the
