@@ -15,34 +15,54 @@ The two standing rules
    uncommitted, and "I pushed it" is not the finish line — "the live site is serving this
    commit" is. See *Verifying a change is live*, below.
 
+Where the site actually lives
+-----------------------------
+
+Two hosts, one repository, and they deploy on different triggers:
+
+    front-end  https://res-q-am16.vercel.app/     Vercel, root directory `frontend`,
+                                                  deploys itself on every push (~15s)
+    API        https://res-q-api.onrender.com     Render, `render.yaml`, rootDir `backend`,
+                                                  Auto-Deploy set to **On Commit** in the
+                                                  dashboard, so it also rebuilds on push
+
+The Render service serves the pages as well, but the pages the user actually opens are
+Vercel's. Both are fed by the same `frontend/` directory, so a page change ships twice and a
+*backend* change only reaches the user's site once Render has rebuilt. The pages call the API
+cross-origin through `frontend/resq_api.js` (`RESQ_API_BASE`), and Render's
+`RESQ_ALLOWED_ORIGINS` lists the Vercel origin — an origin missing from that list is a CORS
+refusal on every call, which reads like a broken page rather than a missing setting.
+
 How "goes live" is wired
 ------------------------
 
     edit in this folder
-      → scripts/autosync.sh commits it (once the edit has settled) and pushes main
-      → .github/workflows/deploy.yml asks Render to rebuild that commit
-      → the job waits for https://res-q-api.onrender.com/api/health to report the new
-        revision, and goes red if it never does
+      → committing pushes main by itself (a git post-commit hook, installed by
+        scripts/autosync.sh --install)
+      → Vercel rebuilds, and Render's Auto-Deploy rebuilds
+      → .github/workflows/deploy.yml checks that the live API reports the pushed commit
+        and warns (or fails, when it asked for the deploy itself) if it does not
 
-* The Render service serves **both** the pages and the API from one process, so a page
-  fix and an API fix ship together. `render.yaml` → `rootDir: backend`; the document root
-  is `frontend/`. There is no separate frontend host to poke.
-* `scripts/autosync.sh` runs as a launchd job (`com.resq.autosync`) that starts at login
-  and restarts if it dies. It publishes anything in `frontend/`, `backend/`, `supabase/`,
-  docs and config; it never force-pushes and never commits through a half-finished merge.
-* It holds an edit for ~10 seconds of stillness first, and it refuses to commit a backend
-  that does not compile. So a broken change waits for you, and a finished one leaves on
-  its own.
+* `scripts/autosync.sh` also contains a *watcher* that commits on its own, for a repository
+  outside a macOS-guarded folder. **It cannot run here:** macOS refuses a launchd agent
+  access to `~/Downloads` (that is the "Operation not permitted" in
+  `/tmp/resq-autosync-launchd.log`), so in this checkout the commit hook is the mechanism
+  and uncommitted edits wait for whoever made them. Move the repo out of `~/Downloads`, or
+  grant Terminal and bash Full Disk Access, and `--install` will start the watcher too.
+* The workflow needs no secret while Auto-Deploy is on. It takes `RENDER_DEPLOY_HOOK_URL`
+  (or `RENDER_API_KEY` + `RENDER_SERVICE_ID`) as a fallback for a service that does not
+  rebuild on commit — set it from a file, never in a shell history:
+
+      gh secret set RENDER_DEPLOY_HOOK_URL < /path/to/hook.txt
 
 Useful commands:
 
-    scripts/autosync.sh --status      # is it running, and the last few things it did
-    scripts/autosync.sh --once        # do a pass now, in the foreground
-    scripts/autosync.sh --install     # (re)install the launchd job after moving the repo
+    scripts/autosync.sh --status      # is the automation installed
+    scripts/autosync.sh --push        # push what is ahead, now
+    scripts/autosync.sh --install     # (re)install the commit hook
     scripts/autosync.sh --uninstall   # stop it
     tail -f .git/autosync.log         # what it has been doing
     touch .git/autosync-off           # pause publishing; rm it to resume
-    rm .git/autosync-off
 
 Verifying a change is live
 --------------------------
@@ -50,33 +70,63 @@ Verifying a change is live
     git rev-parse --short=12 HEAD
     curl -s https://res-q-api.onrender.com/api/health
 
-`/api/health` carries `revision` — the commit the answering process was built from (the
-host's `RENDER_GIT_COMMIT`, or the working copy when run locally). Those two shas must
-match. If they do not:
+`/api/health` carries `revision` — the commit the answering process was built from (Render's
+own `RENDER_GIT_COMMIT`, or the working copy locally). Those two shas must match for a
+backend change. For a **page** change, check Vercel instead, because it deploys independently:
 
-    gh run list --limit 3            # did the deploy workflow run, and what did it say
-    gh secret list                   # is RENDER_DEPLOY_HOOK_URL (or RENDER_API_KEY) set
-    scripts/autosync.sh --once       # is the push itself still sitting here
+    curl -s https://res-q-am16.vercel.app/res_q_dashboard_donor.html | grep -c '<a string from your diff>'
 
 A stale revision means a deploy that never happened, **not** a code bug — check the deploy
-chain before touching the code. This has already cost one debugging session: three commits
-including the donor dashboard's route map were pushed and correct while the live site kept
-serving a build from days earlier, which looked exactly like "the map is broken".
+chain before touching the code. This cost a whole debugging session on 2026-10-12: three
+commits including the donor dashboard's route map were pushed and correct while the live API
+kept serving a build from days earlier, so `/api/post-claims` answered 404, the dashboard had
+no claimants to route to, and the map panel sat on its drawn placeholder. It looked exactly
+like a broken map.
 
-Deploy secrets
---------------
+**The map needs the API to be current.** `frontend/res_q_dashboard_donor.html` reads the
+donor's claimed posts from `/api/post-claims` and the board from Supabase; with the claims
+route missing it cannot draw a route at all.
 
-The workflow needs one of these, set as a GitHub Actions secret on this repository:
+Debugging the dashboard in a browser
+-----------------------------------
 
-* `RENDER_DEPLOY_HOOK_URL` — Render → the service → Settings → Deploy Hook. Simplest.
-* `RENDER_API_KEY` + `RENDER_SERVICE_ID` — deploys a named commit and can be polled.
+* The route panel is `#orderRoutePanel`; its map is `#orderRouteMap`, mounted by MapLibre
+  (`loadOrderRouteMap()` → `loadMaplibre()` → `mountOrderRouteMap()`), and its fallback
+  drawing is the `#orderRouteRest` SVG laid over it. `paintOrderRoute()` is the one function
+  that decides what the panel shows.
+* **A browser that produces no animation frames cannot render that map at all.** In this
+  app's Preview tab, `requestAnimationFrame` callbacks do not fire until a recording is
+  started, and IntersectionObserver callbacks never fire — so the map looks permanently
+  stuck there. `preview_recording_start` makes frames flow and everything then behaves.
+* MapLibre's stylesheet makes every container `position: relative`, which beats Tailwind's
+  `absolute inset-0`: a map whose box then collapses to zero height is invisible while
+  looking perfectly mounted. `mountOrderRouteMap` pins the box inline for this reason.
+* The route needs both ends to have confirmed pins. A claimant with no confirmed location is
+  reported in the panel rather than drawn ("… has not confirmed a delivery location"), and
+  the newest pending order on the demo board ("Tomatoes", claimed by a Fort York Food Bank
+  contact) is exactly that — so the *default* selection shows that note instead of a map.
+  Picking one of Ortega Deli's own three items draws the route.
 
-Set them **from a file**, so the value never appears in a transcript:
+The rationing pass
+------------------
 
-    gh secret set RENDER_DEPLOY_HOOK_URL < /path/to/hook.txt
+`backend/rationing.py` scores every claimant of a post and splits it. Two separate questions,
+and using one answer for both was a bug:
 
-Never commit a hook URL, an API key or a service id. `render.yaml` deliberately uses
-`sync: false` for the values that are somebody's own (origins, Supabase, the model key).
+* **the queue** is ranked by the whole documented score —
+  `(distance_score * 0.3) + (need_score * 0.4) + (expiry_urgency_multiplier * 3.0)`, per
+  `config.RATION_WEIGHTS`;
+* **the split** — how much of the item each shelter gets — is the ratio of the two terms
+  that are the claimant's own, distance and need, per `config.RATION_SHARE_WEIGHTS`
+  (`rationing.share_weight`).
+
+Urgency is read from the post, so it is the same number for every claimant of an item; a
+constant added to every score before the scores are divided into each other survives the
+division and drags every split toward an even one (Ortega Deli's three-way split came out
+34.7/32.9/32.4 however differently the three shelters reported their need). After the fix the
+demo splits 39.7/31.2/29.1, 56.1/43.9 and 57.9/42.1. If a split still reads too even, the
+compression left is in `local_need_score`, whose floors (a 0.30 base and neutral-middle
+defaults) cap how far apart three claimants can score.
 
 Running it locally
 ------------------
@@ -85,18 +135,17 @@ Running it locally
     python3 backend/server.py 8123       # or on a port of your choosing
 
 Check the port is free first (`lsof -i :8080`) — several agents share this checkout and a
-second server on the same port looks like a site that will not load. Demo accounts, all
-with the password `ResqDemo1!`:
+second server on the same port looks like a site that will not load. Demo accounts, all with
+the password `ResqDemo1!`:
 
     luis@resq.test    Ortega Deli, the Miami donor (the demo's subject)
-    rosa@resq.test    dana@resq.test    (the other test donors)
+    ana@resq.test     Biscayne Bay Shelter      ines@resq.test   Overtown Community Kitchen
+    tomas@resq.test   Little Havana Food Pantry
+    rosa@resq.test    dana@resq.test            noor@resq.test   (other fixture accounts)
 
-Pages are plain files under `frontend/`; the donor dashboard is
-`frontend/res_q_dashboard_donor.html`. A page reaches the API through `apiUrl()` in
-`frontend/resq_api.js`, whose base is the deployed Render origin by default — open the
-pages from `python3 backend/server.py` and the calls go to Render unless the page sets
-`window.RESQ_API_BASE` first. `RESQ_PERSIST=off` (the default, and what the deployment
-runs) keeps accounts, sessions and orders in the worker's memory.
+`RESQ_PERSIST=off` (the default, and what the deployment runs) keeps accounts, sessions and
+orders in the worker's memory — so **every Render deploy signs everybody out**, and a page
+that suddenly redirects to the sign-in screen after a deploy is not a session bug.
 
 Project conventions
 -------------------
@@ -105,15 +154,18 @@ Project conventions
   `backend/server.py`; every constant and threshold lives in `backend/config.py`.
 * Comments carry the *why*, at length, in full sentences. Match that voice; do not add
   banner comments or restate what the next line says.
-* Frontend is single-file HTML with Tailwind from a CDN and one inline `<script>` — there
-  is no build step and no bundler, so a change is a file edit.
-* Long-lived facts about the deployment (origins, modes, the render.yaml contract) belong
-  in `README.md`; this file is the short version for whoever is about to start work.
+* Frontend is single-file HTML with Tailwind from a CDN and one inline `<script>` — there is
+  no build step and no bundler, so a change is a file edit. Vercel serves it in seconds.
+* Long-lived facts about the deployment belong in `README.md`; this file is the short version
+  for whoever is about to start work.
+* Never commit a hook URL, an API key or a service id. `render.yaml` uses `sync: false` for
+  the values that are somebody's own (origins, Supabase, the model key).
 
 Outstanding work
 ----------------
 
-* Donor dashboard: the orders map must load — the code is pushed; confirm it on the live
-  site once the deploy chain is healthy.
-* Low priority: Ortega Deli's rationing allocation (`backend/seed.py`, the Miami book)
-  should read as lopsided rather than as an even split between shelters.
+* The demo board's newest pending order for Ortega Deli is a live Supabase post ("Tomatoes")
+  whose only claim has no confirmed delivery location, so it is the first thing the donor's
+  dashboard shows and it has no route to draw. Either that claim needs a pin on the board, or
+  the panel should fall back to a map of the donor's own pin with the note kept.
+* Ortega Deli's rationing still reads nearly even on the three-way split (39.7/31.2/29.1).

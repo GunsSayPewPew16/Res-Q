@@ -70,11 +70,13 @@ jobs:
           fi
           echo "::warning::No RENDER_DEPLOY_HOOK_URL (or RENDER_API_KEY + RENDER_SERVICE_ID) secret is set, so nothing was deployed. Add one in this repository's Settings → Secrets and variables → Actions."
 
-      # Only when a deploy was actually asked for above: with no secret set there is
-      # nothing to wait for, and this would otherwise spend fifteen minutes failing to
-      # confirm a build nobody requested.
+      # This runs on every push, secret or not, because the question it answers is the one
+      # this repository has been burned by: is the live site serving what was just pushed?
+      # Render's own Auto-Deploy answers it when the service is set to rebuild on commit,
+      # and a stale revision here is then a real failure and the job goes red. With nothing
+      # wired to deploy at all, it is a warning instead — a red build on every push, on a
+      # repository whose problem is that nobody is deploying, would only be noise.
       - name: Wait for the live site to serve this commit
-        if: steps.trigger.outputs.deployed == 'true'
         env:
           SITE: ${{ vars.RESQ_SITE_URL || 'https://res-q-api.onrender.com' }}
         run: |
@@ -94,5 +96,9 @@ jobs:
             echo "attempt ${attempt}/60: live revision is ${live:-unknown}, waiting for ${short}"
             sleep 15
           done
-          echo "::error::${SITE} never served ${short} — the deploy was asked for but not confirmed. Check the service's Events in the Render dashboard."
-          exit 1
+          if [ "${{ steps.trigger.outputs.deployed }}" = "true" ]; then
+            echo "::error::${SITE} never served ${short} — the deploy was asked for but not confirmed. Check the service's Events in the Render dashboard."
+            exit 1
+          fi
+          echo "::warning::${SITE} is still serving ${live:-nothing}; nothing in this workflow asked it to deploy, so the service's own Auto-Deploy is the only path left — check that it is on (Settings → Build & Deploy → Auto-Deploy: On Commit)."
+          exit 0
