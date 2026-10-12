@@ -747,11 +747,20 @@
         '</article>';
     }
 
-    // The count that sits over the board: how much is still going, out of
-    // everything published to it.
-    function feedSummary(rows) {
-        var open = rows.filter(function (row) { return row.status !== 'claimed'; }).length;
-        return open + ' open / ' + rows.length + ' posted';
+    // The count that sits over the board: everything published to it, and how much of
+    // that already has somebody asking. There is deliberately no count of "open"
+    // posts. It used to be the rows with nobody on them, back when the first claim
+    // closed a post; a post now takes more than one, so one with claimants is not a
+    // closed one and calling it anything but posted would read as a board with nothing
+    // left. `claimsByPost` is the grouped claims the cards are drawn from, so the count
+    // and the claimant lines under it can never disagree.
+    function feedSummary(rows, claimsByPost) {
+        var claims = claimsByPost || {};
+        var taken = rows.filter(function (row) {
+            return claimNames(claims[row.id]).length > 0;
+        }).length;
+        return rows.length + ' posted'
+            + (taken ? ' \u00b7 ' + taken + ' with claimants' : '');
     }
 
     global.ResQDB = {

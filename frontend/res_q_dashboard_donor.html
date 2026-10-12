@@ -3610,7 +3610,7 @@
         // claim falls back to the older first-claim-wins update. That is a note rather
         // than a failure — the board itself still works.
         function feedSummaryChip(db, rows, claims) {
-            var chip = db.feedSummary(rows);
+            var chip = db.feedSummary(rows, feedClaims);
             if (!claims.ok && claims.error && claims.error.missingTable) {
                 return chip + ' \u00b7 claims migration pending';
             }
