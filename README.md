@@ -1104,8 +1104,8 @@ The board's own rule is *first claim wins*: a post stops being claimable the mom
 shelter reaches it. Nothing on the board says how an item that several shelters needed
 should have been **shared**, and `backend/rationing.py` is the answer to that — it takes
 every claim a post has, scores each of its claimants, and splits the post between them in
-proportion to those scores, so a shelter gets a share of what it asked for rather than all
-of it or none of it.
+proportion to what separates them, so a shelter gets a share of what it asked for rather
+than all of it or none of it.
 
 The score is the project's own weighted formula, as the pitch states it:
 
@@ -1127,6 +1127,17 @@ what the goods are worth at all, and it carries the largest coefficient for the 
 reason: produce that spoils tonight is worth nothing tomorrow, and no distance is short
 enough to save it. The queue is that score sorted highest first, which is the order a
 delivery round would serve these claimants in.
+
+The queue is that score; the **split** is not, and the difference is worth stating because
+it was invisible for a while. Urgency is read from the post, so it is the same number for
+every claimant of one item — and a constant added to every claimant's score before the
+scores are divided into each other is a constant that survives the division. A three-way
+split came out at 34.7/32.9/32.4 however differently the three shelters reported their
+need, because the item's own urgency (worth 3.0 against distance's 0.3 and need's 0.4) was
+sitting in every numerator. A share is therefore the ratio of `distance_score` and
+`need_score` — the two terms that are about the claimant — and the full score still ranks
+the queue, where the goods' urgency belongs. Both sets of coefficients live in
+`config.RATION_WEIGHTS` and `config.RATION_SHARE_WEIGHTS`.
 
 `backend/llm.py` reads the qualitative half of each claim when a model is configured: the
 written quantity — "3 crates of tomatoes, 2 trays of pastries and a crate of milk" is a

@@ -437,7 +437,8 @@ EARTH_RADIUS_KM = 6371.0088
 
 # The rationing pass. When several shelters have claimed the same surplus post, no single
 # one of them gets the whole item: the post is split between its claimants in proportion
-# to how much each of them needs it, and this is the score that decides by how much.
+# to how much each of them needs it, and this is the score that ranks them. Which half of
+# it decides the split is `RATION_SHARE_WEIGHTS`, below — they are not the same question.
 #
 # The formula is the project's own, and the three names are the fields the model is asked
 # to fill, so the arithmetic in `rationing.py` and the prompt it sends cannot drift apart:
@@ -457,6 +458,26 @@ RATION_WEIGHTS = {
 
 # The same formula as one line, so an answer can carry the arithmetic it used.
 RATION_FORMULA = "(distance_score * 0.3) + (need_score * 0.4) + (expiry_urgency_multiplier * 3.0)"
+
+# Which of those terms a *share* is divided by, as opposed to which rank the queue.
+#
+# The two are not the same question, and using one answer for both is what made every split
+# read as an even one. Urgency is a property of the item: every claimant of a post is being
+# handed the same goods, and the pass reads how close they are to their end from the post
+# rather than from the claimant. So in the formula above it is a constant across the
+# claimants — and a constant added to every share's numerator and denominator is the same
+# constant added to every share, which pulls a three-way split to 33/33/33 no matter how
+# differently the three reported their own need. It still belongs in the score, because the
+# score ranks the queue and perishable goods really are worth more to whoever gets them
+# first. What it cannot do is say which claimant gets more of one item.
+#
+# Distance and need are the terms that are about the claimant, so they are what a post is
+# split in proportion to (`rationing.share_weight`), and these coefficients are read from
+# the same place as the formula's so the two cannot drift.
+RATION_SHARE_WEIGHTS = {
+    "distance_score": RATION_WEIGHTS["distance_score"],
+    "need_score": RATION_WEIGHTS["need_score"],
+}
 
 # Distance is scored against the same radius a match is measured inside, so a claimant at
 # the edge of that radius scores nothing on the term and one at the donor's own door

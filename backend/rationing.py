@@ -12,13 +12,17 @@ four steps, and only the first of them wants a model:
 2. **Score every claimant of the post** with the project's own formula, out of
    `config.RATION_WEIGHTS`. Each of the three inputs is a fraction of one, so the three
    terms are only comparable because they are all on the same scale.
-3. **Split the post in proportion to those scores.** A claimant's share of the item is its
-   score over the sum of the post's scores, and the ration is that share of the weight — so
-   a shelter does not get the whole item because it asked first, and does not get nothing
-   because it asked second. A claim that nobody is competing with is a hundred percent.
+3. **Split the post in proportion to what differs between the claimants.** A claimant's
+   share is its distance-and-need terms over the sum of every claimant's, and the ration is
+   that share of the weight — so a shelter does not get the whole item because it asked
+   first, and does not get nothing because it asked second. The item's urgency is left out
+   of that ratio rather than out of the score: it is the same number for every claimant of
+   a post, so dividing by a total that carries it drags every split toward an even one. A
+   claim that nobody is competing with is a hundred percent.
 4. **Rank the pairs, highest first**, which is the queue: two shelters' claims on the same
    post become two entries in it, and the one that is read first is the one whose need, and
-   the goods' urgency, weigh most.
+   the goods' urgency, weigh most. This is where the full score belongs — ranking the
+   queue is a question about the goods as much as about the shelters, which a split is not.
 
 The model is asked for the qualitative half of each claim and nothing else:
 
@@ -75,6 +79,7 @@ from config import (
     RATION_MAX_PAIRS,
     RATION_MAX_POST_KG,
     RATION_PERCENT_DECIMALS,
+    RATION_SHARE_WEIGHTS,
     RATION_WEIGHTS,
 )
 from geo import haversine_km
@@ -320,6 +325,22 @@ def score_total(distance_score, need_score, urgency):
     return (distance_score * RATION_WEIGHTS["distance_score"]
             + need_score * RATION_WEIGHTS["need_score"]
             + urgency * RATION_WEIGHTS["expiry_urgency_multiplier"])
+
+
+def share_weight(pair):
+    """The part of a pair's score that belongs to that claimant alone — what a share is a
+    fraction of.
+
+    A share decides how much of one item one shelter gets, so it has to be computed from
+    something that differs between the shelters claiming it. The item's urgency does not:
+    it is read from the post, the same number for every claimant, and a constant added to
+    every share before they are divided into each other is a constant that survives the
+    division — which is how a three-way split came out at 34.7/32.9/32.4 however differently
+    the three shelters reported their need. Distance and need are the claimant's own, so the
+    split is their ratio. The full score, urgency included, still ranks the queue.
+    """
+    return (pair["distance"] * RATION_SHARE_WEIGHTS["distance_score"]
+            + pair["need"] * RATION_SHARE_WEIGHTS["need_score"])
 
 
 def score_terms(distance_score, need_score, urgency):
@@ -686,10 +707,21 @@ def rationing_pass(claims, caller_key, owner_name=None, now=None):
         # ration the same way twice: a queue that reshuffled itself between two reads of one
         # post would be a queue nobody could act on.
         scored.sort(key=lambda pair: (-pair["total"], pair["key"] or ""))
-        total_score = sum(pair["total"] for pair in scored) or 1.0
+
+        # The totals above ranked the queue; the split is divided by what separates the
+        # claimants, which is not the same number and deliberately so (see `share_weight`).
+        # Where nothing separates them — every one of them scored zero on both of the
+        # claimant terms — the totals are all there is left to divide by.
+        weights = [share_weight(pair) for pair in scored]
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            weights = [pair["total"] for pair in scored]
+            total_weight = sum(weights)
+        total_weight = total_weight or 1.0
+        shares = [weight / total_weight for weight in weights]
 
         for rank, pair in enumerate(scored, start=1):
-            share = pair["total"] / total_score
+            share = shares[rank - 1]
             ration_kg = round(total_kg * share, METRIC_DECIMALS)
             mine = pair["key"] == caller_key
             entry = {

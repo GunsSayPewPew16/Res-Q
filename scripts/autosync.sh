@@ -7,11 +7,23 @@
 # then wait for the live site to serve the new commit. So the whole chain —
 # edit → commit → push → rebuild → live — runs on its own from here.
 #
-#     scripts/autosync.sh --install      start it, and start it again at every login
+#     scripts/autosync.sh --install      start watching, and push every commit from now on
 #     scripts/autosync.sh --uninstall    stop it and forget it
 #     scripts/autosync.sh --status       is it running, and what has it done
 #     scripts/autosync.sh --once         one pass, in the foreground, then exit
-#     scripts/autosync.sh                the loop itself (this is what launchd runs)
+#     scripts/autosync.sh                the loop itself
+#
+# It installs two things and either one of them is enough to get a change deployed:
+#
+#   * a **commit hook** (`.git/hooks/post-commit`) that pushes after every commit made in
+#     this checkout — by an agent, by an editor, by hand. Committing is publishing, which is
+#     the part that was being done manually.
+#   * a **watcher** (a launchd job) that also commits on its own, so an edit that nobody
+#     committed still leaves. macOS only lets a background agent into ~/Downloads,
+#     ~/Desktop and ~/Documents with the user's permission (see `guarded_folder`), so where
+#     the watcher cannot start, the hook carries on alone and says so.
+#
+# `--push` is the hook's own entry point: no loop, no committing, just what is ahead.
 #
 # A few deliberate restraints, because this writes to a live site:
 #
@@ -34,9 +46,12 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 1
 
 LOG="$REPO/.git/autosync.log"
+LAUNCHD_LOG="${AUTOSYNC_LAUNCHD_LOG:-/tmp/resq-autosync-launchd.log}"
 PAUSE="$REPO/.git/autosync-off"
 LABEL="com.resq.autosync"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+
+HOOK="$REPO/.git/hooks/post-commit"
 
 INTERVAL="${AUTOSYNC_INTERVAL:-20}"   # how often the tree is looked at, in seconds
 QUIET="${AUTOSYNC_QUIET:-10}"         # how long an edit must sit still before it is committed
@@ -68,7 +83,7 @@ commit_message() {
     local files count summary
     files="$(git diff --cached --name-only)"
     count="$(printf '%s\n' "$files" | grep -c . )"
-    summary="$(printf '%s\n' "$files" | head -3 | paste -sd ', ' -)"
+    summary="$(printf '%s\n' "$files" | head -3 | tr '\n' '\n' | sed -e 's/$/,/' | tr -d '\n' | sed -e 's/,$//' -e 's/,/, /g')"
     if [ "$count" -gt 3 ]; then
         summary="$summary and $((count - 3)) more"
     fi
@@ -187,7 +202,42 @@ run_loop() {
 
 # ---------------------------------------------------------------- installing it as a job
 
+guarded_folder() {
+    # Downloads, Desktop and Documents are guarded by macOS: a process started by launchd
+    # is refused even a `cd` into them until the user grants that agent access, which a
+    # script cannot grant itself. Detecting it here is what keeps the watcher from being
+    # installed into a crash loop that only says "Operation not permitted" in /tmp.
+    case "$REPO" in
+        "$HOME/Downloads"/*|"$HOME/Desktop"/*|"$HOME/Documents"/*) return 0 ;;
+    esac
+    return 1
+}
+
+install_hook() {
+    mkdir -p "$(dirname "$HOOK")"
+    cat >"$HOOK" <<'HOOK_END'
+#!/bin/sh
+# Push this commit. See scripts/autosync.sh: committing here is publishing, and pushing is
+# what makes Render rebuild and the live site answer with the new revision.
+[ -f "$(git rev-parse --show-toplevel)/.git/autosync-off" ] && exit 0
+exec /bin/bash "$(git rev-parse --show-toplevel)/scripts/autosync.sh" --push
+HOOK_END
+    chmod +x "$HOOK"
+    log "commit hook installed at $HOOK"
+}
+
 install() {
+    install_hook
+    if guarded_folder; then
+        log "watcher not installed: $REPO is in a macOS-guarded folder"
+        say "autosync is on for this checkout: every commit now pushes itself."
+        say "The background watcher is off in this folder — macOS refuses a launchd agent"
+        say "access to ~/Downloads (that is the 'Operation not permitted' in"
+        say "$LAUNCHD_LOG). Move the repository somewhere unguarded, or grant Terminal and"
+        say "bash Full Disk Access in System Settings → Privacy & Security, and run --install"
+        say "again, to have edits nobody committed pushed as well."
+        return 0
+    fi
     mkdir -p "$(dirname "$PLIST")"
     cat >"$PLIST" <<PLIST_END
 <?xml version="1.0" encoding="UTF-8"?>
@@ -203,8 +253,12 @@ install() {
     <key>WorkingDirectory</key><string>$REPO</string>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
-    <key>StandardOutPath</key><string>$LOG</string>
-    <key>StandardErrorPath</key><string>$LOG</string>
+    <!-- launchd's own copy of anything the script prints, kept outside the repository:
+         a job that cannot start (macOS guards ~/Downloads, ~/Desktop and ~/Documents from
+         background agents until the user grants them access) leaves its complaint here,
+         and a file the script itself could not have written would hide exactly that. -->
+    <key>StandardOutPath</key><string>$LAUNCHD_LOG</string>
+    <key>StandardErrorPath</key><string>$LAUNCHD_LOG</string>
 </dict>
 </plist>
 PLIST_END
@@ -224,12 +278,17 @@ uninstall() {
     launchctl bootout "gui/$UID/$LABEL" >/dev/null 2>&1
     launchctl bootout "gui/$UID" "$PLIST" >/dev/null 2>&1
     launchctl unload -w "$PLIST" >/dev/null 2>&1
-    rm -f "$PLIST"
+    rm -f "$PLIST" "$HOOK"
     log "uninstalled"
     say "autosync is off. Changes now wait for a push, as before."
 }
 
 status() {
+    if [ -x "$HOOK" ]; then
+        say "autosync: commit hook installed — a commit in this checkout pushes itself"
+    else
+        say "autosync: no commit hook — commits wait for a push"
+    fi
     if [ -f "$PLIST" ] && launchctl print "gui/$UID/$LABEL" >/dev/null 2>&1; then
         say "autosync: running (launchd job $LABEL, watching $REPO)"
     elif [ -f "$PLIST" ]; then
@@ -242,9 +301,15 @@ status() {
         say "last lines of $LOG:"
         tail -8 "$LOG"
     fi
+    if [ -s "$LAUNCHD_LOG" ]; then
+        say "last lines of $LAUNCHD_LOG (what launchd saw):"
+        tail -5 "$LAUNCHD_LOG"
+    fi
 }
 
 case "${1:-}" in
+    --push) push_if_ahead ;;
+    --hook) install_hook ;;
     --install) install ;;
     --uninstall) uninstall ;;
     --status) status ;;
