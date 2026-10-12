@@ -290,11 +290,13 @@ status() {
         say "autosync: no commit hook — commits wait for a push"
     fi
     if [ -f "$PLIST" ] && launchctl print "gui/$UID/$LABEL" >/dev/null 2>&1; then
-        say "autosync: running (launchd job $LABEL, watching $REPO)"
+        say "autosync: watcher running (launchd job $LABEL, watching $REPO)"
     elif [ -f "$PLIST" ]; then
-        say "autosync: installed but not running — start it with --install, or by hand"
+        say "autosync: watcher installed but not running — start it with --install"
+    elif guarded_folder; then
+        say "autosync: watcher off (macOS keeps launchd out of $REPO) — the commit hook is the whole mechanism here"
     else
-        say "autosync: not installed — start it with scripts/autosync.sh --install"
+        say "autosync: watcher not installed — start it with scripts/autosync.sh --install"
     fi
     [ -f "$PAUSE" ] && say "paused by $PAUSE"
     if [ -f "$LOG" ]; then
