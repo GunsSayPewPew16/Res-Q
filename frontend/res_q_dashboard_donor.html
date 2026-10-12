@@ -1625,7 +1625,11 @@
         // ---------------------------------------------------------------------------
         var WEEK_LENGTH = 7;
         var WEEK_REST_HEIGHT = 16;
-        var WEEK_BAR_FLOOR = 24;
+        // The tallest bar stops just short of the panel's top, so the figure it is worth
+        // still has its own line above it. Every bar is scaled by this same factor, so the
+        // bars keep their proportions to each other — it shortens the week, it does not
+        // reshape it.
+        var WEEK_BAR_CEIL = 92;
         var WEEK_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
             'Friday', 'Saturday'];
         var weekRunning = false;
@@ -1662,19 +1666,25 @@
                 + (lit ? 'text-[#DAF1DE]' : 'text-[#8EB69B]') + '">' + name + '</span>';
         }
 
-        // Bars are drawn across the week's **own** range rather than up from zero: seven days
-        // of one kitchen's surplus sit within a few kilos of each other, so a zero-based axis
-        // draws seven identical bars and hides the shape it was built to show. What keeps
-        // that honest is that the range itself is named under the chart and every bar
-        // carries its own figure, so the axis is readable from the panel itself. A week
-        // that really is flat is drawn flat, at mid-height, rather than exaggerated into a
-        // shape it does not have.
-        function weekHeight(kg, low, high) {
-            if (low === null || high === null || !isFinite(low) || !isFinite(high)) {
+        // Bars are drawn up from zero, and the top of the track is the week's own high: a
+        // day's height is its own share of the heaviest day, so a bar half the height of
+        // another is half the surplus, and a day a tenth of a kilo below its neighbour is
+        // drawn a tenth of a kilo below it. The first version of this stretched the week's
+        // own range — its low to its high — across the whole panel, which drew seven days
+        // within half a kilo of each other as a mountain range; a 27.0 kg day came out a
+        // quarter the height of a 27.5 kg one. The figures over the bars and the range under
+        // them still say what the week amounts to, so what the bars say is now only what is
+        // true of them, and a week that really is flat is drawn flat.
+        function weekHeight(kg, high) {
+            if (kg === null || kg === undefined || !isFinite(kg)) {
                 return WEEK_REST_HEIGHT;
             }
-            if (high <= low) { return 62; }
-            return Math.round(WEEK_BAR_FLOOR + (100 - WEEK_BAR_FLOOR) * ((kg - low) / (high - low)));
+            // A week of nothing has nothing to show above the axis.
+            if (!(high > 0)) { return 0; }
+            // Kept to a tenth of a percent rather than a whole one: the panel is a couple of
+            // hundred pixels tall, and this is the difference between a bar standing for its
+            // own figure and standing for the nearest figure a whole number could hold.
+            return Math.round(Math.max(0, Math.min(1, kg / high)) * WEEK_BAR_CEIL * 10) / 10;
         }
 
         // Draw the chart from one entry per day, today first: { name, kg }, with kg null on
@@ -1707,7 +1717,7 @@
                 var printed = entry.kg !== null ? entry.kg.toFixed(1) : null;
                 var height = entry.kg === null
                     ? WEEK_REST_HEIGHT
-                    : weekHeight(entry.kg, summary.low, summary.high);
+                    : weekHeight(entry.kg, summary.high);
                 barHTML += weekBarHTML(printed, height, lit);
                 nameHTML += weekDayHTML(entry.name, lit);
             });
@@ -1747,8 +1757,8 @@
             });
             var summary = renderWeekChart(entries);
             setWeekCopy('live \u00b7 ' + (outlook.source || 'Open-Meteo'),
-                'the live sky at ' + where + ', run through the model day by day \u00b7 bars scaled'
-                    + ' to the week\'s own range',
+                'the live sky at ' + where + ', run through the model day by day \u00b7 bars to'
+                    + ' scale from zero, the heaviest day the full height',
                 summary && summary.low !== null
                     ? summary.low.toFixed(1) + '\u2013' + summary.high.toFixed(1) + ' kg \u00b7 '
                         + summary.heaviest.name + ' the heaviest'

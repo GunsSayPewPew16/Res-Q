@@ -850,14 +850,15 @@ bars is interpolated, averaged or smoothed — every bar is one forecast of one 
 the reading behind each label travels with it (the WMO code, its summary, and the day's
 high, low and rainfall) beside the prediction for anything that wants both.
 
-The chart draws those bars across the week's **own** range rather than up from zero:
-seven days of one kitchen's surplus sit within a few kilos of each other, so a
-zero-based axis would draw seven identical bars and hide the shape the chart exists to
-show. The range is named under the chart and **every bar carries its own figure** — all
-seven days, today's included — which is what makes the axis readable from the panel
-itself rather than leaving a reader to guess four of the seven days from the shape; a
-week that really is flat is drawn flat rather than exaggerated into a shape it does not
-have.
+The chart draws those bars **to scale from zero**: a day's height is its own share of the
+week, and the top of the track is the week's own high, so a bar twice the height of
+another is twice the surplus. It was first drawn across the week's **own** range instead —
+its low stretched across the bottom of the panel and its high across the top — which drew
+seven days sitting within half a kilo of each other as a mountain range, a 27.0 kg day at
+a quarter the height of a 27.5 kg one. **Every bar carries its own figure** — all seven
+days, today's included — and the range is named under the chart, which is what keeps a
+reader from having to guess four of the seven days from the shape; a week that really is
+flat is now drawn flat, because flat is the fact about it.
 
 ### The logged days
 

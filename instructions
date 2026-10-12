@@ -139,6 +139,24 @@ column, and one column is the same string either way. If multi-claim ever goes m
 that is the shape of the bug: check the seeder's own report line at boot, which says
 "N claims recorded, M claim rows written" and names the reason when M is short.
 
+The week-ahead chart's scale
+----------------------------
+
+`weekHeight` in `frontend/res_q_dashboard_donor.html` draws every bar as its own share of
+the week's **high**, up from zero, capped at 92% of the panel so the tallest day's figure
+still has its line above it. Bar heights are therefore proportional to the surplus they
+stand for, and stay that way at any spread. The first version stretched the week's *own*
+range across the panel — its low at the bottom, its high at the top — which drew a 27.0 kg
+day at a quarter the height of a 27.5 kg one. The user's words for it: "even a minute
+difference (see 27.0 and 27.5 bars) results in a large difference in the graph". Nothing
+here may be re-scaled to the week's spread: the figures over the bars and the range under
+the chart are what say how big the week is, and the bars only say how the days compare.
+
+**Charting anything else in this project: same rule.** A chart whose bar lengths are not
+proportional to its numbers reads as a shape that is not there, and the next person to
+measure one will file it as a bug. If a spread is too small to read, say so in words under
+the chart rather than stretching the axis.
+
 The rationing pass
 ------------------
 
