@@ -4976,12 +4976,23 @@
 
         // The drawn shape comes back and the map stands down, so a route that cannot be
         // drawn leaves a panel that still reads rather than an empty green box.
-        function keepOrderRouteDrawn(why) {
+        //
+        // `keepMapUp` is for the one case where the map is not ready *yet*: the shape is
+        // laid over the map rather than put in its place, so the container keeps the box
+        // MapLibre sizes itself from. A map mounted into a hidden container starts with
+        // nothing to draw on and never reaches its first frame — hiding it here while
+        // saying "reading the road" would be the panel cancelling the very read it is
+        // waiting for. The shape is over the map and the map is behind it until the route
+        // is drawn, at which point the surface swaps over on its own.
+        function keepOrderRouteDrawn(why, keepMapUp) {
             var container = pendingEl('orderRouteMap');
             var rest = pendingEl('orderRouteRest');
             var note = pendingEl('orderRouteRestNote');
             var legend = pendingEl('orderRouteLegend');
-            if (container) { container.classList.add('hidden'); }
+            if (container) {
+                if (keepMapUp) { container.classList.remove('hidden'); }
+                else { container.classList.add('hidden'); }
+            }
             if (rest) { rest.classList.remove('hidden'); }
             if (note) {
                 note.textContent = why;
@@ -5145,7 +5156,7 @@
                     // `loadOrderRouteMap` is a no-op once it has been asked for.
                     if (!orderRouteAsked) { loadOrderRouteMap(); }
                     keepOrderRouteDrawn('Reading the road from ' + (pickup.address || 'your pin')
-                        + ' to ' + (claimant.name || 'the shelter') + '\u2026');
+                        + ' to ' + (claimant.name || 'the shelter') + '\u2026', true);
                     setOrderRouteChip('reading the road\u2026', false);
                     return;
                 }
