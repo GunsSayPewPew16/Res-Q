@@ -569,6 +569,55 @@ memory, and the seed is what refills it — and why turning `RESQ_PERSIST=on` th
 only appear to work. Persistent accounts want a paid instance with a disk mounted at
 `RESQ_DB`'s path.
 
+### Every push deploys itself
+
+A deployment that only moves when somebody remembers to press a button is a deployment
+that quietly falls behind the repository, and a site serving last week's pages looks
+exactly like a site with a bug in it. Two things close that gap, and they are set up so
+that an edit here reaches the live site without anyone asking it to.
+
+**Render rebuilds on a push.** `render.yaml` carries `autoDeployTrigger: commit`, so a
+service created from this Blueprint redeploys whenever `main` moves — but that only works
+where Render's own GitHub connection can hear about the push, which a hand-made service
+cannot. `.github/workflows/deploy.yml` is the half that does not depend on being heard:
+on every push to `main` GitHub asks Render to build that commit, then *waits for the live
+site to say it is serving it*. It needs one secret on the repository, either
+`RENDER_DEPLOY_HOOK_URL` (the service's **Settings → Deploy Hook**) or `RENDER_API_KEY`
+plus `RENDER_SERVICE_ID`, which names the exact commit to build. With neither set the job
+reports that it has nothing to do instead of failing every push.
+
+```bash
+gh secret set RENDER_DEPLOY_HOOK_URL < /path/to/hook.txt   # from a file, never in a shell history
+```
+
+The wait is the part worth keeping: `/api/health` carries `revision`, the commit the
+answering process was built from, so "deployed" stops being an assumption.
+
+```bash
+git rev-parse --short=12 HEAD
+curl -s https://res-q-api.onrender.com/api/health
+# {"ok": true, "revision": "b776f53715b5", "mode": "demo", "database": null, …}
+```
+
+**The working copy pushes itself.** `scripts/autosync.sh` watches this folder, and once an
+edit has stopped moving it commits it and pushes `main` — which is what starts the deploy
+above. A change is only published after it has sat unchanged for ten seconds, the backend
+is compiled before anything leaves, only `main` is pushed, never with `--force`, and never
+while a merge or rebase is half-finished. It runs as a launchd job
+(`com.resq.autosync`) that starts at login and comes back if it dies:
+
+```bash
+scripts/autosync.sh --install     # start it, and again at every login
+scripts/autosync.sh --status      # is it running, and what has it done lately
+touch .git/autosync-off           # hold everything back; rm the file to resume
+tail -f .git/autosync.log         # the running commentary
+```
+
+So the chain is: an edit lands, the edit settles, it is committed and pushed, Render is
+asked to rebuild that commit, and the live `/api/health` either reports it or the deploy
+job goes red naming what it saw instead. An agent working in this repository is expected
+to leave nothing uncommitted, and to check that revision before calling anything live.
+
 ### The front-end on Vercel, talking back to Render
 
 The pages can be served by Vercel instead of (or as well as) by the API process. Import the

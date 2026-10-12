@@ -123,6 +123,7 @@ from config import (
     PUBLIC_FIELDS,
     RATION_PERCENT_DECIMALS,
     RECIPIENT_NEEDS,
+    REVISION,
     SEED_ON_START,
     STAMP_FORMAT,
     SURPLUS_CATEGORIES_DAYS,
@@ -347,10 +348,15 @@ class ResQHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
+            # `revision` is the commit this process was built from (config.REVISION). It is
+            # what makes a deploy verifiable from outside: an uptime probe reads `ok`, and
+            # whoever just pushed reads `revision` to see whether the build answering them
+            # is the push they made, rather than assuming the host rebuilt when asked.
             return self.send_json(
                 200,
                 {
                     "ok": True,
+                    "revision": REVISION,
                     "mode": "persistent" if PERSIST else "demo",
                     "database": os.path.basename(DB_PATH) if PERSIST else None,
                     "demo_sessions": len(DEMO_SESSIONS),

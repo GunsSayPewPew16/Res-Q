@@ -1,0 +1,98 @@
+# Deploy Res-Q to Render on every push to main, then check that it really went live.
+#
+# Render can rebuild on its own when it hears about a push — that is the service's
+# Auto-Deploy setting — but it only hears about one when the service is connected to this
+# repository in a way GitHub can call back on, and a service that was created by hand (or
+# connected as a plain public URL) never does. Those pushes sit in the repository and the
+# site keeps serving whatever it built last, which reads exactly like "the change did not
+# work" from the outside. This job is the part that does not depend on being heard: GitHub
+# knows a push happened, so GitHub asks for the rebuild.
+#
+# One secret is needed, once — either of these, both from the Render dashboard:
+#
+#   RENDER_DEPLOY_HOOK_URL   the service's Settings → Deploy Hook → the URL. Simplest, and
+#                            enough on its own: it rebuilds the branch the service tracks.
+#   RENDER_API_KEY           an account API key (Avatar → Account Settings → API Keys),
+#                            plus RENDER_SERVICE_ID from the service's Settings page. This
+#                            path names the exact commit to build (`commitId`), so the build
+#                            that answers is provably the push that asked for it.
+#
+# Neither is required for the repository to be healthy: with no secret set the job reports
+# that it has nothing to do and stops, instead of going red on every push until someone
+# fills it in. The last step is the one that matters most — it waits for the live
+# /api/health to report the commit that was just pushed, so "pushed" and "live" stop being
+# the same assumption.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # So a deploy can be asked for by hand — from the Actions tab, or with
+  # `gh workflow run deploy.yml` — without an empty commit to carry it.
+  workflow_dispatch:
+
+# One deploy at a time, in order, and never cancelled half way: a build that is abandoned
+# mid-flight can leave the service on an older revision than the one that would follow it.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask Render to build this commit
+        id: trigger
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RENDER_API_KEY:-}" ] && [ -n "${RENDER_SERVICE_ID:-}" ]; then
+            echo "Triggering a deploy of ${GITHUB_SHA} on service ${RENDER_SERVICE_ID}."
+            curl -fsS -X POST \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"commitId\":\"${GITHUB_SHA}\",\"clearCache\":\"do_not_clear\"}" \
+              "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys"
+            echo
+            echo "deployed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "${DEPLOY_HOOK:-}" ]; then
+            echo "Calling the service's deploy hook for ${GITHUB_SHA}."
+            curl -fsS -X POST "${DEPLOY_HOOK}"
+            echo
+            echo "deployed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::warning::No RENDER_DEPLOY_HOOK_URL (or RENDER_API_KEY + RENDER_SERVICE_ID) secret is set, so nothing was deployed. Add one in this repository's Settings → Secrets and variables → Actions."
+
+      # Only when a deploy was actually asked for above: with no secret set there is
+      # nothing to wait for, and this would otherwise spend fifteen minutes failing to
+      # confirm a build nobody requested.
+      - name: Wait for the live site to serve this commit
+        if: steps.trigger.outputs.deployed == 'true'
+        env:
+          SITE: ${{ vars.RESQ_SITE_URL || 'https://res-q-api.onrender.com' }}
+        run: |
+          set -uo pipefail
+          short="${GITHUB_SHA:0:12}"
+          # A free Render instance is stopped when nothing has called it, and the first
+          # request wakes it: the site can answer nothing at all, or answer 502, for the
+          # better part of a minute before the build it was asked for is even reached. So
+          # this polls rather than checks, for as long as a build and a wake-up can take.
+          for attempt in $(seq 1 60); do
+            body="$(curl -fsS -m 30 "${SITE%/}/api/health" 2>/dev/null || true)"
+            live="$(printf '%s' "$body" | sed -n 's/.*"revision"[": ]*"\([^"]*\)".*/\1/p')"
+            if [ -n "$live" ] && [ "${live#"$short"}" != "$live" ]; then
+              echo "${SITE} is serving ${live} — the commit that was just pushed."
+              exit 0
+            fi
+            echo "attempt ${attempt}/60: live revision is ${live:-unknown}, waiting for ${short}"
+            sleep 15
+          done
+          echo "::error::${SITE} never served ${short} — the deploy was asked for but not confirmed. Check the service's Events in the Render dashboard."
+          exit 1

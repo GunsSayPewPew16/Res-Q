@@ -11,6 +11,7 @@ file every other file may lean on without a cycle.
 
 import os
 import re
+import subprocess
 from itertools import count
 
 # This folder is the backend: its code and its database file live here. The pages it
@@ -28,6 +29,36 @@ DB_PATH = os.environ.get("RESQ_DB", os.path.join(BACKEND_DIR, "resq.db"))
 # credential every time. Accounts are kept in memory for the life of the process.
 # Start the server with RESQ_PERSIST=on to store accounts in the database again.
 PERSIST = os.environ.get("RESQ_PERSIST", "off").strip().lower() in ("on", "1", "true", "yes")
+
+# Which revision this process is running. A deployed service can answer "I am up" without
+# ever answering "and I am the code you just pushed", and those are two different questions
+# when a host is asked to redeploy: the health route renders this, so a push can be confirmed
+# by asking the live site what it is serving rather than by trusting that a build happened.
+#
+# The host's own variable is read first because it is the authoritative one: Render hands
+# every service RENDER_GIT_COMMIT, the sha of the checkout the build ran on, and that is
+# true even where the site was deployed without a repository to read. The fallback reads the
+# working copy, which is what a local run wants; a deployment with neither says so plainly
+# rather than inventing a revision.
+def _revision():
+    """The commit this process was built from, short, or `unknown`."""
+    for name in ("RESQ_REVISION", "RENDER_GIT_COMMIT"):
+        named = (os.environ.get(name) or "").strip()
+        if named:
+            return named[:12]
+    try:
+        read = subprocess.run(
+            ["git", "-C", os.path.dirname(BACKEND_DIR), "rev-parse", "--short=12", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    return read.stdout.decode("utf-8", "replace").strip() or "unknown"
+
+
+REVISION = _revision()
 
 DEMO_SESSIONS = {}
 

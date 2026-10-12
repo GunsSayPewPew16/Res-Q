@@ -1,0 +1,119 @@
+Res-Q — how to work in this folder
+==================================
+
+Standing instructions for any AI agent (or person) picking this repository up. Read this
+before doing anything else: it is the difference between a session that needs the same
+brief typed out again and one that just works. Last updated 2026-10-12.
+
+The two standing rules
+----------------------
+
+1. Always keep a visible todo list. Every request, however small, gets one; mark each item
+   done as it lands rather than at the end. The user reads it as live progress.
+
+2. Everything you change goes live by itself, and you must prove it. Nothing is left
+   uncommitted, and "I pushed it" is not the finish line — "the live site is serving this
+   commit" is. See *Verifying a change is live*, below.
+
+How "goes live" is wired
+------------------------
+
+    edit in this folder
+      → scripts/autosync.sh commits it (once the edit has settled) and pushes main
+      → .github/workflows/deploy.yml asks Render to rebuild that commit
+      → the job waits for https://res-q-api.onrender.com/api/health to report the new
+        revision, and goes red if it never does
+
+* The Render service serves **both** the pages and the API from one process, so a page
+  fix and an API fix ship together. `render.yaml` → `rootDir: backend`; the document root
+  is `frontend/`. There is no separate frontend host to poke.
+* `scripts/autosync.sh` runs as a launchd job (`com.resq.autosync`) that starts at login
+  and restarts if it dies. It publishes anything in `frontend/`, `backend/`, `supabase/`,
+  docs and config; it never force-pushes and never commits through a half-finished merge.
+* It holds an edit for ~10 seconds of stillness first, and it refuses to commit a backend
+  that does not compile. So a broken change waits for you, and a finished one leaves on
+  its own.
+
+Useful commands:
+
+    scripts/autosync.sh --status      # is it running, and the last few things it did
+    scripts/autosync.sh --once        # do a pass now, in the foreground
+    scripts/autosync.sh --install     # (re)install the launchd job after moving the repo
+    scripts/autosync.sh --uninstall   # stop it
+    tail -f .git/autosync.log         # what it has been doing
+    touch .git/autosync-off           # pause publishing; rm it to resume
+    rm .git/autosync-off
+
+Verifying a change is live
+--------------------------
+
+    git rev-parse --short=12 HEAD
+    curl -s https://res-q-api.onrender.com/api/health
+
+`/api/health` carries `revision` — the commit the answering process was built from (the
+host's `RENDER_GIT_COMMIT`, or the working copy when run locally). Those two shas must
+match. If they do not:
+
+    gh run list --limit 3            # did the deploy workflow run, and what did it say
+    gh secret list                   # is RENDER_DEPLOY_HOOK_URL (or RENDER_API_KEY) set
+    scripts/autosync.sh --once       # is the push itself still sitting here
+
+A stale revision means a deploy that never happened, **not** a code bug — check the deploy
+chain before touching the code. This has already cost one debugging session: three commits
+including the donor dashboard's route map were pushed and correct while the live site kept
+serving a build from days earlier, which looked exactly like "the map is broken".
+
+Deploy secrets
+--------------
+
+The workflow needs one of these, set as a GitHub Actions secret on this repository:
+
+* `RENDER_DEPLOY_HOOK_URL` — Render → the service → Settings → Deploy Hook. Simplest.
+* `RENDER_API_KEY` + `RENDER_SERVICE_ID` — deploys a named commit and can be polled.
+
+Set them **from a file**, so the value never appears in a transcript:
+
+    gh secret set RENDER_DEPLOY_HOOK_URL < /path/to/hook.txt
+
+Never commit a hook URL, an API key or a service id. `render.yaml` deliberately uses
+`sync: false` for the values that are somebody's own (origins, Supabase, the model key).
+
+Running it locally
+------------------
+
+    python3 backend/server.py            # pages + API on http://127.0.0.1:8080
+    python3 backend/server.py 8123       # or on a port of your choosing
+
+Check the port is free first (`lsof -i :8080`) — several agents share this checkout and a
+second server on the same port looks like a site that will not load. Demo accounts, all
+with the password `ResqDemo1!`:
+
+    luis@resq.test    Ortega Deli, the Miami donor (the demo's subject)
+    rosa@resq.test    dana@resq.test    (the other test donors)
+
+Pages are plain files under `frontend/`; the donor dashboard is
+`frontend/res_q_dashboard_donor.html`. A page reaches the API through `apiUrl()` in
+`frontend/resq_api.js`, whose base is the deployed Render origin by default — open the
+pages from `python3 backend/server.py` and the calls go to Render unless the page sets
+`window.RESQ_API_BASE` first. `RESQ_PERSIST=off` (the default, and what the deployment
+runs) keeps accounts, sessions and orders in the worker's memory.
+
+Project conventions
+-------------------
+
+* Python 3 standard library only — no framework, no ORM. Routes live in
+  `backend/server.py`; every constant and threshold lives in `backend/config.py`.
+* Comments carry the *why*, at length, in full sentences. Match that voice; do not add
+  banner comments or restate what the next line says.
+* Frontend is single-file HTML with Tailwind from a CDN and one inline `<script>` — there
+  is no build step and no bundler, so a change is a file edit.
+* Long-lived facts about the deployment (origins, modes, the render.yaml contract) belong
+  in `README.md`; this file is the short version for whoever is about to start work.
+
+Outstanding work
+----------------
+
+* Donor dashboard: the orders map must load — the code is pushed; confirm it on the live
+  site once the deploy chain is healthy.
+* Low priority: Ortega Deli's rationing allocation (`backend/seed.py`, the Miami book)
+  should read as lopsided rather than as an even split between shelters.
