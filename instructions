@@ -107,6 +107,38 @@ Debugging the dashboard in a browser
   contact) is exactly that — so the *default* selection shows that note instead of a map.
   Picking one of Ortega Deli's own three items draws the route.
 
+The board, and several shelters on one post
+-------------------------------------------
+
+The board is Supabase (`surplus_posts`), and a claim is **a row of its own** in
+`surplus_claims` — one per recipient per post — which is what lets several shelters claim the
+same item. The post's own `status` still settles to `claimed` on the first claim; it no longer
+means "taken", and nothing in the UI says it any more. Consequences worth keeping:
+
+* The feed card's footer carries no status chip and the recipient's feed has no *Open* tab.
+  Both were removed on 2026-10-12 for the same reason: with several shelters able to take one
+  item, "claimed" is not a reason to move on, and a view that hid claimed posts hid the ones
+  worth reading. Do not put either back without bringing multi-claim down with them.
+* The line above the footer is the fact that replaced them: `claimHeadline` in
+  `frontend/resq_supabase.js` draws "{first claimer} and N more claimed", in the order the
+  claims were made. One claimant is named alone; an unclaimed post says nothing.
+* A recipient who has already claimed a post reads a chip instead of the claim button; a
+  recipient who has not keeps the button on a post others have claimed.
+
+Checking the board directly, with the publishable key from `frontend/resq_supabase.js`:
+
+    U=https://paeshgdpqbjoagpbybhl.supabase.co
+    K=sb_publishable_pRaPy6MH_oBWtx6Ei2Uatw_VM9Z2y8w
+    curl -s -H "apikey: $K" -H "Authorization: Bearer $K" "$U/rest/v1/surplus_claims?select=post_id,recipient_name"
+
+**A gotcha that cost an afternoon: `supabase.row_url` joined PostgREST filters with `?`.** A
+lookup narrowed by two columns came out as `post_id=eq.<uuid>?recipient_name=eq.Ana Cruz`, the
+board read the lot as a uuid and refused it (`invalid input syntax for type uuid`), so the
+fixture's *claims* never reached the board while its *posts* did — a post is looked up by one
+column, and one column is the same string either way. If multi-claim ever goes missing again,
+that is the shape of the bug: check the seeder's own report line at boot, which says
+"N claims recorded, M claim rows written" and names the reason when M is short.
+
 The rationing pass
 ------------------
 
@@ -165,7 +197,13 @@ Outstanding work
 ----------------
 
 * The demo board's newest pending order for Ortega Deli is a live Supabase post ("Tomatoes")
-  whose only claim has no confirmed delivery location, so it is the first thing the donor's
+  whose first claim has no confirmed delivery location, so it is the first thing the donor's
   dashboard shows and it has no route to draw. Either that claim needs a pin on the board, or
   the panel should fall back to a map of the donor's own pin with the note kept.
 * Ortega Deli's rationing still reads nearly even on the three-way split (39.7/31.2/29.1).
+* **`supabase/migrations/20261011000000_add_allocation_to_surplus_posts.sql` has never been
+  applied to the live project.** Every `POST /api/rations` therefore fails to publish and says
+  so per post: "Could not find the 'allocated_at' column … apply … first". The ration is still
+  computed and shown; it just never reaches the board. Run that migration in Supabase's SQL
+  editor and the publishing half starts working.
+* The three earlier migrations *are* applied, including the claims table.
