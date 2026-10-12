@@ -4936,6 +4936,16 @@
                 // Shown before it is built: MapLibre sizes itself from its container's box,
                 // and a hidden container measures nothing.
                 container.classList.remove('hidden');
+                // And given its box back before the map is built in it. MapLibre's own
+                // stylesheet declares every map container `position: relative`, which beats
+                // the panel's `absolute inset-0` — the element then has no height of its
+                // own, no children to take one from, and measures nothing, so the canvas it
+                // sizes from that box is a zero-height strip. The map is on the page and
+                // drawing absolutely nothing, which is what a panel that never leaves its
+                // drawn placeholder looks like from the outside. Set inline, where it wins
+                // over both stylesheets.
+                container.style.position = 'absolute';
+                container.style.inset = '0';
                 orderRouteMap = new window.maplibregl.Map({
                     container: container,
                     style: MAP_STYLE,
